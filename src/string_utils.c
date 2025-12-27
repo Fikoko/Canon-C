@@ -176,7 +176,25 @@ StringArray *string_split(const char *str, const char *delimiter) {
     char *token = strtok(str_copy, delimiter);
     while (token) {
         if (count >= capacity) {
+            if (capacity > SIZE_MAX / 2) {
+                for (size_t i = 0; i < count; i++) {
+                    free(arr->strings[i]);
+                }
+                free(arr->strings);
+                free(str_copy);
+                free(arr);
+                return NULL;
+            }
             capacity *= 2;
+            if (capacity > SIZE_MAX / sizeof(char *)) {
+                for (size_t i = 0; i < count; i++) {
+                    free(arr->strings[i]);
+                }
+                free(arr->strings);
+                free(str_copy);
+                free(arr);
+                return NULL;
+            }
             char **new_strings = realloc(arr->strings, sizeof(char *) * capacity);
             if (!new_strings) {
                 for (size_t i = 0; i < count; i++) {
@@ -227,10 +245,23 @@ String *string_join(const StringArray *arr, const char *separator) {
     size_t sep_len = separator ? strlen(separator) : 0;
     
     for (size_t i = 0; i < arr->count; i++) {
-        total_len += strlen(arr->strings[i]);
+        size_t str_len = strlen(arr->strings[i]);
+        
+        if (str_len > SIZE_MAX - total_len) {
+            return NULL;
+        }
+        total_len += str_len;
+        
         if (i < arr->count - 1) {
+            if (sep_len > SIZE_MAX - total_len) {
+                return NULL;
+            }
             total_len += sep_len;
         }
+    }
+    
+    if (total_len > SIZE_MAX - 1) {
+        return NULL;
     }
     
     String *result = string_new_with_capacity(total_len + 1);
