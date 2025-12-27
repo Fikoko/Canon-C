@@ -26,6 +26,42 @@ for modules in the `Canon-C` ecosystem.
 
 ## Functional Data Flow
 
-- Programs are written in terms of **transformations**, not hidden side effects.
+- Programs are written in terms of **transformations**, not hidden side effects:
+
+    input → transform → output
+
+
+  This is not strict functional programming, but a guideline to improve
+  readability and predictability.
+
+---
+
+## Literate Readability
+
+- Minimal semantic distance between the programmer’s intent and the code.
+- Fewer rules to memorize.
+- No invisible side effects.
+- Code should read like a clear explanation of its purpose.
+
+---
+
+## Foundational vs Optional Modules
+
+**Foundational modules**:
+
+- Appear in most non-trivial programs.
+- Do not encode ideology (OO, async, inheritance, etc.).
+- Reduce mechanical noise.
+- Make behavior explicit.
+- Compose cleanly with other modules.
+
+**Examples**: arena allocation, option/result types, bounded collections, explicit iteration.
+
+**Optional modules**:
+
+- Helpful but isolated.
+- May depend on foundational modules.
+- Must not break the dependency rule.
+
 
 
