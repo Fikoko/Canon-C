@@ -1,13 +1,24 @@
 #include "canon/vector.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #define VECTOR_INITIAL_CAPACITY 8
 #define VECTOR_GROWTH_FACTOR 2
+#define VECTOR_MAX_CAPACITY (SIZE_MAX / 2)
 
 Vector *vector_new(size_t element_size) {
+    if (element_size == 0 || element_size > VECTOR_MAX_CAPACITY) {
+        return NULL;
+    }
+    
     Vector *vec = malloc(sizeof(Vector));
     if (!vec) return NULL;
+    
+    if (VECTOR_INITIAL_CAPACITY > SIZE_MAX / element_size) {
+        free(vec);
+        return NULL;
+    }
     
     vec->data = malloc(VECTOR_INITIAL_CAPACITY * element_size);
     if (!vec->data) {
@@ -30,6 +41,10 @@ void vector_free(Vector *vec) {
 bool vector_reserve(Vector *vec, size_t capacity) {
     if (!vec || capacity <= vec->capacity) return true;
     
+    if (capacity > SIZE_MAX / vec->element_size) {
+        return false;
+    }
+    
     void *new_data = realloc(vec->data, capacity * vec->element_size);
     if (!new_data) return false;
     
@@ -42,7 +57,13 @@ bool vector_push(Vector *vec, const void *element) {
     if (!vec || !element) return false;
     
     if (vec->size >= vec->capacity) {
+        if (vec->capacity > VECTOR_MAX_CAPACITY) {
+            return false;
+        }
         size_t new_capacity = vec->capacity * VECTOR_GROWTH_FACTOR;
+        if (new_capacity < vec->capacity || new_capacity > VECTOR_MAX_CAPACITY) {
+            new_capacity = VECTOR_MAX_CAPACITY;
+        }
         if (!vector_reserve(vec, new_capacity)) {
             return false;
         }

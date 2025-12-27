@@ -1,8 +1,10 @@
 #include "canon/string_utils.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #define STRING_INITIAL_CAPACITY 32
+#define STRING_MAX_CAPACITY (SIZE_MAX / 2)
 
 static char *canon_strdup(const char *s) {
     size_t len = strlen(s) + 1;
@@ -66,12 +68,26 @@ bool string_append(String *str, const char *text) {
     if (!str || !text) return false;
     
     size_t text_len = strlen(text);
+    
+    if (text_len > SIZE_MAX - str->length - 1) {
+        return false;
+    }
+    
     size_t new_len = str->length + text_len;
     
     if (new_len + 1 > str->capacity) {
         size_t new_capacity = str->capacity;
+        
         while (new_capacity <= new_len) {
-            new_capacity *= 2;
+            if (new_capacity > STRING_MAX_CAPACITY) {
+                return false;
+            }
+            size_t next_capacity = new_capacity * 2;
+            if (next_capacity < new_capacity || next_capacity > STRING_MAX_CAPACITY) {
+                new_capacity = STRING_MAX_CAPACITY;
+                break;
+            }
+            new_capacity = next_capacity;
         }
         
         char *new_data = realloc(str->data, new_capacity);
