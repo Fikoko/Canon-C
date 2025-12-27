@@ -1,7 +1,5 @@
 # Canon-C
 
-# mylib
-
 A collection of small, explicit C libraries designed to improve readability,
 semantic clarity, and development speed while preserving C’s performance and
 predictability.
