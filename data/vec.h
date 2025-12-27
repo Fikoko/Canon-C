@@ -10,7 +10,8 @@ typedef struct {
     size_t capacity;
 } Vec;
 
-// Initialize vector
+// --- Automatic mode ---
+
 static inline Vec vec_init(size_t capacity) {
     Vec v;
     v.items = (void**)malloc(sizeof(void*) * capacity);
@@ -19,7 +20,6 @@ static inline Vec vec_init(size_t capacity) {
     return v;
 }
 
-// Push item to vector
 static inline bool vec_push(Vec* v, void* item) {
     if (v->len >= v->capacity) {
         size_t new_capacity = v->capacity * 2 + 1;
@@ -32,19 +32,31 @@ static inline bool vec_push(Vec* v, void* item) {
     return true;
 }
 
-// Pop last item from vector
+// Pop last item (automatic)
 static inline void* vec_pop(Vec* v) {
     if (v->len == 0) return NULL;
     return v->items[--v->len];
 }
 
-// Get item by index (NULL if out-of-bounds)
-static inline void* vec_get(Vec* v, size_t index) {
-    if (index >= v->len) return NULL;
-    return v->items[index];
+// --- Manual mode variants ---
+
+// Push with no automatic resize, fails if full
+static inline bool vec_push_manual(Vec* v, void* item) {
+    if (v->len >= v->capacity) return false;
+    v->items[v->len++] = item;
+    return true;
 }
 
-// Free vector
+// Initialize with preallocated buffer (manual)
+static inline Vec vec_init_manual(void** buffer, size_t capacity) {
+    Vec v;
+    v.items = buffer;
+    v.len = 0;
+    v.capacity = capacity;
+    return v;
+}
+
+// Free vector (same for both modes)
 static inline void vec_free(Vec* v) {
     free(v->items);
     v->items = NULL;
