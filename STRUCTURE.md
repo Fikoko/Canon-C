@@ -1,7 +1,7 @@
 # Project Structure
 
 This document defines the **architecture and dependency rules** for all modules
-in the `mylib` ecosystem. It is intended to maintain clarity, composability, and
+in the `Canon-C` ecosystem. It is intended to maintain clarity, composability, and
 prevent accidental coupling.
 
 ---
