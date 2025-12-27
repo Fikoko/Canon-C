@@ -1,10 +1,6 @@
 # Canon-C-Library
 This repository is a collection of small, explicit C utilities that form a coherent semantic layer on top of C.
 
-# non semantic "c"
-
-A minimal, functional, literate semantic layer for C.
-
 This repository collects small, explicit C utilities that allow C to be used as an **execution backend**, while higher-level meaning is expressed through a simple, functional-style library.
 
 The goal is not to extend C into another language, but to **reduce the semantic and cognitive burden of programming** by replacing low-level mechanics (manual allocation, pointer bookkeeping, loop scaffolding) with clear, intention-revealing operations.
