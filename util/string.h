@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Duplicate string
+// --- Automatic mode ---
 static inline char* str_dup(const char* s) {
     size_t len = strlen(s);
     char* copy = (char*)malloc(len + 1);
@@ -13,7 +13,6 @@ static inline char* str_dup(const char* s) {
     return copy;
 }
 
-// Concatenate two strings (allocates new memory)
 static inline char* str_concat(const char* a, const char* b) {
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -24,7 +23,6 @@ static inline char* str_concat(const char* a, const char* b) {
     return new_str;
 }
 
-// Get substring (allocates new memory)
 static inline char* str_sub(const char* s, size_t start, size_t len) {
     size_t s_len = strlen(s);
     if (start >= s_len) return NULL;
@@ -34,6 +32,27 @@ static inline char* str_sub(const char* s, size_t start, size_t len) {
     memcpy(sub, s + start, len);
     sub[len] = '\0';
     return sub;
+}
+
+// --- Manual mode ---
+
+// Copy string into preallocated buffer
+static inline bool str_copy_manual(char* dest, size_t dest_size, const char* src) {
+    size_t len = strlen(src);
+    if (len + 1 > dest_size) return false;
+    memcpy(dest, src, len + 1);
+    return true;
+}
+
+// Concatenate strings into preallocated buffer
+static inline bool str_concat_manual(char* dest, size_t dest_size, const char* a, const char* b) {
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
+    if (len_a + len_b + 1 > dest_size) return false;
+    memcpy(dest, a, len_a);
+    memcpy(dest + len_a, b, len_b + 1);
+    dest[len_a + len_b] = '\0';
+    return true;
 }
 
 #endif // CANON_C_UTIL_STRING_H
