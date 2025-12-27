@@ -1,72 +1,123 @@
-# Canon-C-Library
-This repository is a collection of small, explicit C utilities that form a coherent semantic layer on top of C.
+# Canon-C
 
-This repository collects small, explicit C utilities that allow C to be used as an **execution backend**, while higher-level meaning is expressed through a simple, functional-style library.
+A community-curated collection of small, composable C libraries that provide **explicit, selectable semantics** for writing readable, literate, and predictable C code.
 
-The goal is not to extend C into another language, but to **reduce the semantic and cognitive burden of programming** by replacing low-level mechanics (manual allocation, pointer bookkeeping, loop scaffolding) with clear, intention-revealing operations.
-
-C provides execution.  
-Semantics live in the library.
+This project treats **C as an execution backend**, not as a complete semantic system.  
+Meaning, structure, and programming style are expressed through libraries — not imposed by the language.
 
 ---
 
 ## Motivation
 
-C is fast, predictable, and transparent — but its default semantics force the programmer to constantly manage details that are mechanical rather than meaningful.
+Modern programming languages often trade readability and semantic transparency for expressive power and enforcement. While this can be effective in large or highly specialized environments, it also increases cognitive load, development time, and the need for deep language mastery.
 
-This project explores a different approach:
+This project explores a different path:
 
-- keep C’s performance and simplicity
-- avoid language-level abstraction systems
-- build a small, explicit semantic layer as a **library**
-- favor functional data flow (input → output)
-- support literate, readable code
-- make abstractions opt-in, inspectable, and replaceable
+- prioritize **literate readability**
+- make **semantics explicit and inspectable**
+- reduce accidental complexity
+- avoid hidden behavior
+- keep performance and predictability
+
+C is used because it is simple, stable, fast, and universally supported — not because its default semantics are ideal.
 
 ---
 
-## Core Principles
+## Core Idea
 
-- **Library, not language**
-- **Zero-cost abstractions**
-- **Functional-style APIs**
-- **Explicit memory models** (arena-based allocation)
-- **No mandatory `malloc` / `free` in user code**
-- **Readable, intention-first code**
-- **Minimal surface area**
+**All abstractions live in libraries.  
+All meaning is opt-in.  
+Everything is replaceable.**
+
+Instead of a single framework or a fixed “standard way”, this repository collects **independent function sets**, each representing a specific semantic choice.
+
+Users select the semantics they want by selecting the libraries they include.
+
+---
+
+## What This Repository Contains
+
+- Small, focused C libraries
+- Each library is:
+  - standalone
+  - optional
+  - documented
+  - versioned by semantic intent
+- Examples of library categories:
+  - memory models (e.g. arena allocators)
+  - semantic containers (e.g. vectors, options, results)
+  - functional-style utilities (map, filter, fold)
+  - iteration and data-flow helpers
+
+There is no required core and no mandatory dependency graph.
+
+---
+
+## Community-Driven Semantics
+
+This project is intentionally **pluralistic**.
+
+Different libraries may solve the same problem using different assumptions or trade-offs.  
+This is not a flaw — it is the point.
+
+Two vector implementations can coexist.
+Two error-handling models can coexist.
+Two memory models can coexist.
+
+Users choose **which meaning they want**, not which framework they must accept.
 
 ---
 
 ## What This Is Not
 
 - Not a framework
-- Not object-oriented C
-- Not a C++ or Rust replacement
 - Not a new language
+- Not a replacement for C++
 - Not an STL clone
+- Not a package manager
+
+This project does not aim to compete with existing languages or ecosystems.  
+It aims to make **writing and reasoning about C code simpler and more readable**.
 
 ---
 
-## Scope
+## Design Principles
 
-This repository will incrementally collect:
+- **Library, not language**
+- **Functions over mechanisms**
+- **Explicit memory and lifetimes**
+- **No hidden allocation**
+- **Minimal surface area**
+- **Readable before clever**
+- **Literate programming friendly**
+- **C and C++ compatible**
 
-- arena allocators
-- semantic containers (`Vec`, `Option`, `Result`)
-- functional utilities (`map`, `filter`, `fold`, `range`)
-- small, composable helpers
+---
 
-Each component is independent and optional.
+## Usage Philosophy
+
+You do not “adopt” this project.
+
+You **pick** from it.
+
+Copy headers.
+Use submodules.
+Select only what fits your way of thinking.
+
+If a library no longer matches your semantics, replace it.
 
 ---
 
 ## Philosophy
 
-> Abstractions should be chosen, not inherited.
+> Abstractions should be chosen, not inherited.  
+> Semantics should be visible, not implied.  
+> C provides execution — libraries provide meaning.
 
 ---
 
 ## Status
 
-Early exploration.  
-Expect small commits, minimal dependencies, and evolving ideas.
+Early-stage and exploratory.
+
+The focus is on clarity, restraint, and long-term usefulness rather than completeness or popularity.
