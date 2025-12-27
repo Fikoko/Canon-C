@@ -1,123 +1,100 @@
 # Canon-C
 
-A community-curated collection of small, composable C libraries that provide **explicit, selectable semantics** for writing readable, literate, and predictable C code.
+# mylib
 
-This project treats **C as an execution backend**, not as a complete semantic system.  
-Meaning, structure, and programming style are expressed through libraries — not imposed by the language.
+A collection of small, explicit C libraries designed to improve readability,
+semantic clarity, and development speed while preserving C’s performance and
+predictability.
+
+This project treats **C as an execution backend**, not as a semantic authority.
 
 ---
 
 ## Motivation
 
-Modern programming languages often trade readability and semantic transparency for expressive power and enforcement. While this can be effective in large or highly specialized environments, it also increases cognitive load, development time, and the need for deep language mastery.
+C is fast, portable, and honest, but its native semantics are low-level and
+mechanical. Writing non-trivial programs in C often requires memorizing
+patterns, rules, and boilerplate such as manual memory management,
+ownership conventions, error flags, and loop idioms. These details obscure
+intent and slow development.
 
-This project explores a different path:
+Many modern languages solve this by embedding abstractions directly into
+the language. While powerful, this approach increases semantic complexity,
+hides behavior, and raises the cost of mastery.
 
-- prioritize **literate readability**
-- make **semantics explicit and inspectable**
-- reduce accidental complexity
-- avoid hidden behavior
-- keep performance and predictability
+This project takes a different path.
 
-C is used because it is simple, stable, fast, and universally supported — not because its default semantics are ideal.
+C is left untouched.  
+Meaning is added through **libraries**, not syntax.
+
+The goal is to enable **literate, intention-revealing C code** while
+preserving C’s performance, portability, and transparency.
+
+Readability is treated as a real engineering constraint, directly
+proportional to development time and long-term maintainability.
 
 ---
 
 ## Core Idea
 
-**All abstractions live in libraries.  
-All meaning is opt-in.  
-Everything is replaceable.**
+Everything is a library.  
+Everything is a function.  
+Everything is explicit.
 
-Instead of a single framework or a fixed “standard way”, this repository collects **independent function sets**, each representing a specific semantic choice.
+C is used as a **low-level target**, while higher-level semantics
+(memory, lifetime, failure, data flow, transformation) are expressed
+through small, composable modules.
 
-Users select the semantics they want by selecting the libraries they include.
-
----
-
-## What This Repository Contains
-
-- Small, focused C libraries
-- Each library is:
-  - standalone
-  - optional
-  - documented
-  - versioned by semantic intent
-- Examples of library categories:
-  - memory models (e.g. arena allocators)
-  - semantic containers (e.g. vectors, options, results)
-  - functional-style utilities (map, filter, fold)
-  - iteration and data-flow helpers
-
-There is no required core and no mandatory dependency graph.
+You do not inherit semantics from the language.  
+You **select** semantics by choosing which headers to include.
 
 ---
 
-## Community-Driven Semantics
+## Design Philosophy
 
-This project is intentionally **pluralistic**.
+- Everything is optional
+- Everything is explicit
+- No hidden allocation
+- No implicit ownership
+- No global state
+- No framework coupling
+- No required runtime
+- No language extensions
+- No clever tricks
 
-Different libraries may solve the same problem using different assumptions or trade-offs.  
-This is not a flaw — it is the point.
+If behavior cannot be understood by reading the header, it does not belong.
 
-Two vector implementations can coexist.
-Two error-handling models can coexist.
-Two memory models can coexist.
+Abstractions must clarify behavior, not conceal it.
 
-Users choose **which meaning they want**, not which framework they must accept.
+---
+
+## What This Is
+
+- A curated set of **foundational C modules**
+- A shared structure and discipline for community-defined function libraries
+- A functional-style semantic layer built *on top of* C
+- Fully usable from both **C and C++**
+- A project optimized for readability, predictability, and development speed
 
 ---
 
 ## What This Is Not
 
-- Not a framework
-- Not a new language
 - Not a replacement for C++
-- Not an STL clone
-- Not a package manager
+- Not a new programming language
+- Not object-oriented
+- Not macro-heavy metaprogramming
+- Not a framework
+- Not opinionated about application architecture
 
-This project does not aim to compete with existing languages or ecosystems.  
-It aims to make **writing and reasoning about C code simpler and more readable**.
-
----
-
-## Design Principles
-
-- **Library, not language**
-- **Functions over mechanisms**
-- **Explicit memory and lifetimes**
-- **No hidden allocation**
-- **Minimal surface area**
-- **Readable before clever**
-- **Literate programming friendly**
-- **C and C++ compatible**
+This project does not compete with languages.  
+It avoids them.
 
 ---
 
-## Usage Philosophy
+## Project Structure
 
-You do not “adopt” this project.
+The project is organized by **semantic depth**, not by features.
+Lower layers define unavoidable mechanics, while higher layers build
+meaning on top of them.
 
-You **pick** from it.
-
-Copy headers.
-Use submodules.
-Select only what fits your way of thinking.
-
-If a library no longer matches your semantics, replace it.
-
----
-
-## Philosophy
-
-> Abstractions should be chosen, not inherited.  
-> Semantics should be visible, not implied.  
-> C provides execution — libraries provide meaning.
-
----
-
-## Status
-
-Early-stage and exploratory.
-
-The focus is on clarity, restraint, and long-term usefulness rather than completeness or popularity.
