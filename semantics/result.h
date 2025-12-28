@@ -13,12 +13,26 @@ typedef struct { \
     }; \
 } Result_##value_type##_##error_type; \
 \
-static inline Result_##value_type##_##error_type Result_##value_type##_##error_type##_Ok(value_type v) { \
-    Result_##value_type##_##error_type r; r.is_ok = true; r.ok = v; return r; \
+static inline Result_##value_type##_##error_type \
+Result_##value_type##_##error_type##_Ok(value_type v) { \
+    Result_##value_type##_##error_type r; \
+    r.is_ok = true; \
+    r.ok = v; \
+    return r; \
 } \
 \
-static inline Result_##value_type##_##error_type Result_##value_type##_##error_type##_Err(error_type e) { \
-    Result_##value_type##_##error_type r; r.is_ok = false; r.err = e; return r; \
+static inline Result_##value_type##_##error_type \
+Result_##value_type##_##error_type##_Err(error_type e) { \
+    Result_##value_type##_##error_type r; \
+    r.is_ok = false; \
+    r.err = e; \
+    return r; \
+} \
+\
+static inline value_type \
+Result_##value_type##_##error_type##_unwrap_or( \
+    Result_##value_type##_##error_type r, value_type fallback) { \
+    return r.is_ok ? r.ok : fallback; \
 }
 
 #endif // CANON_C_SEMANTICS_RESULT_H
