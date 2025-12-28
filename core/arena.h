@@ -2,42 +2,32 @@
 #define CANON_C_CORE_ARENA_H
 
 #include <stddef.h>
-#include <stdlib.h>
+#include <stdint.h>
+#include "memory.h"
+
+/*
+    arena.h — linear allocation with explicit lifetime
+
+    Arena does not own memory by default.
+    It operates on a caller-provided buffer.
+*/
 
 typedef struct Arena {
-    unsigned char* buffer;
-    size_t capacity;
-    size_t offset;
+    uint8_t *buffer;
+    size_t   capacity;
+    size_t   offset;
 } Arena;
 
-// Initialize arena with given capacity
-static inline Arena arena_init(size_t capacity) {
-    Arena a;
-    a.buffer = (unsigned char*)malloc(capacity);
-    a.capacity = capacity;
-    a.offset = 0;
-    return a;
-}
+/* Initialize arena with an existing buffer */
+void arena_init(Arena *arena, void *buffer, size_t capacity);
 
-// Allocate memory from arena
-static inline void* arena_alloc(Arena* a, size_t size) {
-    if (a->offset + size > a->capacity) return NULL;
-    void* ptr = a->buffer + a->offset;
-    a->offset += size;
-    return ptr;
-}
+/* Allocate memory from arena */
+void *arena_alloc(Arena *arena, size_t size);
 
-// Reset arena (does not free memory)
-static inline void arena_reset(Arena* a) {
-    a->offset = 0;
-}
+/* Reset arena (reuse memory) */
+void arena_reset(Arena *arena);
 
-// Free arena memory
-static inline void arena_free(Arena* a) {
-    free(a->buffer);
-    a->buffer = NULL;
-    a->capacity = 0;
-    a->offset = 0;
-}
+/* Check remaining capacity */
+size_t arena_remaining(const Arena *arena);
 
-#endif // CANON_C_CORE_ARENA_H
+#endif /* CANON_C_CORE_ARENA_H */
