@@ -1,47 +1,62 @@
 # Design Principles
 
-This document explains the **semantic rules and behavior expectations**
-for modules in the `Canon-C` ecosystem.
+This document defines the **semantic rules and behavioral expectations**
+for modules in the Canon-C ecosystem.
+
+These rules are intentionally strict.  
+If a module violates them, it does not belong.
 
 ---
 
 ## Memory Model
 
-- All memory comes from the caller.
-- Allocators must be passed explicitly.
-- Lifetimes are visible and predictable.
-- Hidden `malloc`/`free` or implicit allocation is forbidden.
+- All memory ownership is explicit.
+- Allocators or buffers must be passed by the caller **or**
+  allocation must be clearly documented in the API.
+- Lifetimes must be visible and predictable.
+- Hidden ownership transfer is forbidden.
 - Arena-style allocation is preferred when possible.
+
+If a function allocates internally, this must be obvious from its name,
+documentation, or usage pattern.
 
 ---
 
 ## Failure Model
 
 - Failure and absence are represented explicitly as values.
-- No sentinel values, global flags, or hidden control flow.
-- Types such as `Option<T>` or `Result<T, E>` must be used to express potential failure.
-- Every function that can fail must communicate this in its signature.
+- No hidden global flags or implicit control flow.
+- Types such as `Option<T>` or `Result<T, E>` are the preferred way to
+  express absence or failure.
+- Every function that can fail must communicate this in its signature
+  or return convention.
+
+Conventional C patterns (e.g. returning `NULL`) are acceptable when
+clearly documented and unavoidable.
 
 ---
 
 ## Functional Data Flow
 
-- Programs are written in terms of **transformations**, not hidden side effects:
+Programs are written in terms of **transformations**, not hidden side effects:
 
-    input → transform → output
+input → transform → output
 
 
-  This is not strict functional programming, but a guideline to improve
-  readability and predictability.
+This is not strict functional programming.
+It is a readability rule that favors explicit data flow over mutation
+hidden across multiple layers.
 
 ---
 
 ## Literate Readability
 
-- Minimal semantic distance between the programmer’s intent and the code.
+- Minimal semantic distance between intent and code.
 - Fewer rules to memorize.
 - No invisible side effects.
-- Code should read like a clear explanation of its purpose.
+- Behavior must be discoverable by reading the header.
+
+Code should read like a clear explanation of its purpose.
 
 ---
 
@@ -55,13 +70,12 @@ for modules in the `Canon-C` ecosystem.
 - Make behavior explicit.
 - Compose cleanly with other modules.
 
-**Examples**: arena allocation, option/result types, bounded collections, explicit iteration.
+**Examples**:
+arena allocation, option/result types, bounded collections,
+explicit iteration.
 
 **Optional modules**:
 
 - Helpful but isolated.
 - May depend on foundational modules.
-- Must not break the dependency rule.
-
-
-
+- Must not impose new semantic rules.
