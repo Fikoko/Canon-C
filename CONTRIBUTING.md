@@ -28,6 +28,7 @@ A module may be accepted if it can justify itself as:
 - No implicit ownership.
 - No clever tricks or macros that obscure intent.
 - All function behavior must be explicit in headers.
+- Header-only by default; ".c" files require explicit justification.
 
 ---
 
