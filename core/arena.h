@@ -34,7 +34,11 @@ static inline void arena_init(Arena *arena, void *buffer, size_t capacity) {
    ------------------------------------------------------------ */
 static inline void* arena_alloc(Arena *arena, size_t size) {
     if (!arena || size == 0) return NULL;
+
+    size = mem_align(size);
+
     if (arena->offset + size > arena->capacity) return NULL;
+
     void *ptr = arena->buffer + arena->offset;
     arena->offset += size;
     return ptr;
