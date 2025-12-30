@@ -58,5 +58,25 @@ core → semantics → data → algo → util
    - How it fits into the hierarchy
    - Any guarantees or limitations
 
-PRs violating these rules will be returned with feedback.
+PRs violating these rules will be returned with feedback. 
+
+## Frozen Modules (v1.0.0)
+
+All modules included in v1.0.0 are frozen.
+
+Allowed changes:
+- Comments
+- Documentation
+- Typo fixes
+- Bug fixes that do not alter semantics or signatures
+
+Disallowed changes:
+- Signature changes
+- Ownership changes
+- Lifetime changes
+- Hidden behavior
+- New dependencies
+
+Breaking changes require a new major release.
+
 
