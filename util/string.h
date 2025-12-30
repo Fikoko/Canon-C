@@ -1,46 +1,49 @@
 #ifndef CANON_C_UTIL_STRING_H
 #define CANON_C_UTIL_STRING_H
 
-#include <stdlib.h>
-#include <string.h>
+#include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
+#include <canon/core/memory.h>
 
 /*
-    string.h — basic string utilities
+    string.h — explicit string helpers
 
-    Automatic mode:
-      - Allocates using malloc
-      - Caller owns returned memory
+    Ownership rules are encoded in function names.
 
-    Manual mode:
-      - Operates on caller-provided buffers
-      - Never allocates
+    Functions that allocate:
+      - return owned memory
+      - must be freed by the caller
+
+    Functions that operate on buffers:
+      - never allocate
+      - never free
 */
 
-// =====================
-// Automatic mode
-// =====================
+/* ============================================================
+   Owned strings (explicit allocation)
+   ============================================================ */
 
-// Duplicate string (malloc)
-static inline char* str_dup(const char* s) {
+/* Allocate and copy string */
+static inline char *str_alloc_copy(const char *s) {
     if (!s) return NULL;
 
     size_t len = strlen(s);
-    char* copy = (char*)malloc(len + 1);
-    if (!copy) return NULL;
+    char *out = (char *)mem_alloc(len + 1);
+    if (!out) return NULL;
 
-    memcpy(copy, s, len + 1);
-    return copy;
+    memcpy(out, s, len + 1);
+    return out;
 }
 
-// Concatenate two strings (malloc)
-static inline char* str_concat(const char* a, const char* b) {
+/* Allocate and concatenate two strings */
+static inline char *str_alloc_concat(const char *a, const char *b) {
     if (!a || !b) return NULL;
 
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
 
-    char* out = (char*)malloc(len_a + len_b + 1);
+    char *out = (char *)mem_alloc(len_a + len_b + 1);
     if (!out) return NULL;
 
     memcpy(out, a, len_a);
@@ -48,8 +51,12 @@ static inline char* str_concat(const char* a, const char* b) {
     return out;
 }
 
-// Substring (malloc)
-static inline char* str_sub(const char* s, size_t start, size_t len) {
+/* Allocate substring */
+static inline char *str_alloc_sub(
+    const char *s,
+    size_t start,
+    size_t len
+) {
     if (!s) return NULL;
 
     size_t s_len = strlen(s);
@@ -58,7 +65,7 @@ static inline char* str_sub(const char* s, size_t start, size_t len) {
     if (start + len > s_len)
         len = s_len - start;
 
-    char* out = (char*)malloc(len + 1);
+    char *out = (char *)mem_alloc(len + 1);
     if (!out) return NULL;
 
     memcpy(out, s + start, len);
@@ -66,15 +73,15 @@ static inline char* str_sub(const char* s, size_t start, size_t len) {
     return out;
 }
 
-// =====================
-// Manual mode
-// =====================
+/* ============================================================
+   Buffer-based operations (no allocation)
+   ============================================================ */
 
-// Copy string into preallocated buffer
-static inline bool str_copy_manual(
-    char* dest,
-    size_t dest_size,
-    const char* src
+/* Copy string into caller-provided buffer */
+static inline bool str_copy_into(
+    char       *dest,
+    size_t      dest_size,
+    const char *src
 ) {
     if (!dest || !src) return false;
 
@@ -85,12 +92,12 @@ static inline bool str_copy_manual(
     return true;
 }
 
-// Concatenate into preallocated buffer
-static inline bool str_concat_manual(
-    char* dest,
-    size_t dest_size,
-    const char* a,
-    const char* b
+/* Concatenate strings into caller-provided buffer */
+static inline bool str_concat_into(
+    char       *dest,
+    size_t      dest_size,
+    const char *a,
+    const char *b
 ) {
     if (!dest || !a || !b) return false;
 
