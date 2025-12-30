@@ -72,32 +72,16 @@ Abstractions must clarify behavior, not conceal it.
   - `memory.h` — allocation helpers and contracts
 - **data/**
   - `vec.h` — dynamic vector (automatic & manual modes)
-  - `range.h` — sequential integer generator
-  - `vec_clone.h` — deep copy of vectors
-  - `vec_sort.h` — sort vector elements
-  - `vec_reverse.h` — reverse vector elements
-  - `vec_find.h` — find element in vector
 - **semantics/**
   - `option.h` — explicit optional values
   - `result.h` — explicit success/error values
 - **algo/**
   - `map.h` — functional-style data transformation
-  - `filter.h` — select elements based on predicate
-  - `fold.h` — aggregate elements into a single value
-  - `zip.h` — combine two sequences element-wise
-  - `enumerate.h` — iterate with index and value
-  - `slice.h` — extract subranges
-  - `flat_map.h` — map and flatten results
-  - `any_all.h` — check predicates for any/all elements
-  - `find.h` — locate first element matching a predicate
+  - `filter.h` — select elements based on predicate (x)
+  - `fold.h` — aggregate elements into a single value (x)
 - **util/**
   - `string.h` — string utilities (automatic & manual)
   - `log.h` — minimal logging
-  - `logf.h` — formatted logging
-  - `str_split.h` — split string into substrings
-  - `str_join.h` — join multiple strings
-  - `mem_safe.h` — safe memory operations
-  - `arena_dup.h` — duplicate memory via arena
 
 
 All modules are **header-only** and require no runtime or build system integration.
