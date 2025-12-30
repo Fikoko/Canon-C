@@ -2,69 +2,80 @@
 #define CANON_C_ALGO_MAP_H
 
 #include <stddef.h>
+#include <stdbool.h>
+#include <canon/core/memory.h>
 
 /*
-    map.h — canonical mapping primitive over pointer sequences
+    map.h — functional-style mapping over pointer sequences
 
-    PURPOSE
-    -------
-    Defines the irreducible "map" operation:
-      - transform each element of a pointer sequence
-      - without allocating
-      - without owning memory
-      - without assuming container type
+    A map operation transforms:
+        input[i] -> output[i]
 
-    OWNERSHIP
-    ----------
-    - Input pointers are borrowed
-    - Output pointers are written, not owned
-    - This module never allocates or frees memory
+    This module:
+    - Does not track ownership
+    - Does not free memory
+    - Does not assume allocation strategy
 
-    FAILURE
-    --------
-    - Mapping functions may return NULL
-    - NULL values are propagated verbatim
-    - No internal error handling is performed
-
-    DEPENDENCIES
-    -------------
-    None (pure behavioral primitive)
+    Allocation, if any, is always explicit.
 */
 
-/* Transformation function: input pointer → output pointer */
-typedef void* (*MapFn)(void*);
+typedef void* (*MapFunc)(void*);
 
-/* ------------------------------------------------------------
-   In-place mapping
-   Mutates the provided array
-   ------------------------------------------------------------ */
-static inline void map_inplace(
-    void** items,
-    size_t count,
-    MapFn fn
-) {
-    if (!items || !fn) return;
+/* ============================================================
+   In-place transformation
+   ============================================================ */
 
-    for (size_t i = 0; i < count; i++) {
-        items[i] = fn(items[i]);
+/* Mutate array by applying f to each element */
+static inline void map_inplace(void **items, size_t len, MapFunc f) {
+    if (!items || !f) return;
+
+    for (size_t i = 0; i < len; i++) {
+        items[i] = f(items[i]);
     }
 }
 
-/* ------------------------------------------------------------
-   Map into caller-provided output buffer
-   Input and output may alias
-   ------------------------------------------------------------ */
-static inline void map_to(
-    void** input,
-    size_t count,
-    MapFn fn,
-    void** output
-) {
-    if (!input || !output || !fn) return;
+/* ============================================================
+   Explicit allocation
+   ============================================================ */
 
-    for (size_t i = 0; i < count; i++) {
-        output[i] = fn(input[i]);
+/* Allocate output array using core allocator */
+static inline bool map_alloc(
+    void   **items,
+    size_t   len,
+    MapFunc  f,
+    void ***out_items
+) {
+    if (!items || !f || !out_items) return false;
+
+    void **out = (void **)mem_alloc(sizeof(void *) * len);
+    if (!out) return false;
+
+    for (size_t i = 0; i < len; i++) {
+        out[i] = f(items[i]);
     }
+
+    *out_items = out;
+    return true;
+}
+
+/* ============================================================
+   Manual buffer
+   ============================================================ */
+
+/* Map into caller-provided output buffer */
+static inline bool map_into(
+    void   **items,
+    size_t   len,
+    MapFunc  f,
+    void   **output
+) {
+    if (!items || !output || !f) return false;
+
+    for (size_t i = 0; i < len; i++) {
+        output[i] = f(items[i]);
+    }
+
+    return true;
 }
 
 #endif /* CANON_C_ALGO_MAP_H */
