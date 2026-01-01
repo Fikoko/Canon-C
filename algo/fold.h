@@ -6,33 +6,38 @@
 /*
     fold.h — aggregate elements into a single value
 
-    Derived utility.
-    - Caller owns accumulator
+    Semantics:
+    - Left-to-right fold
+    - Explicit accumulator
     - No allocation
-    - Order is left-to-right
+    - No ownership
 */
-
-/* Fold function:
-   acc = f(acc, item)
-*/
-typedef void (*FoldFn)(void *acc, void *item);
 
 /*
-    Folds items into accumulator.
+    Fold function:
+    - acc  : accumulator (caller-owned)
+    - item : current element
+    - ctx  : optional user context (may be NULL)
+*/
+typedef void (*FoldFn)(void *acc, void *item, void *ctx);
+
+/*
+    Fold items into accumulator.
 
     Requirements:
     - acc must point to valid, initialized storage
 */
 static inline void fold(
-    void *acc,
-    void **items,
-    size_t len,
-    FoldFn f
+    void   *acc,
+    void  **items,
+    size_t  len,
+    FoldFn  f,
+    void   *ctx
 ) {
     if (!acc || !items || !f) return;
 
     for (size_t i = 0; i < len; i++) {
-        f(acc, items[i]);
+        f(acc, items[i], ctx);
     }
 }
 
