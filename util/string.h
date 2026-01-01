@@ -32,7 +32,7 @@ static inline char *str_alloc_copy(const char *s) {
     char *out = (char *)mem_alloc(len + 1);
     if (!out) return NULL;
 
-    memcpy(out, s, len + 1);
+    mem_copy(out, s, len + 1);
     return out;
 }
 
@@ -46,12 +46,18 @@ static inline char *str_alloc_concat(const char *a, const char *b) {
     char *out = (char *)mem_alloc(len_a + len_b + 1);
     if (!out) return NULL;
 
-    memcpy(out, a, len_a);
-    memcpy(out + len_a, b, len_b + 1);
+    mem_copy(out, a, len_a);
+    mem_copy(out + len_a, b, len_b + 1);
     return out;
 }
 
-/* Allocate substring */
+/*
+    Allocate substring [start, start+len)
+
+    Semantics:
+    - If len == 0 → returns empty string
+    - If start >= strlen(s) → returns NULL
+*/
 static inline char *str_alloc_sub(
     const char *s,
     size_t start,
@@ -68,7 +74,7 @@ static inline char *str_alloc_sub(
     char *out = (char *)mem_alloc(len + 1);
     if (!out) return NULL;
 
-    memcpy(out, s + start, len);
+    mem_copy(out, s + start, len);
     out[len] = '\0';
     return out;
 }
@@ -83,12 +89,14 @@ static inline bool str_copy_into(
     size_t      dest_size,
     const char *src
 ) {
-    if (!dest || !src) return false;
+    if (!dest || !src || dest_size == 0)
+        return false;
 
     size_t len = strlen(src);
-    if (len + 1 > dest_size) return false;
+    if (len + 1 > dest_size)
+        return false;
 
-    memcpy(dest, src, len + 1);
+    mem_copy(dest, src, len + 1);
     return true;
 }
 
@@ -99,7 +107,8 @@ static inline bool str_concat_into(
     const char *a,
     const char *b
 ) {
-    if (!dest || !a || !b) return false;
+    if (!dest || !a || !b || dest_size == 0)
+        return false;
 
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -107,8 +116,8 @@ static inline bool str_concat_into(
     if (len_a + len_b + 1 > dest_size)
         return false;
 
-    memcpy(dest, a, len_a);
-    memcpy(dest + len_a, b, len_b + 1);
+    mem_copy(dest, a, len_a);
+    mem_copy(dest + len_a, b, len_b + 1);
     return true;
 }
 
