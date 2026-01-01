@@ -54,19 +54,19 @@ static inline Vec vec_empty(void) {
    ============================================================ */
 
 static inline bool vec_is_empty(const Vec *v) {
-    return v->len == 0;
+    return !v || v->len == 0;
 }
 
 static inline bool vec_is_full(const Vec *v) {
-    return v->len >= v->capacity;
+    return v && v->len >= v->capacity;
 }
 
 static inline size_t vec_len(const Vec *v) {
-    return v->len;
+    return v ? v->len : 0;
 }
 
 static inline size_t vec_capacity(const Vec *v) {
-    return v->capacity;
+    return v ? v->capacity : 0;
 }
 
 /* ============================================================
@@ -80,8 +80,11 @@ static inline void *vec_get_unchecked(const Vec *v, size_t index) {
 
 /* Get element at index (checked) */
 static inline bool vec_get(const Vec *v, size_t index, void **out) {
-    if (!v || !out) return false;
-    if (index >= v->len) return false;
+    if (!v || !out || !v->items)
+        return false;
+
+    if (index >= v->len)
+        return false;
 
     *out = v->items[index];
     return true;
@@ -93,8 +96,11 @@ static inline bool vec_get(const Vec *v, size_t index, void **out) {
 
 /* Push element, fails if capacity exceeded */
 static inline bool vec_push(Vec *v, void *item) {
-    if (!v) return false;
-    if (v->len >= v->capacity) return false;
+    if (!v || !v->items)
+        return false;
+
+    if (v->len >= v->capacity)
+        return false;
 
     v->items[v->len++] = item;
     return true;
@@ -102,8 +108,11 @@ static inline bool vec_push(Vec *v, void *item) {
 
 /* Pop element, explicit success/failure */
 static inline bool vec_pop(Vec *v, void **out) {
-    if (!v || !out) return false;
-    if (v->len == 0) return false;
+    if (!v || !out || !v->items)
+        return false;
+
+    if (v->len == 0)
+        return false;
 
     *out = v->items[--v->len];
     return true;
@@ -115,7 +124,9 @@ static inline bool vec_pop(Vec *v, void **out) {
 
 /* Clear vector without touching memory */
 static inline void vec_clear(Vec *v) {
-    if (!v) return;
+    if (!v)
+        return;
+
     v->len = 0;
 }
 
