@@ -23,6 +23,32 @@ typedef enum {
 } LogLevel;
 
 /* ============================================================
+   Internal primitive
+   ============================================================ */
+
+/* Log formatted message with va_list to explicit stream */
+static inline void log_vfmt_to(
+    FILE     *out,
+    LogLevel  level,
+    const char *fmt,
+    va_list   args
+) {
+    if (!out || !fmt) return;
+
+    const char *prefix = "";
+
+    switch (level) {
+        case LOG_INFO:  prefix = "[INFO] ";  break;
+        case LOG_WARN:  prefix = "[WARN] ";  break;
+        case LOG_ERROR: prefix = "[ERROR] "; break;
+    }
+
+    fprintf(out, "%s", prefix);
+    vfprintf(out, fmt, args);
+    fputc('\n', out);
+}
+
+/* ============================================================
    Core logging
    ============================================================ */
 
@@ -52,24 +78,10 @@ static inline void log_fmt_to(
     const char *fmt,
     ...
 ) {
-    if (!out || !fmt) return;
-
-    const char *prefix = "";
-
-    switch (level) {
-        case LOG_INFO:  prefix = "[INFO] ";  break;
-        case LOG_WARN:  prefix = "[WARN] ";  break;
-        case LOG_ERROR: prefix = "[ERROR] "; break;
-    }
-
-    fprintf(out, "%s", prefix);
-
     va_list args;
     va_start(args, fmt);
-    vfprintf(out, fmt, args);
+    log_vfmt_to(out, level, fmt, args);
     va_end(args);
-
-    fputc('\n', out);
 }
 
 /* ============================================================
@@ -86,18 +98,7 @@ static inline void log_fmt(LogLevel level, const char *fmt, ...) {
 
     va_list args;
     va_start(args, fmt);
-
-    const char *prefix = "";
-    switch (level) {
-        case LOG_INFO:  prefix = "[INFO] ";  break;
-        case LOG_WARN:  prefix = "[WARN] ";  break;
-        case LOG_ERROR: prefix = "[ERROR] "; break;
-    }
-
-    fprintf(out, "%s", prefix);
-    vfprintf(out, fmt, args);
-    fputc('\n', out);
-
+    log_vfmt_to(out, level, fmt, args);
     va_end(args);
 }
 
