@@ -7,53 +7,80 @@
 /*
     range.h — sequential integer generator
 
-    Derived data utility.
+    Semantics:
+    - Generates integers in [start, end)
+    - Step is positive and non-zero
+    - Explicit iteration
     - No allocation
     - No ownership
     - No hidden state
-    - Explicit iteration
 */
 
-/* Integer range [start, end) with step */
+/*
+    Integer range [start, end) with step
+*/
 typedef struct {
     size_t current;
     size_t end;
     size_t step;
 } Range;
 
-/* ------------------------------------------------------------
+/* ============================================================
    Construction
-   ------------------------------------------------------------ */
+   ============================================================ */
 
-/* Create range: [start, end) with step */
+/*
+    Create range: [start, end) with step
+
+    Notes:
+    - step == 0 is normalized to 1
+    - If start >= end, range is empty
+*/
 static inline Range range_make(size_t start, size_t end, size_t step) {
     Range r;
     r.current = start;
-    r.end = end;
-    r.step = step ? step : 1;
+    r.end     = end;
+    r.step    = step ? step : 1;
     return r;
 }
 
-/* Shorthand: range from 0 to end */
+/*
+    Shorthand: range [0, end)
+*/
 static inline Range range_upto(size_t end) {
     return range_make(0, end, 1);
 }
 
-/* ------------------------------------------------------------
+/* ============================================================
    Iteration
-   ------------------------------------------------------------ */
+   ============================================================ */
 
-/* Check if more values remain */
+/*
+    Returns true if another value can be produced
+*/
 static inline bool range_has_next(const Range *r) {
     return r && r->current < r->end;
 }
 
-/* Get next value and advance */
+/*
+    Produces next value and advances the range.
+
+    Requirements:
+    - range_has_next(r) must be true
+
+    Behavior:
+    - Never overflows
+    - Stops cleanly at end
+*/
 static inline size_t range_next(Range *r) {
     size_t value = r->current;
-    r->current += r->step;
+
+    if (r->end - r->current <= r->step)
+        r->current = r->end;
+    else
+        r->current += r->step;
+
     return value;
 }
 
 #endif /* CANON_C_DATA_RANGE_H */
-
