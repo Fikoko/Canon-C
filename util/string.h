@@ -51,11 +51,13 @@ static inline char *str_alloc_concat(const char *a, const char *b) {
     return out;
 }
 
-/*
-    Allocate substring [start, start+len)
+/* ============================================================
+   Allocate substring [start, start+len)
+   ============================================================ */
 
+/*
     Semantics:
-    - If len == 0 → returns empty string
+    - If len == 0 → returns empty string ("")
     - If start >= strlen(s) → returns NULL
 */
 static inline char *str_alloc_sub(
@@ -71,10 +73,13 @@ static inline char *str_alloc_sub(
     if (start + len > s_len)
         len = s_len - start;
 
+    /* Always allocate at least 1 byte for empty string */
     char *out = (char *)mem_alloc(len + 1);
     if (!out) return NULL;
 
-    mem_copy(out, s + start, len);
+    if (len > 0)
+        mem_copy(out, s + start, len);
+
     out[len] = '\0';
     return out;
 }
