@@ -10,7 +10,7 @@
     - No policy
 */
 
-#include <stddef.h>   /* size_t */
+#include <stddef.h>   /* size_t, max_align_t */
 #include <stdlib.h>   /* malloc, free, realloc */
 #include <string.h>   /* memcpy, memmove, memset, memcmp */
 
@@ -20,7 +20,9 @@
 
 /* Allocate a block of memory.
    Returns NULL on failure or size == 0. */
-static inline void *mem_alloc(size_t size) {
+static inline void *
+mem_alloc(size_t size)
+{
     if (size == 0)
         return NULL;
 
@@ -29,21 +31,31 @@ static inline void *mem_alloc(size_t size) {
 
 /* Free a previously allocated block.
    Accepts NULL. */
-static inline void mem_free(void *ptr) {
+static inline void
+mem_free(void *ptr)
+{
     free(ptr);
 }
 
 /* Resize a memory block.
+   If new_size == 0, frees ptr and returns NULL.
    Returns NULL on failure (original block unchanged). */
-static inline void *mem_realloc(void *ptr, size_t new_size) {
-    if (new_size == 0)
+static inline void *
+mem_realloc(void *ptr, size_t new_size)
+{
+    if (new_size == 0) {
+        free(ptr);
         return NULL;
+    }
 
     return realloc(ptr, new_size);
 }
 
-/* Allocate zero-initialized memory */
-static inline void *mem_alloc_zero(size_t size) {
+/* Allocate zero-initialized memory.
+   Returns NULL on failure or size == 0. */
+static inline void *
+mem_alloc_zero(size_t size)
+{
     if (size == 0)
         return NULL;
 
@@ -60,7 +72,9 @@ static inline void *mem_alloc_zero(size_t size) {
    ============================================================ */
 
 /* Copy memory (no overlap allowed). */
-static inline void mem_copy(void *dest, const void *src, size_t size) {
+static inline void
+mem_copy(void *dest, const void *src, size_t size)
+{
     if (!dest || !src || size == 0)
         return;
 
@@ -68,7 +82,9 @@ static inline void mem_copy(void *dest, const void *src, size_t size) {
 }
 
 /* Move memory (overlap allowed). */
-static inline void mem_move(void *dest, const void *src, size_t size) {
+static inline void
+mem_move(void *dest, const void *src, size_t size)
+{
     if (!dest || !src || size == 0)
         return;
 
@@ -76,7 +92,9 @@ static inline void mem_move(void *dest, const void *src, size_t size) {
 }
 
 /* Set memory to zero. */
-static inline void mem_zero(void *ptr, size_t size) {
+static inline void
+mem_zero(void *ptr, size_t size)
+{
     if (!ptr || size == 0)
         return;
 
@@ -84,7 +102,9 @@ static inline void mem_zero(void *ptr, size_t size) {
 }
 
 /* Set memory to a byte value. */
-static inline void mem_set(void *ptr, int value, size_t size) {
+static inline void
+mem_set(void *ptr, int value, size_t size)
+{
     if (!ptr || size == 0)
         return;
 
@@ -93,7 +113,9 @@ static inline void mem_set(void *ptr, int value, size_t size) {
 
 /* Compare memory regions.
    Returns 0 if equal (memcmp semantics). */
-static inline int mem_compare(const void *a, const void *b, size_t size) {
+static inline int
+mem_compare(const void *a, const void *b, size_t size)
+{
     if (!a || !b || size == 0)
         return 0;
 
@@ -104,9 +126,11 @@ static inline int mem_compare(const void *a, const void *b, size_t size) {
    Intent helpers
    ============================================================ */
 
-/* Align size to pointer width */
-static inline size_t mem_align(size_t size) {
-    size_t align = sizeof(void *);
+/* Align size to maximum required alignment */
+static inline size_t
+mem_align(size_t size)
+{
+    size_t align = sizeof(max_align_t);
     return (size + align - 1) & ~(align - 1);
 }
 
