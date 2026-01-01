@@ -17,8 +17,10 @@
     - Header-only
 */
 
-/* Formatted logging wrapper */
+/* Formatted logging wrapper with explicit null checks */
 static inline void logf(LogLevel level, const char *fmt, ...) {
+    if (!fmt) return; /* safety */
+
     FILE *out = (level == LOG_ERROR) ? stderr : stdout;
 
     va_list args;
