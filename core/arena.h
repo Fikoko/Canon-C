@@ -12,6 +12,10 @@
     - Operates on caller-provided buffer
     - No hidden allocation
     - No implicit reset
+
+    Requirements:
+    - buffer must be non-NULL
+    - buffer must be suitably aligned (at least max_align_t)
 */
 
 /* Linear allocation arena structure */
@@ -23,12 +27,10 @@ typedef struct Arena {
 
 /* ------------------------------------------------------------
    Initialize arena with an existing buffer
-
-   Requirements:
-   - buffer must be non-NULL
-   - buffer must be suitably aligned for all allocations
    ------------------------------------------------------------ */
-static inline void arena_init(Arena *arena, void *buffer, size_t capacity) {
+static inline void
+arena_init(Arena *arena, void *buffer, size_t capacity)
+{
     if (!arena || !buffer || capacity == 0)
         return;
 
@@ -41,13 +43,16 @@ static inline void arena_init(Arena *arena, void *buffer, size_t capacity) {
    Allocate memory from arena
    Returns NULL if capacity is exceeded
    ------------------------------------------------------------ */
-static inline void *arena_alloc(Arena *arena, size_t size) {
+static inline void *
+arena_alloc(Arena *arena, size_t size)
+{
     if (!arena || size == 0)
         return NULL;
 
     size = mem_align(size);
 
-    if (arena->offset + size > arena->capacity)
+    /* Overflow-safe capacity check */
+    if (size > arena->capacity - arena->offset)
         return NULL;
 
     void *ptr = arena->buffer + arena->offset;
@@ -58,7 +63,9 @@ static inline void *arena_alloc(Arena *arena, size_t size) {
 /* ------------------------------------------------------------
    Reset arena allocation offset (reuse memory)
    ------------------------------------------------------------ */
-static inline void arena_reset(Arena *arena) {
+static inline void
+arena_reset(Arena *arena)
+{
     if (!arena)
         return;
 
@@ -68,7 +75,9 @@ static inline void arena_reset(Arena *arena) {
 /* ------------------------------------------------------------
    Check remaining capacity
    ------------------------------------------------------------ */
-static inline size_t arena_remaining(const Arena *arena) {
+static inline size_t
+arena_remaining(const Arena *arena)
+{
     if (!arena)
         return 0;
 
