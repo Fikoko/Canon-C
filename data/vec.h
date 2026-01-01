@@ -119,7 +119,22 @@ static inline bool Vec_##type##_get(const Vec_##type *v, size_t i, type *out) { 
     return true; \
 } \
 static inline type Vec_##type##_get_unchecked(const Vec_##type *v, size_t i) { return v->items[i]; } \
-static inline void Vec_##type##_clear(Vec_##type *v) { if(v) v->len=0; }
+static inline void Vec_##type##_clear(Vec_##type *v) { if(v) v->len=0; } \
+\
+/* Typed push/pop with explicit Result */ \
+static inline Result_void_ptr_const_char_ptr Vec_##type##_push(Vec_##type *v, type item) { \
+    if (!v || !v->items) return Result_void_ptr_const_char_ptr_Err("Vec pointer or buffer NULL"); \
+    if (v->len >= v->capacity) return Result_void_ptr_const_char_ptr_Err("Vec capacity exceeded"); \
+    v->items[v->len++] = item; \
+    return Result_void_ptr_const_char_ptr_Ok(NULL); \
+} \
+\
+static inline Result_void_ptr_const_char_ptr Vec_##type##_pop(Vec_##type *v, type *out) { \
+    if (!v || !v->items || !out) return Result_void_ptr_const_char_ptr_Err("Vec pointer or buffer NULL"); \
+    if (v->len == 0) return Result_void_ptr_const_char_ptr_Err("Vec underflow"); \
+    *out = v->items[--v->len]; \
+    return Result_void_ptr_const_char_ptr_Ok(NULL); \
+}
 
 #ifdef __cplusplus
 }
