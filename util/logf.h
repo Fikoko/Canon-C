@@ -11,20 +11,19 @@
 
     Semantics:
     - Formatting only
-    - Output behavior is delegated to log.h
+    - Output semantics delegated to log.h
     - No allocation
     - No global state
     - Header-only
 */
 
-/*
-    Formatted logging wrapper.
-    Delegates output semantics to log.h.
-*/
+/* Formatted logging wrapper */
 static inline void logf(LogLevel level, const char *fmt, ...) {
+    FILE *out = (level == LOG_ERROR) ? stderr : stdout;
+
     va_list args;
     va_start(args, fmt);
-    log_vfmt(level, fmt, args);
+    log_vfmt_to(out, level, fmt, args);
     va_end(args);
 }
 
