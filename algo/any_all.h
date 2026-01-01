@@ -12,18 +12,19 @@
     - all: returns true if ALL elements satisfy predicate
 
     Properties:
+    - Read-only
     - No allocation
     - No ownership
     - No mutation
-    - Short-circuiting behavior
+    - Short-circuiting
 */
 
 /*
     Predicate function:
-    - elem : pointer to element
+    - elem : element (read-only)
     - ctx  : optional user context (may be NULL)
 */
-typedef bool (*AnyAllPred)(void *elem, void *ctx);
+typedef bool (*AnyAllPred)(const void *elem, void *ctx);
 
 /* ============================================================
    any
@@ -31,14 +32,18 @@ typedef bool (*AnyAllPred)(void *elem, void *ctx);
 
 /*
     Returns true if predicate is true for at least one element.
+
+    For empty sequences:
+    - returns false
 */
 static inline bool any(
-    void        **items,
-    size_t        len,
-    AnyAllPred    pred,
-    void         *ctx
+    const void **items,
+    size_t       len,
+    AnyAllPred   pred,
+    void        *ctx
 ) {
-    if (!items || !pred) return false;
+    if (!items || !pred)
+        return false;
 
     for (size_t i = 0; i < len; i++) {
         if (pred(items[i], ctx))
@@ -54,14 +59,18 @@ static inline bool any(
 
 /*
     Returns true if predicate is true for all elements.
+
+    For empty sequences:
+    - returns true
 */
 static inline bool all(
-    void        **items,
-    size_t        len,
-    AnyAllPred    pred,
-    void         *ctx
+    const void **items,
+    size_t       len,
+    AnyAllPred   pred,
+    void        *ctx
 ) {
-    if (!items || !pred) return false;
+    if (!items || !pred)
+        return false;
 
     for (size_t i = 0; i < len; i++) {
         if (!pred(items[i], ctx))
@@ -72,4 +81,3 @@ static inline bool all(
 }
 
 #endif /* CANON_C_ALGO_ANY_ALL_H */
-
