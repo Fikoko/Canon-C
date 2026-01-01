@@ -10,6 +10,7 @@
     - input[i] is transformed into output[i]
     - No allocation
     - No ownership transfer
+    - No mutation of input elements
     - Output storage is caller-owned
 
     Derived algorithm only.
@@ -18,16 +19,16 @@
 /*
     Map function:
     - in  : pointer to input element
-    - out : pointer to output element
+    - out : pointer to output element (must be writable)
 */
-typedef void (*MapFn)(void *out, void *in);
+typedef void (*MapFn)(void *out, const void *in);
 
 /*
     Maps input items into output items.
 
     Requirements:
-    - input  : array of pointers to elements
-    - output : array of pointers to writable storage
+    - input  : array of pointers to input elements
+    - output : array of pointers to writable output storage
     - Both arrays must be at least `len`
 */
 static inline void map(
@@ -36,7 +37,8 @@ static inline void map(
     size_t len,
     MapFn f
 ) {
-    if (!input || !output || !f) return;
+    if (!input || !output || !f)
+        return;
 
     for (size_t i = 0; i < len; i++) {
         f(output[i], input[i]);
