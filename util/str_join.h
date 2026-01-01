@@ -15,7 +15,7 @@
 */
 
 /* ------------------------------------------------------------
-   Manual mode with optional output
+   Manual join
    ------------------------------------------------------------ */
 
 /*
@@ -25,31 +25,27 @@
     Semantics:
     - sep == NULL is treated as empty string
     - count == 0 produces empty string
-    - dest_written optionally receives the number of characters written (excluding null terminator)
 
     Returns:
-    - true  on success
+    - true on success
     - false if dest_size is insufficient or input invalid
 
     Requirements:
     - dest must be writable
     - parts[i] must be non-NULL, null-terminated strings
-    - dest_size must be >= sum(strlen(parts[i])) + strlen(sep)*(count-1) + 1
 */
-static inline bool str_join_manual_ex(
+static inline bool str_join_manual(
     char       *dest,
     size_t      dest_size,
     const char **parts,
     size_t      count,
-    const char *sep,
-    size_t     *dest_written
+    const char *sep
 ) {
     if (!dest || dest_size == 0)
         return false;
 
     if (count == 0) {
         dest[0] = '\0';
-        if (dest_written) *dest_written = 0;
         return true;
     }
 
@@ -84,29 +80,56 @@ static inline bool str_join_manual_ex(
     }
 
     dest[pos] = '\0';
-    if (dest_written)
-        *dest_written = pos;
-
     return true;
 }
 
 /* ------------------------------------------------------------
-   Convenience macro for Vec_<char*> or array
+   Convenience wrapper: join after splitting
    ------------------------------------------------------------ */
 
 /*
-    STR_JOIN_VEC(dest, dest_size, vec_or_array, sep)
+    Joins string `s` split by delimiter `delim` into `dest`
+    using `sep` as output separator.
 
-    - dest           : destination buffer
-    - dest_size      : size of destination buffer
-    - vec_or_array   : array of char* or Vec_<char*>
-    - sep            : separator string (may be NULL)
-
-    Returns:
-    - true on success
+    Semantics:
+    - Modifies `s` in-place for splitting
+    - Uses `out_parts` buffer to hold split pointers
+    - Returns true on success
 */
-#define STR_JOIN_VEC(dest, dest_size, vec_or_array, sep) \
-    str_join_manual_ex((dest), (dest_size), \
-        (vec_or_array).items, (vec_or_array).len, (sep), NULL)
+static inline bool str_join_split(
+    char       *s,
+    char        delim,
+    char      **out_parts,
+    size_t      max_parts,
+    char       *dest,
+    size_t      dest_size,
+    const char *sep
+) {
+    if (!s || !out_parts || max_parts == 0 || !dest || dest_size == 0)
+        return false;
+
+    size_t count = 0;
+    count = 0;
+
+    /* Split the string in-place */
+    char *p = s;
+    while (*p == delim) p++; /* skip leading delimiters */
+
+    if (*p != '\0')
+        out_parts[count++] = p;
+
+    while (*p && count < max_parts) {
+        if (*p == delim) {
+            *p = '\0';
+            do { p++; } while (*p == delim);
+            if (*p != '\0' && count < max_parts)
+                out_parts[count++] = p;
+            continue;
+        }
+        p++;
+    }
+
+    return str_join_manual(dest, dest_size, (const char **)out_parts, count, sep);
+}
 
 #endif /* CANON_C_UTIL_STR_JOIN_H */
