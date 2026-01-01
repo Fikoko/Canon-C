@@ -15,7 +15,7 @@
 */
 
 /* ------------------------------------------------------------
-   Manual mode (preferred)
+   Manual mode with optional output
    ------------------------------------------------------------ */
 
 /*
@@ -25,27 +25,31 @@
     Semantics:
     - sep == NULL is treated as empty string
     - count == 0 produces empty string
+    - dest_written optionally receives the number of characters written (excluding null terminator)
 
     Returns:
-    - true on success
+    - true  on success
     - false if dest_size is insufficient or input invalid
 
     Requirements:
     - dest must be writable
     - parts[i] must be non-NULL, null-terminated strings
+    - dest_size must be >= sum(strlen(parts[i])) + strlen(sep)*(count-1) + 1
 */
-static inline bool str_join_manual(
+static inline bool str_join_manual_ex(
     char       *dest,
     size_t      dest_size,
     const char **parts,
     size_t      count,
-    const char *sep
+    const char *sep,
+    size_t     *dest_written
 ) {
     if (!dest || dest_size == 0)
         return false;
 
     if (count == 0) {
         dest[0] = '\0';
+        if (dest_written) *dest_written = 0;
         return true;
     }
 
@@ -80,7 +84,29 @@ static inline bool str_join_manual(
     }
 
     dest[pos] = '\0';
+    if (dest_written)
+        *dest_written = pos;
+
     return true;
 }
+
+/* ------------------------------------------------------------
+   Convenience macro for Vec_<char*> or array
+   ------------------------------------------------------------ */
+
+/*
+    STR_JOIN_VEC(dest, dest_size, vec_or_array, sep)
+
+    - dest           : destination buffer
+    - dest_size      : size of destination buffer
+    - vec_or_array   : array of char* or Vec_<char*>
+    - sep            : separator string (may be NULL)
+
+    Returns:
+    - true on success
+*/
+#define STR_JOIN_VEC(dest, dest_size, vec_or_array, sep) \
+    str_join_manual_ex((dest), (dest_size), \
+        (vec_or_array).items, (vec_or_array).len, (sep), NULL)
 
 #endif /* CANON_C_UTIL_STR_JOIN_H */
