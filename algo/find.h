@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <canon/semantics/option.h>
 
 /*
     find.h — locate first element matching a predicate
@@ -13,8 +14,12 @@
     - No allocation
     - No ownership transfer
 
-    Result is reported explicitly via out-parameters.
+    Provides explicit and functional-style search results.
 */
+
+/* ============================================================
+   Predicate function
+   ============================================================ */
 
 /*
     Predicate function:
@@ -22,6 +27,10 @@
     - ctx  : optional user context (may be NULL)
 */
 typedef bool (*FindPred)(const void *elem, void *ctx);
+
+/* ============================================================
+   Basic find (out-parameter style)
+   ============================================================ */
 
 /*
     Finds the first element matching `pred`.
@@ -58,6 +67,53 @@ static inline bool find(
     }
 
     return false;
+}
+
+/* ============================================================
+   Option-based variants (functional, explicit)
+   ============================================================ */
+
+CANON_C_DEFINE_OPTION(size_t)
+CANON_C_DEFINE_OPTION(void*)
+
+/*
+    Returns Some(index) if element matches predicate, None if not found
+*/
+static inline Option_size_t find_index_opt(
+    const void **items,
+    size_t       len,
+    FindPred     pred,
+    void        *ctx
+) {
+    if (!items || !pred)
+        return Option_size_t_None();
+
+    for (size_t i = 0; i < len; i++) {
+        if (pred(items[i], ctx))
+            return Option_size_t_Some(i);
+    }
+
+    return Option_size_t_None();
+}
+
+/*
+    Returns Some(element pointer) if match found, None otherwise
+*/
+static inline Option_void_ptr find_elem_opt(
+    const void **items,
+    size_t       len,
+    FindPred     pred,
+    void        *ctx
+) {
+    if (!items || !pred)
+        return Option_void_ptr_None();
+
+    for (size_t i = 0; i < len; i++) {
+        if (pred(items[i], ctx))
+            return Option_void_ptr_Some((void*)items[i]);
+    }
+
+    return Option_void_ptr_None();
 }
 
 #endif /* CANON_C_ALGO_FIND_H */
