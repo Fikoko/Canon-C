@@ -3,35 +3,38 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <assert.h>
 
 /*
     str_split.h — split string into substrings
 
     Derived utility.
+
+    Semantics:
     - No allocation
     - No ownership transfer
     - Output substrings reference the original string
     - Caller controls storage of output pointers
+    - Modifies input string in-place (inserts '\0' terminators)
 */
 
 /*
     Splits string `s` by delimiter `delim`.
 
-    Semantics:
-    - Modifies `s` in-place by inserting '\0'
-    - Skips leading delimiters
-    - Stops writing when max_parts is reached
-    - Remaining string (if any) is left intact
-
-    Special case:
-    - delim == '\0' → no split, returns single part
+    Parameters:
+    - s        : mutable null-terminated string to split
+    - delim    : delimiter character; '\0' means no split
+    - out      : output array of char* pointers
+    - max_parts: maximum number of output substrings
 
     Returns:
-    - number of substrings written
+    - number of substrings written to `out` (<= max_parts)
 
-    Requirements:
-    - `s` must be mutable
-    - `out` must have capacity >= max_parts
+    Notes:
+    - Leading delimiters are skipped
+    - Consecutive delimiters are treated as single separators
+    - Remaining parts exceeding max_parts are ignored
+    - Caller must ensure `out` has capacity >= max_parts
 */
 static inline size_t str_split(
     char   *s,
@@ -39,10 +42,12 @@ static inline size_t str_split(
     char  **out,
     size_t  max_parts
 ) {
+    assert(out != NULL && "Output buffer must not be NULL");
+
     if (!s || !out || max_parts == 0)
         return 0;
 
-    /* No delimiter: whole string is one part */
+    /* Special case: no delimiter → whole string is one part */
     if (delim == '\0') {
         out[0] = s;
         return 1;
