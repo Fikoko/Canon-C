@@ -3,52 +3,88 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <canon/core/memory.h>
 
 /*
     filter.h — select elements based on predicate
 
-    This is a derived utility built on top of canonical primitives.
-
-    - No allocation policy is imposed
-    - No ownership is assumed
-    - No side effects beyond writing output
-    - Predicate must be pure from the caller’s perspective
+    Semantics:
+    - Preserves input order
+    - No ownership transfer
+    - No hidden allocation
 */
 
-/* Predicate over elements */
-typedef bool (*FilterPred)(void *item);
+/*
+    Predicate:
+    - item : element
+    - ctx  : user context
+    - return true to keep element
+*/
+typedef bool (*FilterPred)(void *item, void *ctx);
 
 /* ============================================================
-   Manual mode (preferred)
+   Manual buffer mode
    ============================================================ */
 
 /*
     Filters items into caller-provided output buffer.
 
-    Returns:
-    - number of elements written to output
-
-    Requirements:
-    - output must have capacity >= len
+    Returns number of elements written.
+    Stops early if output buffer is full.
 */
-static inline size_t filter_manual(
-    void **items,
-    size_t len,
-    FilterPred pred,
-    void **output
+static inline size_t filter_into(
+    void      **items,
+    size_t      len,
+    FilterPred  pred,
+    void       *ctx,
+    void      **out,
+    size_t      out_cap
 ) {
-    if (!items || !pred || !output) return 0;
+    if (!items || !out || !pred) return 0;
 
     size_t out_len = 0;
 
-    for (size_t i = 0; i < len; i++) {
-        if (pred(items[i])) {
-            output[out_len++] = items[i];
+    for (size_t i = 0; i < len && out_len < out_cap; i++) {
+        if (pred(items[i], ctx)) {
+            out[out_len++] = items[i];
         }
     }
 
     return out_len;
 }
 
-#endif /* CANON_C_ALGO_FILTER_H */
+/* ============================================================
+   Explicit allocation mode
+   ============================================================ */
 
+/*
+    Allocates output array sized to input length.
+    Returns number of filtered elements.
+*/
+static inline bool filter_alloc(
+    void      **items,
+    size_t      len,
+    FilterPred  pred,
+    void       *ctx,
+    void     ***out_items,
+    size_t     *out_len
+) {
+    if (!items || !pred || !out_items || !out_len) return false;
+
+    void **out = (void **)mem_alloc(sizeof(void *) * len);
+    if (!out) return false;
+
+    size_t count = 0;
+
+    for (size_t i = 0; i < len; i++) {
+        if (pred(items[i], ctx)) {
+            out[count++] = items[i];
+        }
+    }
+
+    *out_items = out;
+    *out_len   = count;
+    return true;
+}
+
+#endif /* CANON_C_ALGO_FILTER_H */
