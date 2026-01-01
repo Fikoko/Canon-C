@@ -3,12 +3,16 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include "semantics/result.h"  /* Use your Result<T, E> */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
     vec.h — bounded dynamic sequence (shape only)
 
     Vec represents:
-    - a contiguous sequence of pointers
+    - a contiguous sequence of elements (generic via void*)
     - explicit length
     - explicit capacity
 
@@ -16,11 +20,14 @@
     - allocate memory
     - resize itself
     - free memory
-    - assume ownership semantics
+    - assume ownership
 
     All memory is owned and managed by the caller.
 */
 
+/* ============================================================
+   Generic Vec type (void* version)
+   ============================================================ */
 typedef struct {
     void   **items;
     size_t   len;
@@ -28,8 +35,9 @@ typedef struct {
 } Vec;
 
 /* ============================================================
-   Initialization
+   Result-based push/pop (explicit failure)
    ============================================================ */
+CANON_C_DEFINE_RESULT(void*, const char*)  /* Result<void*, const char*> for Vec ops */
 
 /* Initialize Vec with caller-provided buffer */
 static inline Vec vec_init(void **buffer, size_t capacity) {
@@ -42,92 +50,79 @@ static inline Vec vec_init(void **buffer, size_t capacity) {
 
 /* Initialize empty Vec (invalid until buffer is set) */
 static inline Vec vec_empty(void) {
-    Vec v;
-    v.items = NULL;
-    v.len = 0;
-    v.capacity = 0;
+    Vec v = {0};
     return v;
 }
 
-/* ============================================================
-   Capacity & state
-   ============================================================ */
+/* Capacity & state */
+static inline bool vec_is_empty(const Vec *v) { return !v || v->len == 0; }
+static inline bool vec_is_full(const Vec *v)  { return v && v->len >= v->capacity; }
+static inline size_t vec_len(const Vec *v)    { return v ? v->len : 0; }
+static inline size_t vec_capacity(const Vec *v) { return v ? v->capacity : 0; }
 
-static inline bool vec_is_empty(const Vec *v) {
-    return !v || v->len == 0;
-}
-
-static inline bool vec_is_full(const Vec *v) {
-    return v && v->len >= v->capacity;
-}
-
-static inline size_t vec_len(const Vec *v) {
-    return v ? v->len : 0;
-}
-
-static inline size_t vec_capacity(const Vec *v) {
-    return v ? v->capacity : 0;
-}
-
-/* ============================================================
-   Element access
-   ============================================================ */
-
-/* Get element at index (unchecked) */
-static inline void *vec_get_unchecked(const Vec *v, size_t index) {
-    return v->items[index];
-}
-
-/* Get element at index (checked) */
+/* Element access */
 static inline bool vec_get(const Vec *v, size_t index, void **out) {
-    if (!v || !out || !v->items)
-        return false;
-
-    if (index >= v->len)
-        return false;
-
+    if (!v || !out || !v->items || index >= v->len) return false;
     *out = v->items[index];
     return true;
 }
 
-/* ============================================================
-   Mutation (bounded, explicit failure)
-   ============================================================ */
+static inline void *vec_get_unchecked(const Vec *v, size_t index) {
+    return v->items[index];
+}
 
-/* Push element, fails if capacity exceeded */
-static inline bool vec_push(Vec *v, void *item) {
+/* Mutation using Result for explicit failure */
+static inline Result_void_ptr_const_char_ptr vec_push(Vec *v, void *item) {
     if (!v || !v->items)
-        return false;
-
+        return Result_void_ptr_const_char_ptr_Err("Vec pointer or buffer NULL");
     if (v->len >= v->capacity)
-        return false;
-
+        return Result_void_ptr_const_char_ptr_Err("Vec capacity exceeded");
     v->items[v->len++] = item;
-    return true;
+    return Result_void_ptr_const_char_ptr_Ok(NULL);
 }
 
-/* Pop element, explicit success/failure */
-static inline bool vec_pop(Vec *v, void **out) {
+static inline Result_void_ptr_const_char_ptr vec_pop(Vec *v, void **out) {
     if (!v || !out || !v->items)
-        return false;
-
+        return Result_void_ptr_const_char_ptr_Err("Vec pointer or buffer NULL");
     if (v->len == 0)
-        return false;
-
+        return Result_void_ptr_const_char_ptr_Err("Vec underflow");
     *out = v->items[--v->len];
-    return true;
+    return Result_void_ptr_const_char_ptr_Ok(NULL);
+}
+
+/* Reset */
+static inline void vec_clear(Vec *v) {
+    if (v) v->len = 0;
 }
 
 /* ============================================================
-   Reset
+   Typed Vec macro (optional)
    ============================================================ */
+#define DEFINE_VEC(type) \
+typedef struct { \
+    type *items; \
+    size_t len, capacity; \
+} Vec_##type; \
+\
+static inline Vec_##type Vec_##type##_init(type *buffer, size_t capacity) { \
+    Vec_##type v = { buffer, 0, capacity }; \
+    return v; \
+} \
+\
+static inline bool Vec_##type##_is_empty(const Vec_##type *v) { return !v || v->len == 0; } \
+static inline bool Vec_##type##_is_full(const Vec_##type *v)  { return v && v->len >= v->capacity; } \
+static inline size_t Vec_##type##_len(const Vec_##type *v)    { return v ? v->len : 0; } \
+static inline size_t Vec_##type##_capacity(const Vec_##type *v) { return v ? v->capacity : 0; } \
+static inline bool Vec_##type##_get(const Vec_##type *v, size_t i, type *out) { \
+    if (!v || !out || i >= v->len) return false; \
+    *out = v->items[i]; \
+    return true; \
+} \
+static inline type Vec_##type##_get_unchecked(const Vec_##type *v, size_t i) { return v->items[i]; } \
+static inline void Vec_##type##_clear(Vec_##type *v) { if(v) v->len=0; }
 
-/* Clear vector without touching memory */
-static inline void vec_clear(Vec *v) {
-    if (!v)
-        return;
-
-    v->len = 0;
+#ifdef __cplusplus
 }
+#endif
 
 #endif /* CANON_C_DATA_VEC_H */
