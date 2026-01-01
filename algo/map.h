@@ -2,6 +2,7 @@
 #define CANON_C_ALGO_MAP_H
 
 #include <stddef.h>
+#include <canon/semantics/result.h>
 
 /*
     map.h — element-wise transformation
@@ -12,29 +13,33 @@
     - No ownership transfer
     - No mutation of input elements
     - Output storage is caller-owned
-
-    Derived algorithm only.
 */
+
+/* ------------------------------------------------------------
+   Generic map function
+   ------------------------------------------------------------ */
 
 /*
     Map function (generic):
-    - in  : pointer to input element
-    - out : pointer to output element (must be writable)
+    - in  : pointer to input element (read-only)
+    - out : pointer to output element (writable)
 */
 typedef void (*MapFn)(void *out, const void *in);
 
 /*
     Maps input items into output items.
-    Requirements:
+
+    Parameters:
     - input  : array of pointers to input elements
-    - output : array of pointers to writable output storage
-    - Both arrays must be at least `len`
+    - output : array of writable pointers for output
+    - len    : number of elements
+    - f      : transformation function
 */
 static inline void map(
-    void **input,
-    void **output,
-    size_t len,
-    MapFn f
+    const void **input,
+    void       **output,
+    size_t       len,
+    MapFn        f
 ) {
     if (!input || !output || !f)
         return;
@@ -44,15 +49,15 @@ static inline void map(
     }
 }
 
-/* ============================================================
-   Typed macro (for arrays or Vec_<type>)
-   ============================================================ */
+/* ------------------------------------------------------------
+   Optional typed array map (compile-time type safety)
+   ------------------------------------------------------------ */
 
 /*
     MAP_TYPED(out, in, len, Type, fn)
 
-    - out  : pointer to output array or Vec_<type>.items
-    - in   : pointer to input array or Vec_<type>.items
+    - out  : pointer to output array
+    - in   : pointer to input array
     - len  : number of elements
     - Type : element type
     - fn   : function of signature `void fn(Type *out, const Type *in)`
@@ -66,17 +71,25 @@ static inline void map(
         } \
     } while(0)
 
+/* ------------------------------------------------------------
+   Convenience macro for Vec_<type>
+   ------------------------------------------------------------ */
+
 /*
     MAP_VEC(out_vec, in_vec, Type, fn)
-
-    Convenience macro for Vec_<type>:
 
     - out_vec : destination Vec_<type>
     - in_vec  : source Vec_<type>
     - Type    : element type
-    - fn      : transformation function
+    - fn      : function to apply
 */
 #define MAP_VEC(out_vec, in_vec, Type, fn) \
-    MAP_TYPED((out_vec).items, (in_vec).items, ((out_vec).len < (in_vec).len ? (out_vec).len : (in_vec).len), Type, fn)
+    MAP_TYPED( \
+        (out_vec).items, \
+        (in_vec).items, \
+        ((out_vec).len < (in_vec).len ? (out_vec).len : (in_vec).len), \
+        Type, \
+        fn \
+    )
 
 #endif /* CANON_C_ALGO_MAP_H */
