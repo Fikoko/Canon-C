@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 /*
     log.h — minimal observable logging
@@ -28,10 +29,10 @@ typedef enum {
 
 /* Log formatted message with va_list to explicit stream */
 static inline void log_vfmt_to(
-    FILE     *out,
-    LogLevel  level,
+    FILE      *out,
+    LogLevel   level,
     const char *fmt,
-    va_list   args
+    va_list    args
 ) {
     if (!out || !fmt) return;
 
@@ -43,7 +44,7 @@ static inline void log_vfmt_to(
         case LOG_ERROR: prefix = "[ERROR] "; break;
     }
 
-    fprintf(out, "%s", prefix);
+    fputs(prefix, out);
     vfprintf(out, fmt, args);
     fputc('\n', out);
 }
@@ -54,8 +55,8 @@ static inline void log_vfmt_to(
 
 /* Log simple message to explicit stream */
 static inline void log_to(
-    FILE     *out,
-    LogLevel  level,
+    FILE      *out,
+    LogLevel   level,
     const char *msg
 ) {
     if (!out || !msg) return;
@@ -73,11 +74,13 @@ static inline void log_to(
 
 /* Log formatted message to explicit stream */
 static inline void log_fmt_to(
-    FILE     *out,
-    LogLevel  level,
+    FILE      *out,
+    LogLevel   level,
     const char *fmt,
     ...
 ) {
+    if (!out || !fmt) return;
+
     va_list args;
     va_start(args, fmt);
     log_vfmt_to(out, level, fmt, args);
@@ -88,12 +91,18 @@ static inline void log_fmt_to(
    Convenience helpers
    ============================================================ */
 
+/* Log simple message to default stream (stdout / stderr) */
 static inline void log_msg(LogLevel level, const char *msg) {
+    if (!msg) return;
+
     FILE *out = (level == LOG_ERROR) ? stderr : stdout;
     log_to(out, level, msg);
 }
 
+/* Log formatted message to default stream (stdout / stderr) */
 static inline void log_fmt(LogLevel level, const char *fmt, ...) {
+    if (!fmt) return;
+
     FILE *out = (level == LOG_ERROR) ? stderr : stdout;
 
     va_list args;
