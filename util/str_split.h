@@ -17,8 +17,14 @@
 /*
     Splits string `s` by delimiter `delim`.
 
-    Writes pointers to substrings into `out`.
-    Each substring is null-terminated in-place.
+    Semantics:
+    - Modifies `s` in-place by inserting '\0'
+    - Skips leading delimiters
+    - Stops writing when max_parts is reached
+    - Remaining string (if any) is left intact
+
+    Special case:
+    - delim == '\0' → no split, returns single part
 
     Returns:
     - number of substrings written
@@ -36,15 +42,39 @@ static inline size_t str_split(
     if (!s || !out || max_parts == 0)
         return 0;
 
+    /* No delimiter: whole string is one part */
+    if (delim == '\0') {
+        out[0] = s;
+        return 1;
+    }
+
     size_t count = 0;
     char *p = s;
+
+    /* Skip leading delimiters */
+    while (*p == delim)
+        p++;
+
+    if (*p == '\0')
+        return 0;
 
     out[count++] = p;
 
     while (*p && count < max_parts) {
         if (*p == delim) {
             *p = '\0';
-            out[count++] = p + 1;
+
+            /* Skip consecutive delimiters */
+            do {
+                p++;
+            } while (*p == delim);
+
+            if (*p == '\0')
+                break;
+
+            if (count < max_parts)
+                out[count++] = p;
+            continue;
         }
         p++;
     }
@@ -53,4 +83,3 @@ static inline size_t str_split(
 }
 
 #endif /* CANON_C_UTIL_STR_SPLIT_H */
-
