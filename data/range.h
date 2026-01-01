@@ -16,13 +16,14 @@
     - No hidden state
 */
 
-/*
-    Integer range [start, end) with step
-*/
+/* ============================================================
+   Range type
+   ============================================================ */
+
 typedef struct {
-    size_t current;
-    size_t end;
-    size_t step;
+    size_t current;  /* next value to produce */
+    size_t end;      /* exclusive end */
+    size_t step;     /* iteration step (>0) */
 } Range;
 
 /* ============================================================
@@ -30,11 +31,9 @@ typedef struct {
    ============================================================ */
 
 /*
-    Create range: [start, end) with step
-
-    Notes:
-    - step == 0 is normalized to 1
-    - If start >= end, range is empty
+    Create a range [start, end) with step.
+    - step == 0 → normalized to 1
+    - If start >= end → empty range
 */
 static inline Range range_make(size_t start, size_t end, size_t step) {
     Range r;
@@ -44,9 +43,7 @@ static inline Range range_make(size_t start, size_t end, size_t step) {
     return r;
 }
 
-/*
-    Shorthand: range [0, end)
-*/
+/* Shorthand: range [0, end) with step 1 */
 static inline Range range_upto(size_t end) {
     return range_make(0, end, 1);
 }
@@ -55,32 +52,33 @@ static inline Range range_upto(size_t end) {
    Iteration
    ============================================================ */
 
-/*
-    Returns true if another value can be produced
-*/
+/* Returns true if another value can be produced */
 static inline bool range_has_next(const Range *r) {
     return r && r->current < r->end;
 }
 
-/*
-    Produces next value and advances the range.
-
-    Requirements:
-    - range_has_next(r) must be true
-
-    Behavior:
-    - Never overflows
-    - Stops cleanly at end
+/* Produces next value and advances the range.
+   Requirements:
+   - range_has_next(r) must be true
+   - step > 0
 */
 static inline size_t range_next(Range *r) {
+    if (!r) return 0;  /* safety */
+
     size_t value = r->current;
 
+    /* advance safely without overflow */
     if (r->end - r->current <= r->step)
         r->current = r->end;
     else
         r->current += r->step;
 
     return value;
+}
+
+/* Reset range to start */
+static inline void range_reset(Range *r, size_t start) {
+    if (r) r->current = start;
 }
 
 #endif /* CANON_C_DATA_RANGE_H */
