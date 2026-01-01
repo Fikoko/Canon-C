@@ -12,6 +12,9 @@
 
     Without sentinels, magic values, or implicit error states.
     Header-only, zero-cost abstraction.
+
+    Notes:
+    - `type` must be a single token (use typedefs if needed)
 */
 
 #define CANON_C_DEFINE_OPTION(type)                                      \
@@ -21,7 +24,9 @@ typedef struct {                                                         \
 } Option_##type;                                                         \
                                                                          \
 /* Construct Some(value) */                                              \
-static inline Option_##type Option_##type##_Some(type v) {               \
+static inline Option_##type                                              \
+Option_##type##_Some(type v)                                             \
+{                                                                        \
     Option_##type o;                                                     \
     o.has_value = true;                                                  \
     o.value = v;                                                         \
@@ -29,26 +34,33 @@ static inline Option_##type Option_##type##_Some(type v) {               \
 }                                                                        \
                                                                          \
 /* Construct None */                                                     \
-static inline Option_##type Option_##type##_None(void) {                 \
+static inline Option_##type                                              \
+Option_##type##_None(void)                                               \
+{                                                                        \
     Option_##type o = {0};                                               \
-    o.has_value = false;                                                 \
     return o;                                                            \
 }                                                                        \
                                                                          \
 /* Presence checks */                                                    \
-static inline bool Option_##type##_is_some(Option_##type o) {            \
+static inline bool                                                       \
+Option_##type##_is_some(Option_##type o)                                 \
+{                                                                        \
     return o.has_value;                                                  \
 }                                                                        \
                                                                          \
-static inline bool Option_##type##_is_none(Option_##type o) {            \
+static inline bool                                                       \
+Option_##type##_is_none(Option_##type o)                                 \
+{                                                                        \
     return !o.has_value;                                                 \
 }                                                                        \
                                                                          \
 /* Safe access: writes value to out if present */                        \
-static inline bool Option_##type##_get(                                  \
+static inline bool                                                       \
+Option_##type##_get(                                                     \
     Option_##type o,                                                     \
     type *out                                                            \
-) {                                                                      \
+)                                                                        \
+{                                                                        \
     if (!o.has_value || !out)                                            \
         return false;                                                    \
                                                                          \
@@ -57,10 +69,12 @@ static inline bool Option_##type##_get(                                  \
 }                                                                        \
                                                                          \
 /* Fallback extraction */                                                \
-static inline type Option_##type##_unwrap_or(                            \
+static inline type                                                       \
+Option_##type##_unwrap_or(                                               \
     Option_##type o,                                                     \
     type fallback                                                        \
-) {                                                                      \
+)                                                                        \
+{                                                                        \
     return o.has_value ? o.value : fallback;                             \
 }
 
