@@ -71,7 +71,8 @@ Abstractions must clarify behavior, not conceal it.
   - `arena.h` — explicit linear allocation
   - `memory.h` — allocation helpers and contracts
 - **data/**
-  - `vec.h` — dynamic vector (automatic & manual modes)
+  - `vec.h` — dynamic vector (bounded, caller-owned)
+  - `range.h` — sequential integer generator (x)
 - **semantics/**
   - `option.h` — explicit optional values
   - `result.h` — explicit success/error values
@@ -79,9 +80,14 @@ Abstractions must clarify behavior, not conceal it.
   - `map.h` — functional-style data transformation
   - `filter.h` — select elements based on predicate (x)
   - `fold.h` — aggregate elements into a single value (x)
+  - `find.h` — locate first matching element (x)
+  - `any_all.h` — predicate checks (any / all) (x)
 - **util/**
   - `string.h` — string utilities (automatic & manual)
+  - `str_split.h` — split string into substrings (x)
+  - `str_join.h` — join multiple strings (x)
   - `log.h` — minimal logging
+  - `logf.h` — formatted logging (x)
 
 
 All modules are **header-only** and require no runtime or build system integration.
