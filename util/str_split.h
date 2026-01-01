@@ -3,38 +3,40 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <assert.h>
+#include <string.h>
 
 /*
     str_split.h — split string into substrings
 
     Derived utility.
-
-    Semantics:
     - No allocation
     - No ownership transfer
     - Output substrings reference the original string
     - Caller controls storage of output pointers
-    - Modifies input string in-place (inserts '\0' terminators)
 */
+
+/* ------------------------------------------------------------
+   Core split
+   ------------------------------------------------------------ */
 
 /*
     Splits string `s` by delimiter `delim`.
 
-    Parameters:
-    - s        : mutable null-terminated string to split
-    - delim    : delimiter character; '\0' means no split
-    - out      : output array of char* pointers
-    - max_parts: maximum number of output substrings
+    Semantics:
+    - Modifies `s` in-place by inserting '\0'
+    - Skips leading delimiters
+    - Stops writing when max_parts is reached
+    - Remaining string (if any) is left intact
+
+    Special case:
+    - delim == '\0' → no split, returns single part
 
     Returns:
-    - number of substrings written to `out` (<= max_parts)
+    - number of substrings written
 
-    Notes:
-    - Leading delimiters are skipped
-    - Consecutive delimiters are treated as single separators
-    - Remaining parts exceeding max_parts are ignored
-    - Caller must ensure `out` has capacity >= max_parts
+    Requirements:
+    - `s` must be mutable
+    - `out` must have capacity >= max_parts
 */
 static inline size_t str_split(
     char   *s,
@@ -42,12 +44,10 @@ static inline size_t str_split(
     char  **out,
     size_t  max_parts
 ) {
-    assert(out != NULL && "Output buffer must not be NULL");
-
     if (!s || !out || max_parts == 0)
         return 0;
 
-    /* Special case: no delimiter → whole string is one part */
+    /* No delimiter: whole string is one part */
     if (delim == '\0') {
         out[0] = s;
         return 1;
@@ -85,6 +85,81 @@ static inline size_t str_split(
     }
 
     return count;
+}
+
+/* ------------------------------------------------------------
+   Optional helpers
+   ------------------------------------------------------------ */
+
+/*
+    Rejoins split substrings into caller buffer using separator.
+    - parts   : array of substrings (read-only)
+    - count   : number of substrings
+    - dest    : output buffer (caller-owned)
+    - dest_sz : buffer size
+    - sep     : separator string (NULL treated as "")
+    Returns true on success, false if buffer too small or invalid input
+*/
+static inline bool str_split_join(
+    const char **parts,
+    size_t       count,
+    char        *dest,
+    size_t       dest_sz,
+    const char  *sep
+) {
+    if (!parts || !dest || dest_sz == 0)
+        return false;
+
+    if (!sep)
+        sep = "";
+
+    size_t sep_len = strlen(sep);
+    size_t pos = 0;
+
+    for (size_t i = 0; i < count; i++) {
+        if (!parts[i])
+            return false;
+
+        size_t part_len = strlen(parts[i]);
+        if (pos + part_len + 1 > dest_sz)
+            return false;
+
+        memcpy(dest + pos, parts[i], part_len);
+        pos += part_len;
+
+        if (i + 1 < count && sep_len > 0) {
+            if (pos + sep_len + 1 > dest_sz)
+                return false;
+
+            memcpy(dest + pos, sep, sep_len);
+            pos += sep_len;
+        }
+    }
+
+    dest[pos] = '\0';
+    return true;
+}
+
+/*
+    Trim leading and trailing characters from a substring in-place.
+    - s        : mutable substring
+    - trim_ch  : character to trim
+    Returns pointer to trimmed string (may be same as input)
+*/
+static inline char *str_trim(char *s, char trim_ch) {
+    if (!s)
+        return NULL;
+
+    /* Trim leading */
+    while (*s == trim_ch)
+        s++;
+
+    /* Trim trailing */
+    char *end = s + strlen(s);
+    while (end > s && *(end - 1) == trim_ch)
+        *(--end) = '\0';
+
+    return s;
 }
 
 #endif /* CANON_C_UTIL_STR_SPLIT_H */
