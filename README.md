@@ -76,12 +76,12 @@ Abstractions must clarify behavior, not conceal it.
 ### data/
 - `vec.h` — bounded dynamic vector (caller-owned buffer)
 - `range.h` — explicit integer range generator (ascending/descending, signed support)
-- `StringBuf.h` — incremental string builder (arena- or buffer-backed)
+- `stringbuf.h` — incremental string builder (arena- or buffer-backed)
 
 ### semantics/
 - `option.h` — explicit presence/absence of a value (with combinators)
 - `result.h` — explicit success/failure with value or error (with combinators)
-- `Error.h` — common error codes and human-readable messages
+- `error.h` — common error codes and human-readable messages
 
 ### algo/
 - `map.h` — element-wise transformation (supports different input/output types)
@@ -89,17 +89,17 @@ Abstractions must clarify behavior, not conceal it.
 - `fold.h` — reduce sequence to single value (infallible & fallible variants)
 - `find.h` — locate first matching element
 - `any_all.h` — predicate checks (any / all)
-- `Sort.h` — generic in-place sorting (with comparator)
-- `Search.h` — binary search utilities (lower_bound, exact match)
-- `Unique.h` — remove consecutive duplicates (in-place)
+- `sort.h` — generic in-place sorting (with comparator)
+- `search.h` — binary search utilities (lower_bound, exact match)
+- `unique.h` — remove consecutive duplicates (in-place)
 
 ### util/
 - `string.h` — safe string operations (copy, concat, predicates)
 - `str_split.h` — non-mutating string splitting (borrowed views)
 - `str_join.h` — safe string joining (buffer-based & allocating)
 - `log.h` — minimal, explicit logging with Result-based error handling
-- `File.h` — safe file I/O (read/write whole files, arena-backed preferred)
-- `Parse.h` — robust parsing of integers, unsigned, and floating-point values
+- `file.h` — safe file I/O (read/write whole files, arena-backed preferred)
+- `parse.h` — robust parsing of integers, unsigned, and floating-point values
 
 
 All modules are **header-only** and require no runtime or build system integration.
