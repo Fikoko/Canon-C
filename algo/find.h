@@ -3,117 +3,87 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <canon/semantics/option.h>
+
+#include "data/vec.h"  // For vec integration macros
 
 /*
-    find.h — locate first element matching a predicate
+    find.h — Locate first element matching predicate (functional style)
 
-    Semantics:
-    - Scans a sequence left-to-right
-    - Read-only over elements
-    - No allocation
-    - No ownership transfer
+    algo_find:
+      Scans left-to-right, returns true on first match.
+      Optionally writes index and/or element pointer.
 
-    Provides explicit and functional-style search results.
+    Properties:
+      - Read-only input
+      - Short-circuiting
+      - No allocation, mutation, or ownership
+      - Optional user context
 */
 
+typedef bool (*algo_find_pred)(const void* elem, void* ctx);
+
 /* ============================================================
-   Predicate function
+   Generic version (void* elements)
    ============================================================ */
 
 /*
-    Predicate function:
-    - elem : current element (read-only)
-    - ctx  : optional user context (may be NULL)
+    algo_find:
+      Finds first element where pred returns true.
+      Returns true if found, false otherwise (or invalid input).
+      Optionally stores index and/or element pointer.
 */
-typedef bool (*FindPred)(const void *elem, void *ctx);
+static inline bool algo_find(
+    const void** items,
+    size_t len,
+    algo_find_pred pred,
+    void* ctx,
+    size_t* out_index,     // optional: receives matching index
+    const void** out_elem  // optional: receives matching element pointer
+)
+{
+    if (!items || !pred) return false;
 
-/* ============================================================
-   Basic find (out-parameter style)
-   ============================================================ */
-
-/*
-    Finds the first element matching `pred`.
-
-    Parameters:
-    - items     : array of element pointers (read-only)
-    - len       : number of elements
-    - pred      : predicate function
-    - ctx       : optional context
-    - out_index : optional; receives index if found
-    - out_elem  : optional; receives element pointer if found
-
-    Returns:
-    - true  if a matching element was found
-    - false otherwise
-*/
-static inline bool find(
-    const void **items,
-    size_t       len,
-    FindPred     pred,
-    void        *ctx,
-    size_t      *out_index,
-    const void **out_elem
-) {
-    if (!items || !pred)
-        return false;
-
-    for (size_t i = 0; i < len; i++) {
+    for (size_t i = 0; i < len; ++i) {
         if (pred(items[i], ctx)) {
             if (out_index) *out_index = i;
             if (out_elem)  *out_elem  = items[i];
             return true;
         }
     }
-
     return false;
 }
 
 /* ============================================================
-   Option-based variants (functional, explicit)
+   Strongly typed version (recommended)
    ============================================================ */
 
-CANON_C_DEFINE_OPTION(size_t)
-CANON_C_DEFINE_OPTION(void*)
-
 /*
-    Returns Some(index) if element matches predicate, None if not found
+    ALGO_FIND(array, len, Type, pred, ctx, out_index, out_elem)
+      pred signature: bool pred(const Type* elem, void* ctx)
+      out_index/out_elem: optional (pass NULL if not needed)
+      Returns: true if found
 */
-static inline Option_size_t find_index_opt(
-    const void **items,
-    size_t       len,
-    FindPred     pred,
-    void        *ctx
-) {
-    if (!items || !pred)
-        return Option_size_t_None();
+#define ALGO_FIND(array, len, Type, pred, ctx, out_index, out_elem) \
+    ({ \
+        bool _found = false; \
+        if ((array) && (pred)) { \
+            for (size_t _i = 0; _i < (len); ++_i) { \
+                if ((pred)(&(array)[_i], (ctx))) { \
+                    if (out_index) *(out_index) = _i; \
+                    if (out_elem)  *(out_elem)  = &(array)[_i]; \
+                    _found = true; \
+                    break; \
+                } \
+            } \
+        } \
+        _found; \
+    })
 
-    for (size_t i = 0; i < len; i++) {
-        if (pred(items[i], ctx))
-            return Option_size_t_Some(i);
-    }
+/* ============================================================
+   Vec integration
+   ============================================================ */
 
-    return Option_size_t_None();
-}
-
-/*
-    Returns Some(element pointer) if match found, None otherwise
-*/
-static inline Option_void_ptr find_elem_opt(
-    const void **items,
-    size_t       len,
-    FindPred     pred,
-    void        *ctx
-) {
-    if (!items || !pred)
-        return Option_void_ptr_None();
-
-    for (size_t i = 0; i < len; i++) {
-        if (pred(items[i], ctx))
-            return Option_void_ptr_Some((void*)items[i]);
-    }
-
-    return Option_void_ptr_None();
-}
+#define ALGO_FIND_VEC(vec, Type, pred, ctx, out_index, out_elem) \
+    ALGO_FIND((vec).items, (vec).len, Type, pred, ctx, out_index, out_elem)
 
 #endif /* CANON_C_ALGO_FIND_H */
