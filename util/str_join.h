@@ -5,76 +5,70 @@
 #include <stdbool.h>
 #include <string.h>
 
-/*
-    str_join.h — join multiple strings
+#include "core/memory.h"
+#include "semantics/option.h"
+#include "util/string.h"  // for str_equals, etc. if needed
 
-    Derived utility.
-    - No hidden allocation
-    - No ownership transfer
-    - Caller controls destination buffer
+/*
+    str_join.h — Safe string joining utilities
+
+    All functions:
+      - Never allocate unless explicitly named "alloc"
+      - Never take ownership
+      - Never mutate input unless explicitly stated
+      - Return explicit success/failure
 */
 
-/* ------------------------------------------------------------
-   Manual join
-   ------------------------------------------------------------ */
+CANON_C_DEFINE_OPTION(char*)
+
+/* ============================================================
+   Buffer-based join (no allocation, no input mutation)
+   ============================================================ */
 
 /*
-    Joins `count` strings from `parts` using separator `sep`
-    into `dest`.
-
-    Semantics:
-    - sep == NULL is treated as empty string
-    - count == 0 produces empty string
-
+    str_join:
+      Joins `count` strings from `parts` using `sep` into `dest`.
+      - sep = NULL treated as empty separator
+      - count = 0 produces empty string
+      - All parts[i] must be valid null-terminated strings
     Returns:
-    - true on success
-    - false if dest_size is insufficient or input invalid
-
-    Requirements:
-    - dest must be writable
-    - parts[i] must be non-NULL, null-terminated strings
+      true  — success (string fits)
+      false — insufficient dest_size or invalid input
 */
-static inline bool str_join_manual(
-    char       *dest,
-    size_t      dest_size,
-    const char **parts,
-    size_t      count,
-    const char *sep
-) {
-    if (!dest || dest_size == 0)
-        return false;
-
+static inline bool str_join(
+    char* dest,
+    size_t dest_size,
+    const char** parts,
+    size_t count,
+    const char* sep
+)
+{
+    if (!dest || dest_size == 0) return false;
     if (count == 0) {
         dest[0] = '\0';
         return true;
     }
+    if (!parts) return false;
 
-    if (!parts)
-        return false;
-
-    if (!sep)
-        sep = "";
+    sep = sep ? sep : "";
+    const size_t sep_len = strlen(sep);
 
     size_t pos = 0;
-    size_t sep_len = strlen(sep);
 
-    for (size_t i = 0; i < count; i++) {
-        if (!parts[i])
-            return false;
+    for (size_t i = 0; i < count; ++i) {
+        if (!parts[i]) return false;
 
-        size_t part_len = strlen(parts[i]);
+        const size_t part_len = strlen(parts[i]);
 
-        if (pos + part_len + 1 > dest_size)
-            return false;
+        // Check space for part + separator (except after last) + null
+        const size_t needed = part_len + (i + 1 < count && sep_len > 0 ? sep_len : 0) + 1;
+        if (pos + needed > dest_size) return false;
 
-        memcpy(dest + pos, parts[i], part_len);
+        mem_copy(dest + pos, parts[i], part_len);
         pos += part_len;
 
         if (i + 1 < count && sep_len > 0) {
-            if (pos + sep_len + 1 > dest_size)
-                return false;
-
-            memcpy(dest + pos, sep, sep_len);
+            mem_copy(dest + pos, sep, sep_len);
             pos += sep_len;
         }
     }
@@ -83,53 +77,113 @@ static inline bool str_join_manual(
     return true;
 }
 
-/* ------------------------------------------------------------
-   Convenience wrapper: join after splitting
-   ------------------------------------------------------------ */
+/* ============================================================
+   Allocating join (caller must free on Some)
+   ============================================================ */
 
 /*
-    Joins string `s` split by delimiter `delim` into `dest`
-    using `sep` as output separator.
-
-    Semantics:
-    - Modifies `s` in-place for splitting
-    - Uses `out_parts` buffer to hold split pointers
-    - Returns true on success
+    str_alloc_join:
+      Allocates and joins `count` strings with `sep`.
+      Returns option_charp:
+        Some(ptr) — success, caller owns ptr
+        None      — allocation failure or invalid input
 */
-static inline bool str_join_split(
-    char       *s,
-    char        delim,
-    char      **out_parts,
-    size_t      max_parts,
-    char       *dest,
-    size_t      dest_size,
-    const char *sep
-) {
-    if (!s || !out_parts || max_parts == 0 || !dest || dest_size == 0)
-        return false;
-
-    size_t count = 0;
-    count = 0;
-
-    /* Split the string in-place */
-    char *p = s;
-    while (*p == delim) p++; /* skip leading delimiters */
-
-    if (*p != '\0')
-        out_parts[count++] = p;
-
-    while (*p && count < max_parts) {
-        if (*p == delim) {
-            *p = '\0';
-            do { p++; } while (*p == delim);
-            if (*p != '\0' && count < max_parts)
-                out_parts[count++] = p;
-            continue;
-        }
-        p++;
+static inline option_charp str_alloc_join(
+    const char** parts,
+    size_t count,
+    const char* sep
+)
+{
+    if (!parts || count == 0) {
+        return str_alloc_copy("");
     }
 
-    return str_join_manual(dest, dest_size, (const char **)out_parts, count, sep);
+    sep = sep ? sep : "";
+    const size_t sep_len = strlen(sep);
+
+    // Compute total length
+    size_t total = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (!parts[i]) return option_charp_none();
+        total += strlen(parts[i]);
+        if (i + 1 < count && sep_len > 0) total += sep_len;
+    }
+    total += 1;  // null terminator
+
+    char* out = (char*)mem_alloc(total);
+    if (!out) return option_charp_none();
+
+    if (str_join(out, total, parts, count, sep)) {
+        return option_charp_some(out);
+    }
+
+    mem_free(out);
+    return option_charp_none();
+}
+
+/* ============================================================
+   Non-mutating split + join (safe round-trip)
+   ============================================================ */
+
+/*
+    str_split_to_parts:
+      Splits `s` by `delim` into `out_parts` buffer.
+      - Does NOT modify `s`
+      - Skips empty segments (multiple delimiters treated as one)
+      - Stops at max_parts
+    Returns: number of parts found
+*/
+static inline size_t str_split_to_parts(
+    const char* s,
+    char delim,
+    const char** out_parts,
+    size_t max_parts
+)
+{
+    if (!s || !out_parts || max_parts == 0) return 0;
+
+    size_t count = 0;
+    const char* start = s;
+
+    while (*start) {
+        // Skip leading delimiters
+        while (*start == delim) ++start;
+        if (*start == '\0') break;
+
+        if (count < max_parts) {
+            out_parts[count++] = start;
+        }
+
+        // Find next delimiter
+        while (*start && *start != delim) ++start;
+
+        if (*start == '\0' && count < max_parts) {
+            // Last part already added
+            break;
+        }
+    }
+
+    return count;
+}
+
+/*
+    str_rejoin:
+      Convenience: split `s` by `delim`, join with `sep` into `dest`
+      - No mutation of `s`
+      - Safe and bounded
+*/
+static inline bool str_rejoin(
+    const char* s,
+    char delim,
+    const char** parts_buffer,
+    size_t max_parts,
+    char* dest,
+    size_t dest_size,
+    const char* sep
+)
+{
+    size_t count = str_split_to_parts(s, delim, parts_buffer, max_parts);
+    return str_join(dest, dest_size, parts_buffer, count, sep);
 }
 
 #endif /* CANON_C_UTIL_STR_JOIN_H */
