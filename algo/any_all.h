@@ -3,110 +3,114 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <canon/semantics/option.h>
+
+#include "data/vec.h"  // For vec integration macros
 
 /*
-    any_all.h — predicate checks over sequences
+    any_all.h — Predicate checks over sequences (functional style)
 
-    Semantics:
-    - any: returns true if ANY element satisfies predicate
-    - all: returns true if ALL elements satisfy predicate
+    algo_any: true if at least one element satisfies predicate
+    algo_all: true if all elements satisfy predicate
 
     Properties:
-    - Read-only
-    - No allocation
-    - No ownership
-    - No mutation
-    - Short-circuiting
+      - Read-only access
+      - Short-circuiting
+      - No allocation, mutation, or ownership
+      - Optional user context
 */
 
+typedef bool (*algo_pred_fn)(const void* elem, void* ctx);
+
 /* ============================================================
-   Predicate function type
+   Generic versions (void* elements)
    ============================================================ */
 
 /*
-    Predicate function:
-    - elem : element (read-only)
-    - ctx  : optional user context (may be NULL)
+    algo_any:
+      Returns true if pred returns true for any element.
+      Returns false if items == NULL or pred == NULL or len == 0.
 */
-typedef bool (*AnyAllPred)(const void *elem, void *ctx);
+static inline bool algo_any(
+    const void** items,
+    size_t len,
+    algo_pred_fn pred,
+    void* ctx
+)
+{
+    if (!items || !pred) return false;
 
-/* ============================================================
-   Basic versions (return raw bool)
-   ============================================================ */
-
-/* Returns true if predicate is true for at least one element */
-static inline bool any(
-    const void **items,
-    size_t       len,
-    AnyAllPred   pred,
-    void        *ctx
-) {
-    if (!items || !pred)
-        return false;
-
-    for (size_t i = 0; i < len; i++) {
-        if (pred(items[i], ctx))
+    for (size_t i = 0; i < len; ++i) {
+        if (pred(items[i], ctx)) {
             return true;
+        }
     }
-
     return false;
 }
 
-/* Returns true if predicate is true for all elements */
-static inline bool all(
-    const void **items,
-    size_t       len,
-    AnyAllPred   pred,
-    void        *ctx
-) {
-    if (!items || !pred)
-        return false;
+/*
+    algo_all:
+      Returns true if pred returns true for every element.
+      Returns false if any element fails or on invalid input.
+*/
+static inline bool algo_all(
+    const void** items,
+    size_t len,
+    algo_pred_fn pred,
+    void* ctx
+)
+{
+    if (!items || !pred) return false;
 
-    for (size_t i = 0; i < len; i++) {
-        if (!pred(items[i], ctx))
+    for (size_t i = 0; i < len; ++i) {
+        if (!pred(items[i], ctx)) {
             return false;
+        }
     }
-
     return true;
 }
 
 /* ============================================================
-   Option<bool> variants (explicit failure handling)
+   Strongly typed versions (recommended)
    ============================================================ */
 
-CANON_C_DEFINE_OPTION(bool)
+#define ALGO_ANY_TYPED(items, len, Type, pred, ctx) \
+    ({ \
+        bool _result = false; \
+        if ((items) && (pred)) { \
+            for (size_t _i = 0; _i < (len); ++_i) { \
+                if ((pred)(&(items)[_i], (ctx))) { \
+                    _result = true; \
+                    break; \
+                } \
+            } \
+        } \
+        _result; \
+    })
 
-/* Returns Some(true/false) or None if input/predicate is NULL */
-static inline Option_bool any_opt(
-    const void **items,
-    size_t       len,
-    AnyAllPred   pred,
-    void        *ctx
-) {
-    if (!items || !pred) return Option_bool_None();
+#define ALGO_ALL_TYPED(items, len, Type, pred, ctx) \
+    ({ \
+        bool _result = true; \
+        if ((items) && (pred)) { \
+            for (size_t _i = 0; _i < (len); ++_i) { \
+                if (!(pred)(&(items)[_i], (ctx))) { \
+                    _result = false; \
+                    break; \
+                } \
+            } \
+        } else { \
+            _result = false; \
+        } \
+        _result; \
+    })
 
-    for (size_t i = 0; i < len; i++) {
-        if (pred(items[i], ctx))
-            return Option_bool_Some(true);
-    }
-    return Option_bool_Some(false);
-}
+/* ============================================================
+   Vec integration (safe and convenient)
+   ============================================================ */
 
-/* Returns Some(true/false) or None if input/predicate is NULL */
-static inline Option_bool all_opt(
-    const void **items,
-    size_t       len,
-    AnyAllPred   pred,
-    void        *ctx
-) {
-    if (!items || !pred) return Option_bool_None();
+#define ALGO_ANY_VEC(vec, Type, pred, ctx) \
+    ALGO_ANY_TYPED((vec).items, (vec).len, Type, pred, ctx)
 
-    for (size_t i = 0; i < len; i++) {
-        if (!pred(items[i], ctx))
-            return Option_bool_Some(false);
-    }
-    return Option_bool_Some(true);
-}
+#define ALGO_ALL_VEC(vec, Type, pred, ctx) \
+    ALGO_ALL_TYPED((vec).items, (vec).len, Type, pred, ctx)
 
 #endif /* CANON_C_ALGO_ANY_ALL_H */
