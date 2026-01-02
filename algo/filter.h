@@ -3,98 +3,92 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <canon/semantics/option.h>
+
+#include "data/vec.h"  // For vec integration macros
 
 /*
-    filter.h — select elements based on predicate
+    filter.h — Select elements matching predicate (functional style)
 
-    Semantics:
-    - Preserves input order
-    - Read-only over elements
-    - No allocation
-    - No ownership transfer
+    algo_filter_into:
+      Copies elements that satisfy pred into caller-provided output buffer.
+      Preserves relative order.
+      Truncates if output capacity is insufficient.
 
-    Derived algorithm only.
+    Properties:
+      - Read-only input
+      - No allocation, mutation, or ownership transfer
+      - Short-circuits when output is full
+      - Optional user context
 */
 
+typedef bool (*algo_filter_pred)(const void* elem, void* ctx);
+
 /* ============================================================
-   Predicate
+   Generic version (void* elements)
    ============================================================ */
 
 /*
-    Predicate function:
-    - elem : element (read-only)
-    - ctx  : optional user context
-    - returns true to keep element
+    algo_filter_into:
+      Filters items into out buffer.
+      Returns number of elements written (may be < matching count if truncated).
+      Returns 0 on invalid input (items == NULL || out == NULL || pred == NULL).
 */
-typedef bool (*FilterPred)(const void *elem, void *ctx);
-
-/* ============================================================
-   Basic filter (caller-managed output)
-   ============================================================ */
-
-/*
-    Filters items into caller-provided output buffer.
-
-    Parameters:
-    - items   : input array (read-only)
-    - len     : number of elements
-    - pred    : predicate function
-    - ctx     : optional context
-    - out     : output buffer (caller-owned)
-    - out_cap : capacity of output buffer
-
-    Returns:
-    - number of elements written to `out`
-    - truncates if out_cap < number of matches
-*/
-static inline size_t filter_into(
-    const void **items,
-    size_t       len,
-    FilterPred   pred,
-    void        *ctx,
-    const void **out,
-    size_t       out_cap
-) {
-    if (!items || !out || !pred)
-        return 0;
+static inline size_t algo_filter_into(
+    const void** items,
+    size_t len,
+    algo_filter_pred pred,
+    void* ctx,
+    void** out,          // Note: non-const — we write pointers
+    size_t out_cap
+)
+{
+    if (!items || !out || !pred) return 0;
 
     size_t out_len = 0;
-    for (size_t i = 0; i < len && out_len < out_cap; i++) {
+    for (size_t i = 0; i < len; ++i) {
+        if (out_len >= out_cap) break;  // truncate early
         if (pred(items[i], ctx)) {
-            out[out_len++] = items[i];
+            out[out_len++] = (void*)items[i];  // const cast: safe (borrowed pointer)
         }
     }
     return out_len;
 }
 
 /* ============================================================
-   Option<size_t> variant (explicit failure handling)
+   Strongly typed version (recommended)
    ============================================================ */
 
-CANON_C_DEFINE_OPTION(size_t)
-
 /*
-    Returns Some(number of elements written) or None if input/predicate/output is NULL
+    ALGO_FILTER_INTO(out_array, in_array, len, Type, pred, ctx)
+      pred signature: bool pred(const Type* elem, void* ctx)
+      Returns number of elements written
 */
-static inline Option_size_t filter_into_opt(
-    const void **items,
-    size_t       len,
-    FilterPred   pred,
-    void        *ctx,
-    const void **out,
-    size_t       out_cap
-) {
-    if (!items || !out || !pred)
-        return Option_size_t_None();
+#define ALGO_FILTER_INTO(out_array, in_array, len, Type, pred, ctx) \
+    ({ \
+        size_t _out_len = 0; \
+        if ((out_array) && (in_array) && (pred)) { \
+            const size_t _cap = (sizeof(out_array) / sizeof((out_array)[0])); \
+            for (size_t _i = 0; _i < (len) && _out_len < _cap; ++_i) { \
+                if ((pred)(&(in_array)[_i], (ctx))) { \
+                    (out_array)[_out_len++] = (in_array)[_i]; \
+                } \
+            } \
+        } \
+        _out_len; \
+    })
 
-    size_t out_len = 0;
-    for (size_t i = 0; i < len && out_len < out_cap; i++) {
-        if (pred(items[i], ctx)) {
-            out[out_len++] = items[i];
-        }
-    }
-    return Option_size_t_Some(out_len);
-}
+/* ============================================================
+   Vec integration (safe bounded filtering)
+   ============================================================ */
+
+#define ALGO_FILTER_VEC(out_vec, in_vec, Type, pred, ctx) \
+    ALGO_FILTER_INTO( \
+        (out_vec).items, \
+        (in_vec).items, \
+        (in_vec).len, \
+        Type, \
+        pred, \
+        ctx \
+    )
 
 #endif /* CANON_C_ALGO_FILTER_H */
