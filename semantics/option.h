@@ -5,94 +5,103 @@
 #include <assert.h>
 
 /*
-    option.h — explicit presence / absence
+    option.h — Explicit presence or absence of a value
 
-    Option<T> encodes:
-    - presence (Some)
-    - absence (None)
+    Option<T> represents:
+      - Some(value) : value is present
+      - None        : value is absent
 
-    Without sentinels, magic values, or implicit error states.
-    Header-only, zero-cost abstraction.
+    No NULL pointers, no sentinel values, no hidden error states.
+    Zero-cost abstraction: just a bool + the value (with natural alignment).
+    Header-only, fully generic via macro.
 */
 
-#define CANON_C_DEFINE_OPTION(type)                                      \
-typedef struct {                                                         \
-    bool has_value;                                                      \
-    type value;                                                          \
-} Option_##type;                                                         \
-                                                                         \
-/* Construct Some(value) */                                              \
-static inline Option_##type                                              \
-Option_##type##_Some(type v)                                             \
-{                                                                        \
-    Option_##type o;                                                     \
-    o.has_value = true;                                                  \
-    o.value = v;                                                         \
-    return o;                                                            \
-}                                                                        \
-                                                                         \
-/* Construct None */                                                     \
-static inline Option_##type                                              \
-Option_##type##_None(void)                                               \
-{                                                                        \
-    Option_##type o = {0};                                               \
-    return o;                                                            \
-}                                                                        \
-                                                                         \
-/* Presence checks */                                                    \
-static inline bool                                                       \
-Option_##type##_is_some(Option_##type o)                                 \
-{                                                                        \
-    return o.has_value;                                                  \
-}                                                                        \
-                                                                         \
-static inline bool                                                       \
-Option_##type##_is_none(Option_##type o)                                 \
-{                                                                        \
-    return !o.has_value;                                                 \
-}                                                                        \
-                                                                         \
-/* Safe access: writes value to out if present */                        \
-static inline bool                                                       \
-Option_##type##_get(                                                     \
-    Option_##type o,                                                     \
-    type *out                                                            \
-)                                                                        \
-{                                                                        \
-    if (!o.has_value || !out)                                            \
-        return false;                                                    \
-                                                                         \
-    *out = o.value;                                                      \
-    return true;                                                         \
-}                                                                        \
-                                                                         \
-/* Fallback extraction */                                                \
-static inline type                                                       \
-Option_##type##_unwrap_or(                                               \
-    Option_##type o,                                                     \
-    type fallback                                                        \
-)                                                                        \
-{                                                                        \
-    return o.has_value ? o.value : fallback;                             \
-}                                                                        \
-                                                                         \
-/* Asserted extraction (fail loudly if None) */                          \
-static inline type                                                       \
-Option_##type##_unwrap(Option_##type o) {                                \
-    assert(o.has_value && "Called unwrap on None");                      \
-    return o.value;                                                      \
-}                                                                        \
-                                                                         \
-/* Asserted extraction with custom message */                             \
-static inline type                                                       \
-Option_##type##_expect(Option_##type o, const char *msg) {               \
-    assert(o.has_value && msg);                                          \
-    return o.value;                                                      \
-}                                                                        \
-                                                                         \
-/* Functional combinators */                                              \
-static inline Option_##type                                              \
-Option_##type##_map(Option_##type o, type (*f)(type)) {                  \
-    return o.has_value ? Option_##type##_Some(f(o.value)) : Option_##type##_None(); \
+#define CANON_C_DEFINE_OPTION(type) \
+typedef struct { \
+    bool has_value; \
+    type value; \
+} option_##type; \
+\
+/* Construct Some(value) */ \
+static inline option_##type option_##type##_some(type v) \
+{ \
+    option_##type o; \
+    o.has_value = true; \
+    o.value = v; \
+    return o; \
+} \
+\
+/* Construct None (zero-initialized → safe in static storage) */ \
+static inline option_##type option_##type##_none(void) \
+{ \
+    option_##type o = {0}; \
+    return o; \
+} \
+\
+/* Presence checks */ \
+static inline bool option_##type##_is_some(option_##type o) \
+{ \
+    return o.has_value; \
+} \
+\
+static inline bool option_##type##_is_none(option_##type o) \
+{ \
+    return !o.has_value; \
+} \
+\
+/* Safe extraction: writes to out pointer if present */ \
+static inline bool option_##type##_get(option_##type o, type *out) \
+{ \
+    if (o.has_value && out) { \
+        *out = o.value; \
+        return true; \
+    } \
+    return false; \
+} \
+\
+/* Return value or fallback */ \
+static inline type option_##type##_unwrap_or(option_##type o, type fallback) \
+{ \
+    return o.has_value ? o.value : fallback; \
+} \
+\
+/* Panic on None (debug only) */ \
+static inline type option_##type##_unwrap(option_##type o) \
+{ \
+    assert(o.has_value && "option_##type##_unwrap called on None"); \
+    return o.value; \
+} \
+\
+/* Panic on None with custom message */ \
+static inline type option_##type##_expect(option_##type o, const char *msg) \
+{ \
+    assert(o.has_value && msg); \
+    (void)msg; /* silence unused warning in release */ \
+    return o.value; \
+} \
+\
+/* Transform value if present (map) */ \
+static inline option_##type option_##type##_map( \
+    option_##type o, \
+    type (*f)(type) \
+) { \
+    return o.has_value ? option_##type##_some(f(o.value)) : option_##type##_none(); \
+} \
+\
+/* Chain computations that return Option (flat_map / and_then) */ \
+static inline option_##type option_##type##_and_then( \
+    option_##type o, \
+    option_##type (*f)(type) \
+) { \
+    return o.has_value ? f(o.value) : option_##type##_none(); \
+} \
+\
+/* Provide alternative if None */ \
+static inline option_##type option_##type##_or_else( \
+    option_##type o, \
+    option_##type (*fallback)(void) \
+) { \
+    return o.has_value ? o : fallback(); \
 }
+
 #endif /* CANON_C_SEMANTICS_OPTION_H */
