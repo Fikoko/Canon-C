@@ -3,128 +3,133 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <canon/semantics/result.h>
+#include "semantics/result.h"
 
 /*
-    log.h — minimal observable logging (Canon-C Result-based)
+    log.h — Minimal, explicit, observable logging
 
-    This module:
-    - Performs explicit side effects (I/O)
-    - Does not allocate
-    - Does not store global state
-    - Returns explicit Result on failure
+    Features:
+      - Explicit output stream control
+      - No allocation, no global state
+      - Explicit Result<void, const char*> on failure
+      - Side effects are intentional and visible
+      - Errors go to stderr, info/warn to stdout
+
+    This is an optional utility — safe to include everywhere.
 */
 
 typedef enum {
     LOG_INFO,
     LOG_WARN,
     LOG_ERROR
-} LogLevel;
+} log_level;
 
-/* Result type for logging functions */
-CANON_C_DEFINE_RESULT(void, const char*)  /* Result<void, const char*> */
+/* Result type: success = Ok(()), failure = Err(message) */
+CANON_C_DEFINE_RESULT(bool, const char*)  // true = success
 
 /* ============================================================
-   Internal primitive
+   Core: Log to explicit stream
    ============================================================ */
 
-/* Log formatted message with va_list to explicit stream */
-static inline Result_void_const_char_ptr log_vfmt_to(
-    FILE      *out,
-    LogLevel   level,
-    const char *fmt,
-    va_list    args
-) {
-    if (!out) return Result_void_const_char_ptr_Err("Output stream NULL");
-    if (!fmt) return Result_void_const_char_ptr_Err("Format string NULL");
+/* Low-level: formatted logging with va_list */
+static inline result_bool_constcharp log_vfmt_to(
+    FILE* stream,
+    log_level level,
+    const char* fmt,
+    va_list args
+)
+{
+    if (!stream) return result_bool_constcharp_err("null output stream");
+    if (!fmt)    return result_bool_bool_constcharp_err("null format string");
 
-    const char *prefix = "";
-
+    const char* prefix = "";
     switch (level) {
         case LOG_INFO:  prefix = "[INFO] ";  break;
         case LOG_WARN:  prefix = "[WARN] ";  break;
         case LOG_ERROR: prefix = "[ERROR] "; break;
     }
 
-    if (fputs(prefix, out) == EOF) 
-        return Result_void_const_char_ptr_Err("Failed to write prefix");
+    if (fputs(prefix, stream) == EOF)
+        return result_bool_constcharp_err("failed to write log prefix");
 
-    if (vfprintf(out, fmt, args) < 0)
-        return Result_void_const_char_ptr_Err("Failed to write formatted message");
+    if (vfprintf(stream, fmt, args) < 0)
+        return result_bool_constcharp_err("failed to write formatted message");
 
-    if (fputc('\n', out) == EOF)
-        return Result_void_const_char_ptr_Err("Failed to write newline");
+    if (fputc('\n', stream) == EOF)
+        return result_bool_constcharp_err("failed to write newline");
 
-    return Result_void_const_char_ptr_Ok(NULL);
+    if (fflush(stream) == EOF)
+        return result_bool_constcharp_err("failed to flush stream");
+
+    return result_bool_constcharp_ok(true);
 }
 
-/* ============================================================
-   Core logging
-   ============================================================ */
-
-/* Log simple message to explicit stream */
-static inline Result_void_const_char_ptr log_to(
-    FILE      *out,
-    LogLevel   level,
-    const char *msg
-) {
-    if (!out) return Result_void_const_char_ptr_Err("Output stream NULL");
-    if (!msg) return Result_void_const_char_ptr_Err("Message NULL");
-
-    const char *prefix = "";
-
-    switch (level) {
-        case LOG_INFO:  prefix = "[INFO] ";  break;
-        case LOG_WARN:  prefix = "[WARN] ";  break;
-        case LOG_ERROR: prefix = "[ERROR] "; break;
-    }
-
-    if (fprintf(out, "%s%s\n", prefix, msg) < 0)
-        return Result_void_const_char_ptr_Err("Failed to write message");
-
-    return Result_void_const_char_ptr_Ok(NULL);
-}
-
-/* Log formatted message to explicit stream */
-static inline Result_void_const_char_ptr log_fmt_to(
-    FILE      *out,
-    LogLevel   level,
-    const char *fmt,
+/* Formatted logging to explicit stream */
+static inline result_bool_constcharp log_fmt_to(
+    FILE* stream,
+    log_level level,
+    const char* fmt,
     ...
-) {
-    if (!out) return Result_void_const_char_ptr_Err("Output stream NULL");
-    if (!fmt) return Result_void_const_char_ptr_Err("Format string NULL");
-
+)
+{
     va_list args;
     va_start(args, fmt);
-    Result_void_const_char_ptr res = log_vfmt_to(out, level, fmt, args);
+    result_bool_constcharp res = log_vfmt_to(stream, level, fmt, args);
     va_end(args);
     return res;
+}
+
+/* Simple string message to explicit stream */
+static inline result_bool_constcharp log_to(
+    FILE* stream,
+    log_level level,
+    const char* msg
+)
+{
+    if (!msg) return result_bool_constcharp_err("null message");
+    return log_fmt_to(stream, level, "%s", msg);
 }
 
 /* ============================================================
-   Convenience helpers
+   Convenience: Default streams (stdout / stderr)
    ============================================================ */
 
-/* Log simple message to default stream (stdout / stderr) */
-static inline Result_void_const_char_ptr log_msg(LogLevel level, const char *msg) {
-    if (!msg) return Result_void_const_char_ptr_Err("Message NULL");
-
-    FILE *out = (level == LOG_ERROR) ? stderr : stdout;
-    return log_to(out, level, msg);
-}
-
-/* Log formatted message to default stream (stdout / stderr) */
-static inline Result_void_const_char_ptr log_fmt(LogLevel level, const char *fmt, ...) {
-    if (!fmt) return Result_void_const_char_ptr_Err("Format string NULL");
-
-    FILE *out = (level == LOG_ERROR) ? stderr : stdout;
+/* Formatted logging to default stream */
+static inline result_bool_constcharp log_fmt(
+    log_level level,
+    const char* fmt,
+    ...
+)
+{
+    FILE* stream = (level == LOG_ERROR) ? stderr : stdout;
 
     va_list args;
     va_start(args, fmt);
-    Result_void_const_char_ptr res = log_vfmt_to(out, level, fmt, args);
+    result_bool_constcharp res = log_vfmt_to(stream, level, fmt, args);
     va_end(args);
     return res;
 }
+
+/* Simple message to default stream */
+static inline result_bool_constcharp log_msg(
+    log_level level,
+    const char* msg
+)
+{
+    FILE* stream = (level == LOG_ERROR) ? stderr : stdout;
+    return log_to(stream, level, msg);
+}
+
+/* ============================================================
+   Macros for fire-and-forget (common in release builds)
+   ============================================================ */
+
+#define LOG_INFO(msg)    (void)log_msg(LOG_INFO, (msg))
+#define LOG_WARN(msg)    (void)log_msg(LOG_WARN, (msg))
+#define LOG_ERROR(msg)   (void)log_msg(LOG_ERROR, (msg))
+
+#define LOG_INFO_FMT(...)  (void)log_fmt(LOG_INFO, __VA_ARGS__)
+#define LOG_WARN_FMT(...)  (void)log_fmt(LOG_WARN, __VA_ARGS__)
+#define LOG_ERROR_FMT(...) (void)log_fmt(LOG_ERROR, __VA_ARGS__)
 
 #endif /* CANON_C_UTIL_LOG_H */
