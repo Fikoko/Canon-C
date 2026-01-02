@@ -6,158 +6,129 @@
 #include <string.h>
 
 /*
-    str_split.h — split string into substrings
+    str_split.h — Safe, non-mutating string splitting utilities
 
-    Derived utility.
-    - No allocation
-    - No ownership transfer
-    - Output substrings reference the original string
-    - Caller controls storage of output pointers
+    All functions:
+      - Never mutate input strings (const-correct)
+      - Never allocate
+      - Never take ownership
+      - Output parts reference original string (borrowed views)
+      - Caller provides storage for pointers
+
+    Perfect for parsing without copying or destroying input.
 */
 
-/* ------------------------------------------------------------
-   Core split
-   ------------------------------------------------------------ */
+#include "util/str_join.h"  // for str_join, str_alloc_join (optional include)
+
+/* ============================================================
+   Core: Non-mutating split (safe, recommended)
+   ============================================================ */
 
 /*
-    Splits string `s` by delimiter `delim`.
-
-    Semantics:
-    - Modifies `s` in-place by inserting '\0'
-    - Skips leading delimiters
-    - Stops writing when max_parts is reached
-    - Remaining string (if any) is left intact
-
-    Special case:
-    - delim == '\0' → no split, returns single part
-
-    Returns:
-    - number of substrings written
-
-    Requirements:
-    - `s` must be mutable
-    - `out` must have capacity >= max_parts
+    str_split:
+      Splits const string `s` by `delim` into `out_parts` buffer.
+      - Does NOT modify `s`
+      - Skips empty segments (consecutive delimiters → one split)
+      - Stops at max_parts
+      - Returns number of parts written
+      - Substrings are borrowed views into `s` (valid as long as `s` lives)
 */
 static inline size_t str_split(
-    char   *s,
-    char    delim,
-    char  **out,
-    size_t  max_parts
-) {
-    if (!s || !out || max_parts == 0)
-        return 0;
+    const char* s,
+    char delim,
+    const char** out_parts,
+    size_t max_parts
+)
+{
+    if (!s || !out_parts || max_parts == 0) return 0;
 
-    /* No delimiter: whole string is one part */
+    /* Special case: no delimiter → single part */
     if (delim == '\0') {
-        out[0] = s;
+        out_parts[0] = s;
         return 1;
     }
 
     size_t count = 0;
-    char *p = s;
+    const char* start = s;
 
-    /* Skip leading delimiters */
-    while (*p == delim)
-        p++;
+    while (*start) {
+        /* Skip leading delimiters */
+        while (*start == delim) ++start;
+        if (*start == '\0') break;
 
-    if (*p == '\0')
-        return 0;
-
-    out[count++] = p;
-
-    while (*p && count < max_parts) {
-        if (*p == delim) {
-            *p = '\0';
-
-            /* Skip consecutive delimiters */
-            do {
-                p++;
-            } while (*p == delim);
-
-            if (*p == '\0')
-                break;
-
-            if (count < max_parts)
-                out[count++] = p;
-            continue;
+        if (count < max_parts) {
+            out_parts[count++] = start;
         }
-        p++;
+
+        /* Find end of part */
+        while (*start && *start != delim) ++start;
+
+        /* If at delimiter, next loop will skip it */
     }
 
     return count;
 }
 
-/* ------------------------------------------------------------
-   Optional helpers
-   ------------------------------------------------------------ */
+/* ============================================================
+   Trimming (in-place, explicit mutation)
+   ============================================================ */
 
 /*
-    Rejoins split substrings into caller buffer using separator.
-    - parts   : array of substrings (read-only)
-    - count   : number of substrings
-    - dest    : output buffer (caller-owned)
-    - dest_sz : buffer size
-    - sep     : separator string (NULL treated as "")
-    Returns true on success, false if buffer too small or invalid input
+    str_trim_in_place:
+      Removes leading and trailing instances of `trim_ch` from `s`.
+      - Modifies `s` in-place (explicitly named)
+      - Returns pointer to start of trimmed content (may shift)
 */
-static inline bool str_split_join(
-    const char **parts,
-    size_t       count,
-    char        *dest,
-    size_t       dest_sz,
-    const char  *sep
-) {
-    if (!parts || !dest || dest_sz == 0)
-        return false;
+static inline char* str_trim_in_place(char* s, char trim_ch)
+{
+    if (!s) return NULL;
 
-    if (!sep)
-        sep = "";
+    /* Trim leading */
+    char* start = s;
+    while (*start == trim_ch) ++start;
 
-    size_t sep_len = strlen(sep);
-    size_t pos = 0;
-
-    for (size_t i = 0; i < count; i++) {
-        if (!parts[i])
-            return false;
-
-        size_t part_len = strlen(parts[i]);
-        if (pos + part_len + 1 > dest_sz)
-            return false;
-
-        memcpy(dest + pos, parts[i], part_len);
-        pos += part_len;
-
-        if (i + 1 < count && sep_len > 0) {
-            if (pos + sep_len + 1 > dest_sz)
-                return false;
-
-            memcpy(dest + pos, sep, sep_len);
-            pos += sep_len;
-        }
+    /* If entire string was trim chars */
+    if (*start == '\0') {
+        s[0] = '\0';
+        return s;
     }
 
-    dest[pos] = '\0';
-    return true;
+    /* Move content if needed */
+    if (start != s) {
+        memmove(s, start, strlen(start) + 1);
+    }
+
+    /* Trim trailing */
+    char* end = s + strlen(s);
+    while (end > s && *(end - 1) == trim_ch) --end;
+    *end = '\0';
+
+    return s;
 }
 
 /*
-    Trim leading and trailing characters from a substring in-place.
-    - s        : mutable substring
-    - trim_ch  : character to trim
-    Returns pointer to trimmed string (may be same as input)
+    str_trim_whitespace:
+      Convenience: trim common whitespace (\t\n\r )
 */
-static inline char *str_trim(char *s, char trim_ch) {
-    if (!s)
-        return NULL;
+static inline char* str_trim_whitespace(char* s)
+{
+    if (!s) return NULL;
 
-    /* Trim leading */
-    while (*s == trim_ch)
-        s++;
+    char* start = s;
+    while (*start && strchr(" \t\n\r", *start)) ++start;
 
-    /* Trim trailing */
-    char *end = s + strlen(s);
-    while (end > s && *(end - 1) == trim_ch)
-        *(--end) = '\0';
+    if (*start == '\0') {
+        s[0] = '\0';
+        return s;
+    }
+
+    if (start != s) {
+        memmove(s, start, strlen(start) + 1);
+    }
+
+    char* end = s + strlen(s);
+    while (end > s && strchr(" \t\n\r", *(end - 1))) --end;
+    *end = '\0';
 
     return s;
 }
