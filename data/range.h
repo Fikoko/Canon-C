@@ -3,82 +3,142 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>  // for SIZE_MAX
+#include <limits.h>  // for INT_MAX/MIN if signed
 
 /*
-    range.h — sequential integer generator
+    range.h — Explicit integer range generator
 
-    Semantics:
-    - Generates integers in [start, end)
-    - Step is positive and non-zero
-    - Explicit iteration
-    - No allocation
-    - No ownership
-    - No hidden state
+    Generates sequential integers with explicit iteration.
+    Supports:
+      - Unsigned and signed integers
+      - Ascending and descending (positive/negative step)
+      - Empty ranges
+      - No allocation, no hidden state, no ownership
+
+    Perfect for bounded loops without index bugs.
 */
 
-/* ============================================================
-   Range type
-   ============================================================ */
-
 typedef struct {
-    size_t current;  /* next value to produce */
-    size_t end;      /* exclusive end */
-    size_t step;     /* iteration step (>0) */
-} Range;
+    ptrdiff_t current;  // signed for flexibility (supports negative values and descending)
+    ptrdiff_t end;      // exclusive upper bound
+    ptrdiff_t step;     // non-zero step (positive or negative)
+} range;
 
 /* ============================================================
    Construction
    ============================================================ */
 
 /*
-    Create a range [start, end) with step.
-    - step == 0 → normalized to 1
-    - If start >= end → empty range
+    range_make(start, end, step):
+      Creates range [start, end) with given step.
+      - step == 0 → normalized to +1
+      - If step > 0 and start >= end → empty
+      - If step < 0 and start <= end → empty
 */
-static inline Range range_make(size_t start, size_t end, size_t step) {
-    Range r;
-    r.current = start;
-    r.end     = end;
-    r.step    = step ? step : 1;
-    return r;
+static inline range range_make(ptrdiff_t start, ptrdiff_t end, ptrdiff_t step)
+{
+    if (step == 0) step = 1;
+
+    return (range){
+        .current = start,
+        .end     = end,
+        .step    = step
+    };
 }
 
-/* Shorthand: range [0, end) with step 1 */
-static inline Range range_upto(size_t end) {
+/* Common shorthands */
+static inline range range_upto(ptrdiff_t end)          // [0, end)
+{
     return range_make(0, end, 1);
+}
+
+static inline range range_from_to(ptrdiff_t start, ptrdiff_t end)  // [start, end)
+{
+    return range_make(start, end, 1);
+}
+
+static inline range range_downfrom(ptrdiff_t start)   // [start, 0) descending
+{
+    return range_make(start, 0, -1);
+}
+
+/* ============================================================
+   Queries
+   ============================================================ */
+
+static inline bool range_is_empty(const range* r)
+{
+    if (!r) return true;
+    if (r->step > 0) return r->current >= r->end;
+    if (r->step < 0) return r->current <= r->end;
+    return true;  // step == 0 should not happen
+}
+
+static inline bool range_has_next(const range* r)
+{
+    return !range_is_empty(r);
+}
+
+/* Estimated length (safe, no overflow) */
+static inline size_t range_len(const range* r)
+{
+    if (!r || range_is_empty(r)) return 0;
+
+    if (r->step > 0) {
+        if (r->end - r->current > (ptrdiff_t)SIZE_MAX) return SIZE_MAX;
+        return (size_t)((r->end - r->current - 1) / r->step + 1);
+    } else {
+        if (r->current - r->end > (ptrdiff_t)SIZE_MAX) return SIZE_MAX;
+        return (size_t)((r->current - r->end - 1) / -r->step + 1);
+    }
 }
 
 /* ============================================================
    Iteration
    ============================================================ */
 
-/* Returns true if another value can be produced */
-static inline bool range_has_next(const Range *r) {
-    return r && r->current < r->end;
-}
-
-/* Produces next value and advances the range.
-   Requirements:
-   - range_has_next(r) must be true
-   - step > 0
+/*
+    range_next(r):
+      Returns next value and advances the iterator.
+      Behavior is defined only if range_has_next(r) was true.
+      On exhaustion: returns last value and sets current to end
 */
-static inline size_t range_next(Range *r) {
-    if (!r) return 0;  /* safety */
+static inline ptrdiff_t range_next(range* r)
+{
+    if (!r || range_is_empty(r)) return 0;  // safety
 
-    size_t value = r->current;
+    ptrdiff_t value = r->current;
 
-    /* advance safely without overflow */
-    if (r->end - r->current <= r->step)
-        r->current = r->end;
-    else
-        r->current += r->step;
+    if (r->step > 0) {
+        if (r->current > r->end - r->step) {
+            r->current = r->end;  // exhaust
+        } else {
+            r->current += r->step;
+        }
+    } else {
+        if (r->current < r->end - r->step) {
+            r->current = r->end;
+        } else {
+            r->current += r->step;
+        }
+    }
 
     return value;
 }
 
-/* Reset range to start */
-static inline void range_reset(Range *r, size_t start) {
+/* Reset to beginning */
+static inline void range_reset(range* r, ptrdiff_t start)
+{
     if (r) r->current = start;
 }
+
+/* ============================================================
+   Convenience: for-loop integration
+   ============================================================ */
+
+#define RANGE_FOR(var, r_expr) \
+    for (range _r = (r_expr), *_rp = &_r; \
+         range_has_next(_rp) && ((var) = range_next(_rp), 1); )
 
 #endif /* CANON_C_DATA_RANGE_H */
