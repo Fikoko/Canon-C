@@ -67,27 +67,39 @@ Abstractions must clarify behavior, not conceal it.
 
 ## Included Modules (Current)
 
-- **core/**
-  - `arena.h` — explicit linear allocation
-  - `memory.h` — allocation helpers and contracts
-- **data/**
-  - `vec.h` — dynamic vector (bounded, caller-owned)
-  - `range.h` — sequential integer generator (x)
-- **semantics/**
-  - `option.h` — explicit optional values
-  - `result.h` — explicit success/error values
-- **algo/**
-  - `map.h` — functional-style data transformation
-  - `filter.h` — select elements based on predicate (x)
-  - `fold.h` — aggregate elements into a single value (x)
-  - `find.h` — locate first matching element (x)
-  - `any_all.h` — predicate checks (any / all) (x)
-- **util/**
-  - `string.h` — string utilities (automatic & manual)
-  - `str_split.h` — split string into substrings (x)
-  - `str_join.h` — join multiple strings (x)
-  - `log.h` — minimal logging
-  - `logf.h` — formatted logging (x)
+### core/
+- `arena.h` — explicit linear allocation (bump allocator)
+- `memory.h` — low-level memory utilities (alignment, safe memcpy wrappers)
+- `pool.h` — fixed-size object pool allocator (arena-backed)
+- `scope.h` — RAII-style deferred cleanup macros
+
+### data/
+- `vec.h` — bounded dynamic vector (caller-owned buffer)
+- `range.h` — explicit integer range generator (ascending/descending, signed support)
+- `StringBuf.h` — incremental string builder (arena- or buffer-backed)
+
+### semantics/
+- `option.h` — explicit presence/absence of a value (with combinators)
+- `result.h` — explicit success/failure with value or error (with combinators)
+- `Error.h` — common error codes and human-readable messages
+
+### algo/
+- `map.h` — element-wise transformation (supports different input/output types)
+- `filter.h` — select elements matching predicate
+- `fold.h` — reduce sequence to single value (infallible & fallible variants)
+- `find.h` — locate first matching element
+- `any_all.h` — predicate checks (any / all)
+- `Sort.h` — generic in-place sorting (with comparator)
+- `Search.h` — binary search utilities (lower_bound, exact match)
+- `Unique.h` — remove consecutive duplicates (in-place)
+
+### util/
+- `string.h` — safe string operations (copy, concat, predicates)
+- `str_split.h` — non-mutating string splitting (borrowed views)
+- `str_join.h` — safe string joining (buffer-based & allocating)
+- `log.h` — minimal, explicit logging with Result-based error handling
+- `File.h` — safe file I/O (read/write whole files, arena-backed preferred)
+- `Parse.h` — robust parsing of integers, unsigned, and floating-point values
 
 
 All modules are **header-only** and require no runtime or build system integration.
