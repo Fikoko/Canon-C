@@ -1,6 +1,6 @@
 # Release Clarification
 
-Early CANON-C releases (v0.1.x – v0.2.x) document the evolution of the project
+Early CANON-C releases document the evolution of the project
 and may describe modules that were later reclassified or removed.
 
 These releases should be read as:
