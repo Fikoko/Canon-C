@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include "semantics/option.h"
 #include "semantics/result.h"
-#include "semantics/Error.h"
+#include "semantics/error.h"
 #include "core/arena.h"
 
 /*
