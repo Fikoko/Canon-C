@@ -4,7 +4,7 @@
 #include "result.h"
 
 /*
-    Error.h — Common error codes and messages
+    error.h — Common error codes and messages
 
     Use with Result<T, Error>:
       Result<int, Error> parse_int(const char* s);
