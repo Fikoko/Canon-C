@@ -77,6 +77,9 @@ Abstractions must clarify behavior, not conceal it.
 - `vec.h` — bounded dynamic vector (caller-owned buffer)
 - `range.h` — explicit integer range generator (ascending/descending, signed support)
 - `stringbuf.h` — incremental string builder (arena- or buffer-backed)
+- `deque.h` — bounded double-ended queue (ring buffer)
+- `queue.h` — FIFO queue wrapper
+- `stack.h` — LIFO stack wrapper
 
 ### semantics/
 - `option.h` — explicit presence/absence of a value (with combinators)
@@ -92,6 +95,7 @@ Abstractions must clarify behavior, not conceal it.
 - `sort.h` — generic in-place sorting (with comparator)
 - `search.h` — binary search utilities (lower_bound, exact match)
 - `unique.h` — remove consecutive duplicates (in-place)
+- `reverse.h` — reverse sequence in-place
 
 ### util/
 - `string.h` — safe string operations (copy, concat, predicates)
@@ -100,6 +104,8 @@ Abstractions must clarify behavior, not conceal it.
 - `log.h` — minimal, explicit logging with Result-based error handling
 - `file.h` — safe file I/O (read/write whole files, arena-backed preferred)
 - `parse.h` — robust parsing of integers, unsigned, and floating-point values
+- `time.h` — high-resolution stopwatch (monotonic timing)
+- `random.h` — fast, explicit PRNG (PCG32, no global state)
 
 
 All modules are **header-only** and require no runtime or build system integration.
