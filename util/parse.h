@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include "semantics/result.h"
-#include "semantics/Error.h"
+#include "semantics/error.h"
 
 /*
     parse.h — Safe parsing of common types from strings
