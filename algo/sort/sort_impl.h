@@ -187,7 +187,9 @@ static inline void algo_merge(
     void*       ctx,
     void*       temp)
 {
-    usize i = left, j = mid, k = 0;
+    usize i = left;
+    usize j = mid;
+    usize k = 0;
 
     while ((i < mid) && (j < right)) {
         const void* le = ptr_elem_const(base, i, elem_size);

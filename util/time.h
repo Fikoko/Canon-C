@@ -137,7 +137,8 @@ typedef struct {
  */
 static inline u64 stopwatch_now_ns_(void) {
 #ifdef _WIN32
-    LARGE_INTEGER freq, counter;
+    LARGE_INTEGER freq;
+    LARGE_INTEGER counter;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&counter);
     return (u64)(counter.QuadPart * 1000000000ULL / freq.QuadPart);

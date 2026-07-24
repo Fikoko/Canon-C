@@ -215,7 +215,9 @@ typedef struct {
 #define CANON_HM_LIFETIME_NEXT_ID_DEFINED
     static inline region_id_t _hm_lifetime_next_id_(void* mp) {
         static region_id_t counter_ = 1;
-        region_id_t id = (region_id_t)(counter_++)
+        const region_id_t c_ = counter_;
+        counter_++;
+        region_id_t id = (region_id_t)c_
                        ^ (region_id_t)(uintptr_t)(mp);
         if (id == REGION_ID_STATIC) { id = (region_id_t)1; }
         return id;

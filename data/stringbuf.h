@@ -268,7 +268,9 @@ typedef struct {
      */
     static inline region_id_t stringbuf_lifetime_next_id_(void* sbp) {
         static region_id_t counter_ = 1;
-        region_id_t id = (region_id_t)(counter_++)
+        const region_id_t c_ = counter_;
+        counter_++;
+        region_id_t id = (region_id_t)c_
                        ^ (region_id_t)(uintptr_t)(sbp);
         if (id == REGION_ID_STATIC) { id = (region_id_t)1; }
         return id;
@@ -518,7 +520,8 @@ static inline bool stringbuf_append_char(
     if (!checked_add(sb->len, 2u, &with_nul)) { return false; }
     if (with_nul > sb->capacity)              { return false; }
 
-    sb->data[sb->len++] = c;
+    sb->data[sb->len] = c;
+    sb->len++;
     sb->data[sb->len]   = '\0';
     return true;
 }

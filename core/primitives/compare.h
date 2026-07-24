@@ -164,7 +164,8 @@ typedef bool (*algo_pred_fn)(const void* elem, void* ctx);
  */
 static inline int algo_cmp_u8(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    u8 x = *(const u8*)a, y = *(const u8*)b;
+    u8 x = *(const u8*)a;
+    u8 y = *(const u8*)b;
     return (x > y) - (x < y);
 }
 
@@ -211,7 +212,8 @@ static inline int algo_cmp_u8_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_u16(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    u16 x = *(const u16*)a, y = *(const u16*)b;
+    u16 x = *(const u16*)a;
+    u16 y = *(const u16*)b;
     return (x > y) - (x < y);
 }
 
@@ -259,7 +261,8 @@ static inline int algo_cmp_u16_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_u32(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    u32 x = *(const u32*)a, y = *(const u32*)b;
+    u32 x = *(const u32*)a;
+    u32 y = *(const u32*)b;
     return (x > y) - (x < y);
 }
 
@@ -307,7 +310,8 @@ static inline int algo_cmp_u32_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_u64(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    u64 x = *(const u64*)a, y = *(const u64*)b;
+    u64 x = *(const u64*)a;
+    u64 y = *(const u64*)b;
     return (x > y) - (x < y);
 }
 
@@ -361,7 +365,8 @@ static inline int algo_cmp_u64_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_i8(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    i8 x = *(const i8*)a, y = *(const i8*)b;
+    i8 x = *(const i8*)a;
+    i8 y = *(const i8*)b;
     return (x > y) - (x < y);
 }
 
@@ -409,7 +414,8 @@ static inline int algo_cmp_i8_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_i16(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    i16 x = *(const i16*)a, y = *(const i16*)b;
+    i16 x = *(const i16*)a;
+    i16 y = *(const i16*)b;
     return (x > y) - (x < y);
 }
 
@@ -459,7 +465,8 @@ static inline int algo_cmp_i16_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_i32(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    i32 x = *(const i32*)a, y = *(const i32*)b;
+    i32 x = *(const i32*)a;
+    i32 y = *(const i32*)b;
     return (x > y) - (x < y);
 }
 
@@ -509,7 +516,8 @@ static inline int algo_cmp_i32_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_i64(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    i64 x = *(const i64*)a, y = *(const i64*)b;
+    i64 x = *(const i64*)a;
+    i64 y = *(const i64*)b;
     return (x > y) - (x < y);
 }
 
@@ -561,7 +569,8 @@ static inline int algo_cmp_i64_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_usize(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    usize x = *(const usize*)a, y = *(const usize*)b;
+    usize x = *(const usize*)a;
+    usize y = *(const usize*)b;
     return (x > y) - (x < y);
 }
 
@@ -609,7 +618,8 @@ static inline int algo_cmp_usize_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_isize(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    isize x = *(const isize*)a, y = *(const isize*)b;
+    isize x = *(const isize*)a;
+    isize y = *(const isize*)b;
     return (x > y) - (x < y);
 }
 
@@ -675,7 +685,8 @@ static inline int algo_cmp_isize_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_f32(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    f32 x = *(const f32*)a, y = *(const f32*)b;
+    f32 x = *(const f32*)a;
+    f32 y = *(const f32*)b;
     if (x != x) { return (y != y) ? 0 : 1; }  /* x is NaN */
     if (y != y) { return -1; }                 /* y is NaN, x is not */
     return (x > y) - (x < y);
@@ -743,7 +754,8 @@ static inline int algo_cmp_f32_desc(const void* a, const void* b, void* ctx) {
  */
 static inline int algo_cmp_f64(const void* a, const void* b, void* ctx) {
     (void)ctx;
-    f64 x = *(const f64*)a, y = *(const f64*)b;
+    f64 x = *(const f64*)a;
+    f64 y = *(const f64*)b;
     if (x != x) { return (y != y) ? 0 : 1; }  /* x is NaN */
     if (y != y) { return -1; }                 /* y is NaN, x is not */
     return (x > y) - (x < y);

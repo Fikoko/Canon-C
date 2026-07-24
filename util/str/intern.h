@@ -125,7 +125,9 @@ static inline str_view_t intern_string(
     borrowed(InternPool*)  pool,
     borrowed(const char*)  s)
 {
-    usize len, probes, index;
+    usize len;
+    usize probes;
+    usize index;
     u64 hash;
 
     require_msg(pool          != NULL, "intern_string: pool is NULL");

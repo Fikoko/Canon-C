@@ -127,7 +127,8 @@ static inline usize str_split(
 
         /* Store start of token if space available */
         if (count < max_parts) {
-            parts_out[count++] = p;
+            parts_out[count] = p;
+            count++;
         } else {
             break;
         }
@@ -177,7 +178,8 @@ static inline usize str_split_keep_empty(
     for (p = s; ; ++p) {
         if ((*p == delim) || (*p == '\0')) {
             if (count < max_parts) {
-                parts_out[count++] = start;
+                parts_out[count] = start;
+                count++;
             } else {
                 break;
             }

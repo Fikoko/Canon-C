@@ -4319,7 +4319,7 @@ jobs:
           echo "  Total violations incl. canary: ${TOTAL}"
           echo "  Real violations:               $((TOTAL - CANARY))"
           echo ""
-          echo "  Expected real count: 152 (pinned; cppcheck 2.13.0,"
+          echo "  Expected real count: 122 (pinned; cppcheck 2.13.0,"
           echo "  suppression set MISRA-DEV-001..012; 190 - 36 rule-17.8"
           echo "  sites eliminated by the parameter-local-copy sweep"
           echo "  (bits.h SWAR/cascade/rotation/smear bodies x22, clamp"
