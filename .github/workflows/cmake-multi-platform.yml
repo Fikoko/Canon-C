@@ -4258,6 +4258,24 @@ jobs:
       - name: Run MISRA C:2012 analysis on library headers
         shell: bash
         run: |
+          # SCAN SURFACE (re-baselined 2026-07-25, Commit 12 — see
+          # MISRA-SCAN-001 in docs/deviations.md).
+          #
+          # `*_impl.h` and `*_mangle.h` are INTERNAL TEMPLATE FRAGMENTS: they
+          # are never compiled alone and depend on macros (`*_LINKAGE`, type
+          # parameters) that their including entry point supplies. Handing them
+          # to cppcheck as standalone translation units left those macros
+          # undefined, the function signatures unparseable, and produced
+          # findings that describe the scan rather than the code. Excluding
+          # them does NOT reduce analysis coverage: every fragment is reached
+          # through an entry point that IS scanned (verified by include-graph
+          # reachability — 28 fragments, 0 unreached), so their contents are
+          # still analysed, with configuration, and findings are still reported
+          # at their own file:line.
+          #
+          # `*_decl.h` / `*_defn.h` are deliberately NOT excluded: nothing
+          # includes them, so they are user-facing entry points whose content
+          # would go entirely unanalysed if dropped.
           HEADERS=$(find \
             "${{ github.workspace }}/core" \
             "${{ github.workspace }}/semantics" \
@@ -4265,7 +4283,8 @@ jobs:
             "${{ github.workspace }}/algo" \
             "${{ github.workspace }}/util" \
             "${{ github.workspace }}/canary" \
-            -name "*.h" -type f 2>/dev/null | sort)
+            -name "*.h" -type f 2>/dev/null \
+            | grep -vE '_(impl|mangle)\.h$' | sort)
           if [ -z "$HEADERS" ]; then
             echo "No header files found — skipping MISRA analysis"
             exit 0
@@ -4319,7 +4338,7 @@ jobs:
           echo "  Total violations incl. canary: ${TOTAL}"
           echo "  Real violations:               $((TOTAL - CANARY))"
           echo ""
-          echo "  Expected real count: 108 (pinned; cppcheck 2.13.0,"
+          echo "  Expected real count: 98 (pinned; cppcheck 2.13.0,"
           echo "  suppression set MISRA-DEV-001..012; 190 - 36 rule-17.8"
           echo "  sites eliminated by the parameter-local-copy sweep"
           echo "  (bits.h SWAR/cascade/rotation/smear bodies x22, clamp"

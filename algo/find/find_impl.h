@@ -118,7 +118,6 @@ ALGO_FIND_LINKAGE bool algo_find(
 
     if (len == 0u) { return false; }
 
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < len; i++) {
         const void* elem = ptr_elem_const(base, i, elem_size);
         if (pred(elem, ctx)) {

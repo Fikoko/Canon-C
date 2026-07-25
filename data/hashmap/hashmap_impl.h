@@ -378,7 +378,6 @@ HASHMAP_LINKAGE result__Bool_Error HM_INSERT_(
 
     bool is_new_key = true;
 
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < map->capacity; i++) {
         HASHMAP_SLOT_NAME* slot = &map->slots[probe_idx];
 
@@ -446,7 +445,6 @@ HASHMAP_LINKAGE option_hm_val_t HM_GET_(
     usize probe_idx = _hm_home(h, map->capacity);
     u32   psl       = 0;
 
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < map->capacity; i++) {
         const HASHMAP_SLOT_NAME* slot = &map->slots[probe_idx];
 
@@ -480,7 +478,6 @@ HASHMAP_LINKAGE borrowed(hm_val_t*) HM_GET_OR_NULL_(
     usize probe_idx = _hm_home(h, map->capacity);
     u32   psl       = 0;
 
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < map->capacity; i++) {
         HASHMAP_SLOT_NAME* slot = &map->slots[probe_idx];
 
@@ -529,7 +526,6 @@ HASHMAP_LINKAGE result_hm_val_t_Error HM_REMOVE_(
     usize found_idx = map->capacity; /* sentinel: not found */
 
     /* Phase 1: find the slot */
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < map->capacity; i++) {
         HASHMAP_SLOT_NAME* slot = &map->slots[probe_idx];
 
@@ -553,7 +549,6 @@ HASHMAP_LINKAGE result_hm_val_t_Error HM_REMOVE_(
 
     /* Phase 2: backward shift deletion */
     usize curr = found_idx;
-    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0u; i < (map->capacity - 1u); i++) {
         usize next = _hm_wrap(curr + 1u, map->capacity);
         HASHMAP_SLOT_NAME* next_slot = &map->slots[next];

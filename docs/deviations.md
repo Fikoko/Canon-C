@@ -4803,3 +4803,80 @@ at its source. It was deliberately *not* taken in this commit because it changes
 the scan surface for the entire tree and would re-baseline every count in the
 campaign ledger; it is recorded here as a candidate for a dedicated
 instrument-change commit with its own dated re-baseline.
+
+**SUPERSEDED (2026-07-25, Commit 12) — record retired.** MISRA-SCAN-001 removed
+the condition this deviation existed to accommodate: `*_impl.h` fragments are no
+longer scanned as standalone translation units, so the rule-14.2 findings this
+record covered do not arise. All 13 inline suppressions were deleted in the same
+commit, verified dead beforehand (86-header scan against a tree with every
+suppression removed: 101 findings, zero rule-14.2 — identical to the same scan
+with them present). Rule 14.2 remains live and unsuppressed across the entire
+tree. This record is retained for provenance: it documents why the findings were
+believed unaddressable at the site (they were — at the site), and its
+"root-cause alternative considered" paragraph is what became MISRA-SCAN-001.
+
+
+## MISRA-SCAN-001: Analysis-surface re-baseline — template fragments are not translation units (2026-07-25, Commit 12)
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-SCAN-001 | 2026-07-25 | misra job header discovery (`*_impl.h`, `*_mangle.h` excluded) | Instrument change + re-baseline |
+
+**What changed**: the misra job previously handed every `*.h` under
+`core/ semantics/ data/ algo/ util/ canary/` to cppcheck as a standalone
+translation unit — 114 headers. 28 of those are internal template fragments
+(`*_impl.h`, `*_mangle.h`) that are never compiled alone: they depend on macros
+(`*_LINKAGE`, type parameters such as `HASHMAP_TYPE_NAME`) that their including
+entry point supplies. Analysed without that configuration the function
+signatures do not parse, and the checker emits findings that describe the scan
+rather than the code. The job now excludes those 28 and scans the 86
+configuration-complete headers.
+
+**Why this is not a coverage reduction**: the fragments are still analysed —
+through the entry points that include them, with their macros defined — and
+findings inside them are still reported at their own file and line (confirmed:
+the corrected scan reports 19.2, 15.4 and 11.3 inside `hashmap_impl.h`, reached
+via `hashmap.h`). Include-graph reachability was computed over all 114 headers
+before the change: **28 fragments, 0 unreached** from the retained set.
+
+**Rejected alternative (recorded because it looks attractive and is not safe)**:
+also excluding `*_decl.h` / `*_defn.h` yields a lower count (87 rather than 98).
+It was rejected: nothing in the tree includes those files — they are user-facing
+entry points — so excluding them leaves **20 fragments with no scanned includer
+at all**, and their contents (e.g. the `CANON_RESULT(bool, Error)` instantiation
+at `algo/fold/fold_decl.h:54`) would go entirely unanalysed. A lower number
+obtained by not looking is not an improvement. The related option of adding
+includes to the umbrellas so those files become reachable was also rejected:
+that is a source change made to satisfy a scanner.
+
+**Re-baseline arithmetic (measured locally at e974663 before the change)**:
+
+| | count |
+|---|---|
+| previous surface (114 headers), CI #1191 | 108 real |
+| corrected surface (86 headers) | **98 real** |
+| net | **-10** |
+
+Disappearing: rule 17.3 x9 (the template-linkage class — `pred(...)` calls read
+as implicit declarations once the signature fails to parse) and rule 2.2 x1.
+**Appearing: none.** No finding was hidden by the previous surface.
+
+**Consequence for MISRA-DEV-013**: superseded and retired in this commit. Its
+13 inline rule-14.2 suppressions were verified dead before removal — the 86-header
+scan run against a tree with all 13 deleted returns **101 findings including zero
+rule-14.2**, identical to the same scan with them in place.
+
+**Consequence for the ledger**: every count in the campaign ledger from 1672
+down to 108 was measured on the previous surface. They remain valid as a record
+of what that instrument reported, and the reductions they describe were real
+(each was verified by shift-aware set-diff against CI at the time). They are
+NOT directly comparable to counts from 98 onward. The ledger is therefore read
+as two segments joined at this commit: 1672 -> 108 on the pre-2026-07-25
+surface, 98 -> ... on the corrected one, with -10 of the step attributable to
+the instrument rather than to the code.
+
+**Corrected classification note**: rules 8.7 (x5) and 5.7 (x4) were provisionally
+classified as template-configuration artifacts during the 2026-07-25 census.
+They survive configuration-complete scanning and are therefore **real findings**
+arising from the `*_decl.h` entry points, not scan artifacts. The census
+classification is corrected accordingly.
