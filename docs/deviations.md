@@ -4746,3 +4746,60 @@ via `--suppress=misra-c2012-11.6` in the misra CI job.
 
 **Mitigation**: Each of the 117 definitions carries an individual inline `cppcheck-suppress` citing this record — rule 20.7 stays live for every other macro in the tree and for all future code, so a new expression-position 20.7 finding surfaces in CI rather than being absorbed. The macro-generated code paths are exercised by the instantiation test suite (51 test TUs) and, for the option/result/vec families, verified by the WP driver TUs under pinned proved-goal baselines; a qualified MISRA checker (Polyspace/LDRA/PC-lint, per the project's certification note) performs real type-aware 20.7 analysis and remains the certification path.
 
+## MISRA-DEV-013: Rule 14.2 — template `_impl.h` loops unanalyzable without the includer's linkage macro
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-013 | 2026-07-24 | 13 `for` loops across 7 template headers (each carries an inline suppression) | Per-site deviation (inline suppressions) |
+
+**Description**: Rule 14.2 requires a `for` loop to be well-formed. The loops
+cited here are textbook-well-formed — `for (usize i = 0; i < len; i++)` with a
+single counter, a pure comparison, a lone increment, and no modification of the
+counter in the body. They are reported only because the reference checker
+(cppcheck 2.13.0 `misra.py`) analyses each `_impl.h` template header standalone,
+without the `*_LINKAGE` macro that the including umbrella header supplies. With
+the macro undefined the function signature does not parse, the loop counter never
+resolves to a `Variable` object, and the addon takes its "if it is not possible
+to identify a loop counter, all three clauses must be empty" branch (misra.py
+`misra_14_2`, lines 2866-2875) and reports a violation.
+
+**Evidence (probe-verified against the shipped addon, 2026-07-24)**:
+- Substituting a concrete linkage specifier (`ALGO_ANY_ALL_LINKAGE` → `static`,
+  `HASHMAP_LINKAGE` → `static`) drops the findings from 2 → 0 and 5 → 0
+  respectively, with no other edit.
+- Scanning the umbrella headers (which define the linkage macro before including
+  the template) reports zero rule-14.2 findings for the same loops.
+- Rewriting the loops does *not* clear the finding: hoisted declaration,
+  pre-increment, removing the counter from the body, and `!=` for `<` were each
+  measured and all still report. The finding is not addressable at the site.
+- Isolating the includes shows the reports appear only once `core/ownership.h`
+  supplies `borrowed(T) → T`; without it the signature is unparseable and the
+  loop is not analysed at all. The finding is thus an artifact of *partial*
+  configuration, not of the loop.
+
+**Rationale**: This is the same root cause the misra job already acknowledges
+with its command-line `--suppress=misra-config:*_impl.h` — template headers are
+not standalone translation units and cannot be fully configured as such. The
+genuine rule-14.2 violations found in the same sweep were fixed rather than
+deviated (`data/bitset.h` first clause `w++` → `w = w + 1u`; the empty
+controlling expression in `util/str/str_split.h`), so this record covers only
+the unaddressable class.
+
+**Mitigation**: Each of the 13 loops carries an individual inline
+`cppcheck-suppress` citing this record — rule 14.2 stays live for every other
+loop in the tree and for all future code, so a genuine malformed `for` surfaces
+in CI rather than being absorbed. Twelve of the thirteen correspond to findings
+visible in CI #1190; the thirteenth (`hashmap_impl.h`, the Phase-1 probe loop) is
+currently masked at CI by a rule-15.4 finding on the same line and is suppressed
+here for absolute-state consistency, so that clearing that 15.4 in a later commit
+cannot surface a latent 14.2. A qualified MISRA checker analysing the
+instantiated umbrella headers (Polyspace/LDRA/PC-lint, per the project's
+certification note) performs configuration-complete 14.2 analysis and remains the
+certification path.
+
+**Root-cause alternative considered**: defining the `*_LINKAGE` macros for the
+misra job, or scanning umbrella headers instead of templates, removes this class
+at its source. It was deliberately *not* taken in this commit because it changes
+the scan surface for the entire tree and would re-baseline every count in the
+campaign ledger; it is recorded here as a candidate for a dedicated
+instrument-change commit with its own dated re-baseline.

@@ -137,6 +137,7 @@ ALGO_UNIQUE_LINKAGE usize algo_unique(
 
     usize write = 1;
 
+    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize read = 1; read < len; ++read) {
         const void* prev = ptr_elem_const(array, write - 1u, elem_size);
         const void* curr = ptr_elem_const(array, read,      elem_size);

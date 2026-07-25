@@ -174,18 +174,21 @@ static inline usize str_split_keep_empty(
 
     count = 0;
     start = s;
+    p     = s;
 
-    for (p = s; ; ++p) {
+    for (;;) {
         if ((*p == delim) || (*p == '\0')) {
+            bool at_end = (*p == '\0');
             if (count < max_parts) {
                 parts_out[count] = start;
                 count++;
+                start = p + 1;
             } else {
-                break;
+                at_end = true;
             }
-            start = p + 1;
-            if (*p == '\0') { break; }
+            if (at_end) { break; }
         }
+        ++p;
     }
 
     return count;

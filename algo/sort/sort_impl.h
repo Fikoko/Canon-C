@@ -354,6 +354,7 @@ ALGO_SORT_LINKAGE bool algo_is_sorted(
 
     if (len < 2u) { return true; }
 
+    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 1; i < len; i++) {
         if (cmp(ptr_elem_const(base, i - 1u, elem_size),
                 ptr_elem_const(base, i,     elem_size),

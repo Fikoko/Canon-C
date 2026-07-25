@@ -149,6 +149,7 @@ ALGO_FILTER_LINKAGE usize algo_filter(
     if ((len == 0u) || (out_cap == 0u)) { return 0u; }
 
     usize written = 0;
+    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < len; i++) {
         const void* elem = ptr_elem_const(base, i, elem_size);
         if (pred(elem, ctx)) {

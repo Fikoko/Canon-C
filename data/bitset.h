@@ -692,7 +692,7 @@ static inline usize bitset_find_next(borrowed(const Bitset*) bs, usize prev) {
         return (found < bs->capacity) ? found : BITSET_NPOS;
     }
 
-    for (w++; w < bs->word_count; w++) {
+    for (w = w + 1u; w < bs->word_count; w++) {
         if (bs->words[w] != 0u) {
             usize found = w * BITSET_BITS_PER_WORD + (usize)bits_ctz(bs->words[w]);
             return (found < bs->capacity) ? found : BITSET_NPOS;

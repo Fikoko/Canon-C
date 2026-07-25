@@ -113,6 +113,7 @@ ALGO_ANY_ALL_LINKAGE bool algo_any(
     require_msg(pred      != NULL, "algo_any: pred cannot be NULL");
     require_msg(elem_size >  0u,    "algo_any: elem_size must be > 0");
 
+    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < len; i++) {
         if (pred(ptr_elem_const(base, i, elem_size), ctx)) { return true; }
     }
@@ -165,6 +166,7 @@ ALGO_ANY_ALL_LINKAGE bool algo_all(
     require_msg(pred      != NULL, "algo_all: pred cannot be NULL");
     require_msg(elem_size >  0u,    "algo_all: elem_size must be > 0");
 
+    /* cppcheck-suppress misra-c2012-14.2 ; MISRA-DEV-013 */
     for (usize i = 0; i < len; i++) {
         if (!pred(ptr_elem_const(base, i, elem_size), ctx)) { return false; }
     }
