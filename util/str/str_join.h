@@ -253,7 +253,8 @@ static inline usize str_split_to_parts(
 
         start = p;
         while (*p && (*p != delim)) { ++p; }
-        part_len = (usize)(p - start);
+        const isize seg_len = p - start;
+        part_len = (usize)seg_len;
 
         if ((scratch_pos + part_len + 1u) > scratch_size) { return 0u; }
         if (count >= max_parts) { return 0; }

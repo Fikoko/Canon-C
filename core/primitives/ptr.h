@@ -770,7 +770,7 @@ static inline void* ptr_retreat(void* p, usize n) {
 static inline isize ptr_diff(const void* to, const void* from) {
     require_msg(to   != NULL, "ptr_diff: 'to' is NULL");
     require_msg(from != NULL, "ptr_diff: 'from' is NULL");
-    return (isize)((const u8*)to - (const u8*)from);
+    return (const u8*)to - (const u8*)from;
 }
 
 /**
@@ -812,7 +812,8 @@ static inline usize ptr_span(const void* to, const void* from) {
     require_msg(from != NULL, "ptr_span: 'from' is NULL");
     require_msg((const u8*)to >= (const u8*)from,
                 "ptr_span: 'to' must be >= 'from'");
-    return (usize)((const u8*)to - (const u8*)from);
+    const isize diff = (const u8*)to - (const u8*)from;
+    return (usize)diff;
 }
 
 /* ============================================================================
@@ -913,7 +914,8 @@ static inline bool ptr_range_in_range(const void*  p,
     const u8* rs = (const u8*)region_start;
     const u8* re = (const u8*)region_end;
     if (pb < rs)               { return false; }  /* starts before region */
-    if (len > (usize)(re - pb)) return false;  /* overflow-safe: no pb+len */
+    const isize avail = re - pb;
+    if (len > (usize)avail) { return false; }  /* overflow-safe: no pb+len */
     return true;
 }
 

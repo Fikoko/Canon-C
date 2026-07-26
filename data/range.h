@@ -344,7 +344,8 @@ static inline usize range_len(const range* r) {
         return CANON_USIZE_MAX;
     }
 
-    return (usize)((adjusted_diff) / abs_step + 1);
+    const isize steps = (adjusted_diff / abs_step) + 1;
+    return (usize)steps;
 }
 
 /**

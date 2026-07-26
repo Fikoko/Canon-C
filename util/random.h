@@ -227,7 +227,8 @@ static inline bool random_bool(borrowed(Random*) r) {
 static inline i32 random_i32_range(borrowed(Random*) r, i32 min, i32 max) {
     require_msg(r != NULL, "random_i32_range: r is NULL");
     if (min >= max) { return min; }
-    u32 range = (u32)((i64)max - (i64)min + 1);
+    const i64 span = ((i64)max - (i64)min) + 1;
+    u32 range = (u32)span;
     return min + (i32)random_range(r, range);
 }
 

@@ -325,7 +325,8 @@ static inline bool pool_init(
     region = arena_alloc(arena, needed);
     if (!region) { return false; }
 
-    pool->base_mark = (ArenaMark)((u8*)region - arena->buffer);
+    const isize region_off = (u8*)region - arena->buffer;
+    pool->base_mark = (ArenaMark)region_off;
     pool->end_mark  = arena_mark(arena);
     pool_lifetime_open_(pool);
     return true;
@@ -455,7 +456,8 @@ static inline void* pool_get(const Pool* pool, usize i) {
     p    = ptr_elem(base, i, pool->object_size);
 
     require_msg(
-        (usize)((u8*)p - pool->arena->buffer) < pool->end_mark,
+        ((u8*)p >= pool->arena->buffer) &&
+        (((u8*)p - pool->arena->buffer) < (isize)pool->end_mark),
         "pool_get: address outside reserved region — pool may have been reset"
     );
 
@@ -484,7 +486,8 @@ static inline const void* pool_get_const(const Pool* pool, usize i) {
     p    = ptr_elem_const(base, i, pool->object_size);
 
     require_msg(
-        (usize)((const u8*)p - pool->arena->buffer) < pool->end_mark,
+        ((const u8*)p >= pool->arena->buffer) &&
+        (((const u8*)p - pool->arena->buffer) < (isize)pool->end_mark),
         "pool_get_const: address outside reserved region — pool may have been reset"
     );
 
