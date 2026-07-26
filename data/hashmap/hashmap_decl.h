@@ -108,7 +108,9 @@ typedef HASHMAP_KEY_TYPE hm_decl_key_t;
 typedef HASHMAP_VAL_TYPE hm_decl_val_t;
 
 CANON_OPTION(hm_decl_val_t)
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(bool, Error)
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(hm_decl_val_t, Error)
 
 /* ============================================================================

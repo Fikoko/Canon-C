@@ -18,6 +18,7 @@
 
 #include <stdarg.h>                      /* va_list, va_start, va_end — for append_fmt */
 #include <stdlib.h>                      /* malloc, realloc, free */
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>                       /* vsnprintf */
 
 #include "core/primitives/types.h"       /* usize, bool */
@@ -329,6 +330,7 @@ static inline bool dynstring_ensure_capacity(DynString* s, usize min_cap) {
     if (new_cap < min_cap) { new_cap = min_cap; }
 
     char* old_data = s->data;
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     char* new_data = (char*)realloc(s->data, new_cap);
     if (!new_data) { return false; }
 
@@ -394,6 +396,7 @@ static inline DynString dynstring_with_capacity(usize capacity) {
     DynString s = dynstring_init();
     if (capacity == 0u) { return s; }
 
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     s.data = (char*)malloc(capacity);
     if (s.data != NULL) {
         s.data[0] = '\0';
@@ -426,6 +429,7 @@ static inline DynString dynstring_from(const char* str) {
     usize len = strlen(str);
     usize cap = len + 1u;
 
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     s.data = (char*)malloc(cap);
     if (s.data != NULL) {
         mem_copy(s.data, str, len + 1u);  /* includes null terminator */
@@ -768,6 +772,7 @@ static inline bool dynstring_shrink_to_fit(DynString* s) {
     if (!s || !s->data) { return true; }
 
     if (s->len == 0u) {
+        /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
         free(s->data);
         s->data = NULL;
         s->cap = 0;
@@ -779,6 +784,7 @@ static inline bool dynstring_shrink_to_fit(DynString* s) {
 
     usize new_cap = s->len + 1u;
     char* old_data = s->data;
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     char* new_data = (char*)realloc(s->data, new_cap);
     if (!new_data) { return false; }
 
@@ -815,6 +821,7 @@ static inline bool dynstring_shrink_to_fit(DynString* s) {
  */
 static inline void dynstring_free(DynString* s) {
     if (s && s->data) {
+        /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
         free(s->data);
         s->data = NULL;
         s->len = 0;
@@ -850,6 +857,7 @@ static inline char* dynstring_to_cstr(const DynString* s) {
     const char* src = (s && s->data) ? s->data : "";
     usize len       = (s && s->data) ? s->len  : 0u;
 
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     char* copy = (char*)malloc(len + 1u);
     if (!copy) { return NULL; }  /* OOM — caller must check */
     mem_copy(copy, src, len + 1u);

@@ -22,6 +22,7 @@
 
 /* Standard library headers required by this file */
 #include <string.h>  /* memmove, memcpy */
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>   /* FILE, fprintf, snprintf */
 
 #ifdef __FRAMAC__
@@ -197,7 +198,9 @@ extern int fprintf(FILE *stream, const char *format, ...);
  * error if either condition is false — it never reaches runtime.
  * The msg argument must be an identifier (no spaces, no quotes).
  */
+/* cppcheck-suppress misra-c2012-2.3 ; MISRA-DEV-017 */
 static_require(DIAG_MAX_FRAMES  >= 1, DIAG_MAX_FRAMES_must_be_at_least_1);
+/* cppcheck-suppress misra-c2012-2.3 ; MISRA-DEV-017 */
 static_require(DIAG_MAX_MSG_LEN >= 1, DIAG_MAX_MSG_LEN_must_be_at_least_1);
 
 /* ════════════════════════════════════════════════════════════════════════════

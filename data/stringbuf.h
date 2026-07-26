@@ -17,6 +17,7 @@
 #define CANON_DATA_STRINGBUF_H
 
 #include <stdarg.h>
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>
 #include <string.h>
 

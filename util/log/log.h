@@ -17,6 +17,7 @@
 #define CANON_UTIL_LOG_H
 
 #include <stdarg.h>
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>
 
 #include "core/primitives/types.h"
@@ -44,6 +45,7 @@ typedef bool canon_bool_;
 /* Instantiate with the typedef, producing result_canon_bool__Error.
  * Then typedef to the canonical name result_bool_Error and provide
  * wrapper functions with the expected names. */
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(canon_bool_, Error)
 
 typedef result_canon_bool__Error result_bool_Error;

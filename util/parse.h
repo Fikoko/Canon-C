@@ -155,8 +155,11 @@
  * uses the type name for name mangling — the names must be valid C identifiers
  * with no spaces or special characters.
  */
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(i64, Error)
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(u64, Error)
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(f64, Error)
 
 /* ────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@
 #define CANON_UTIL_FILE_H
 
 #include <stdbool.h>
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>
 
 #include "core/primitives/types.h"
@@ -75,6 +76,7 @@
 /* ────────────────────────────────────────────────────────────────────────────
    Result type for write operations
    ──────────────────────────────────────────────────────────────────────────── */
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(usize, Error)
 
 /* ────────────────────────────────────────────────────────────────────────────

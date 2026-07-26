@@ -216,6 +216,7 @@ static inline bool mem_regions_overlap(const void* a, const void* b, usize size)
 */
 static inline void* mem_alloc(usize size) {
     if (size == 0u) { return NULL; }
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     return malloc(size);
 }
 
@@ -232,6 +233,7 @@ static inline void* mem_alloc(usize size) {
   ensures  \true;
 */
 static inline void mem_free(void* ptr) {
+    /* cppcheck-suppress misra-c2012-21.3 ; MISRA-DEV-015 */
     free(ptr);
 }
 

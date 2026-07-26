@@ -184,6 +184,7 @@
 #define CANON_CORE_PRIMITIVES_CONTRACT_H
 
 #include "types.h"
+/* cppcheck-suppress misra-c2012-21.6 ; MISRA-DEV-016 */
 #include <stdio.h>
 #include <stdlib.h>
 

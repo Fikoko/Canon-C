@@ -133,7 +133,9 @@ typedef double    f64;   /* 64-bit floating point (IEEE 754 on all supported pla
  * pattern is used instead of static_require because contract.h includes
  * this header — using it here would form an include cycle.
  * ──────────────────────────────────────────────────────────────────────── */
+/* cppcheck-suppress misra-c2012-2.3 ; MISRA-DEV-017 */
 typedef char canon_types_assert_f32_is_4_bytes_[(sizeof(f32) == 4) ? 1 : -1];
+/* cppcheck-suppress misra-c2012-2.3 ; MISRA-DEV-017 */
 typedef char canon_types_assert_f64_is_8_bytes_[(sizeof(f64) == 8) ? 1 : -1];
 
 /* ── Boolean ─────────────────────────────────────────────────────────────── */

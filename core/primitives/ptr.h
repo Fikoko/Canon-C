@@ -142,6 +142,7 @@
  * Every overflow check in this file depends on CANON_USIZE_MAX being
  * the true maximum value representable in usize. If limits.h drifts,
  * catch it at compile time rather than at runtime. */
+/* cppcheck-suppress misra-c2012-2.3 ; MISRA-DEV-017 */
 static_require(CANON_USIZE_MAX == SIZE_MAX,
                canon_usize_max_matches_size_max);
 

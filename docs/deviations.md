@@ -4880,3 +4880,125 @@ classified as template-configuration artifacts during the 2026-07-25 census.
 They survive configuration-complete scanning and are therefore **real findings**
 arising from the `*_decl.h` entry points, not scan artifacts. The census
 classification is corrected accordingly.
+
+## MISRA-DEV-014: Rule 19.2 — the `union` keyword in Result/Option
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-014 | 2026-07-26 | 13 `CANON_RESULT` / `CANON_OPTION` instantiations (inline suppressions) | Design-identity deviation |
+
+**Description**: Rule 19.2 advises against `union`. Every cited site is an
+instantiation of the library's discriminated-union types — `CANON_RESULT(T, E)`
+and `CANON_OPTION(T)` — whose payload is a tagged union selected by an
+explicit discriminant.
+
+**Rationale**: the tagged union IS the type. Result and Option exist to make
+"a value or an error, never both" representable without sentinel values,
+out-parameters, or `errno`. Removing the union does not fix a defect; it
+deletes the abstraction the library is built on and pushes callers back onto
+the error-handling idioms this project exists to replace. The declaration is
+deliberately C99-strict — a NAMED union member (`.val`) rather than a C11
+anonymous union, precisely so the type is portable to the strict-C99 toolchains
+used in certified contexts (CompCert, MSVC /Za, Polyspace, LDRA); see the
+C99-compliance note in `semantics/result/result_decl.h`.
+
+**Why the rule's hazard does not apply**: 19.2's concern is reading a member
+other than the one last written. Access is never raw here: `_is_ok()` /
+`_is_err()` / `_unwrap()` / `_get_ok()` gate every read on the discriminant,
+and those accessors are formally verified — the result and option WP jobs prove
+their contracts (VERIFY-013/014, pins 185/215 and 189/223), which is stronger
+evidence of correct member selection than the rule's syntactic prohibition
+provides.
+
+**Mitigation**: per-site inline suppressions; rule 19.2 stays live for every
+other union in the tree.
+
+## MISRA-DEV-015: Rule 21.3 — `malloc` / `free` / `realloc` in the allocation layer
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-015 | 2026-07-26 | 9 sites: `core/memory.h` x2, `data/convenience/dynstring.h` x7 | Design-identity deviation |
+
+**Description**: Rule 21.3 prohibits the `<stdlib.h>` allocation functions.
+Two sites are the library's allocation boundary itself (`mem_alloc` wrapping
+`malloc`, `mem_free` wrapping `free`); seven are `dynstring`'s growth policy
+(`realloc`).
+
+**Rationale**: the rule's target is *unmanaged* dynamic allocation scattered
+through application code. This library's answer to that hazard is structural —
+`Arena`, `Pool` and `Region` provide bounded, resettable, allocation-free-by-
+construction storage, and they are the recommended path. `mem_alloc`/`mem_free`
+exist as the single audited boundary where heap allocation is admitted, so that
+a project which must use the heap has exactly one place to review, and a project
+which must not can exclude these two functions and use the arena family without
+losing the rest of the library. Deleting the boundary does not remove
+allocation from user programs; it removes the audited chokepoint.
+
+**Note on `dynstring`**: this is an explicitly heap-backed convenience container
+under `data/convenience/`. Its arena-backed counterparts (`StringBuf` on an
+`Arena`, `str_join` with an arena allocator) are available for
+allocation-restricted builds.
+
+**Residual risk**: allocation failure is a *checked* condition throughout —
+`mem_alloc` returns NULL on failure, every caller in the tree tests it, and
+the WP jobs prove the NULL-return contracts (`typed_cast_mem_alloc_*`, VERIFY-008).
+
+**Mitigation**: per-site inline suppressions; rule 21.3 stays live tree-wide.
+
+## MISRA-DEV-016: Rule 21.6 — `<stdio.h>` inclusion for formatted output
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-016 | 2026-07-26 | 6 `#include <stdio.h>` sites | Design-identity deviation |
+
+**Description**: Rule 21.6 prohibits the standard I/O functions. All six cited
+sites are the `#include <stdio.h>` line itself, in the six headers that need
+formatted output: `contract.h` (diagnostic handler), `diag.h`, `log.h`,
+`file.h`, `dynstring.h` and `stringbuf.h` (`vsnprintf` for `append_fmt`).
+
+**Rationale**: these are the library's diagnostic and I/O surfaces. A contract
+handler that cannot report which contract failed, a logger that cannot log, and
+a file module that cannot read files are not improvements. The bounded forms
+are used deliberately — `vsnprintf`/`snprintf` with an explicit size argument,
+never `sprintf`, `gets`, or the unbounded `scanf` family.
+
+**Deliberately NOT deviated — the canary depends on this rule.** The misra job's
+three-violation canary (`canary/misra_canary.h`) uses rule 21.6 as one of its
+three tripwires. A command-line or blanket suppression of 21.6 would silence the
+canary and blind the job to its own failure, so this deviation is implemented
+*exclusively* as six per-site inline suppressions. The canary's 21.6 continues
+to fire and the job continues to require exactly 3 canary findings. This
+constraint is the reason no rule in this campaign is ever deviated globally.
+
+**Mitigation**: per-site inline suppressions. Callers needing a freestanding
+build can define the library's I/O-free subset; `core/` requires stdio only in
+`contract.h`, and only for the default handler, which is replaceable via
+`contract_set_handler()`.
+
+## MISRA-DEV-017: Rule 2.3 — the C99 static-assertion idiom
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-017 | 2026-07-26 | 5 sites: `types.h` x2, `diag.h` x2, `ptr.h` x1 | Tool-idiom deviation |
+
+**Description**: Rule 2.3 forbids unused type declarations. Every cited site is
+a compile-time assertion. Under C11 `static_require(cond, msg)` expands to
+`_Static_assert`; under strict C99 it expands to the portable negative-size-array
+idiom `typedef char static_assert_##msg[(cond) ? 1 : -1];` (see
+`core/primitives/contract.h`). Two sites in `types.h` spell the idiom out
+directly for float-width checks.
+
+**Rationale**: the typedef is not unused — **being declared is its entire
+function**. If the condition is false the array size is negative and the
+translation unit fails to compile, which is the assertion firing. Removing the
+"unused" type removes the check. The findings are an artifact of a C99 toolchain
+configuration: compiled as C11 these sites produce `_Static_assert` and the rule
+does not apply at all.
+
+**What is actually being asserted**: `sizeof(f32) == 4`, `sizeof(f64) == 8`,
+`CANON_USIZE_MAX == SIZE_MAX`, and the `diag.h` frame/message-length floors —
+i.e. the platform assumptions the rest of the library's proofs rest on. These
+are exactly the checks a MISRA project should want to keep.
+
+**Mitigation**: per-site inline suppressions; rule 2.3 stays live for genuinely
+unused typedefs.

@@ -51,6 +51,7 @@
  * includes fold_decl.h. CANON_RESULT generates static inline functions
  * so re-instantiation is safe.
  */
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(bool, Error)
 
 #endif /* CANON_ALGO_FOLD_DECL_H */

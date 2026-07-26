@@ -153,8 +153,10 @@ typedef HASHMAP_VAL_TYPE hm_val_t;
 CANON_OPTION(hm_val_t)
 #ifndef CANON_RESULT_BOOL_ERROR_DEFINED
     #define CANON_RESULT_BOOL_ERROR_DEFINED
+    /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
     CANON_RESULT(bool, Error)
 #endif
+/* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(hm_val_t, Error)
 
 /* ============================================================================
