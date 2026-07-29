@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/header_combination_test.dir/link.d CMakeFiles/header_combination_test.dir/test/integration/header_combination_test.c.o -o header_combination_test

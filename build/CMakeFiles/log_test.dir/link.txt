@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/log_test.dir/link.d CMakeFiles/log_test.dir/test/util/log_test.c.o -o log_test

@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/dynstring_test.dir/link.d CMakeFiles/dynstring_test.dir/test/data/convenience/dynstring_test.c.o -o dynstring_test

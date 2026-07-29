@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/bits_test.dir/link.d CMakeFiles/bits_test.dir/test/core/primitives/bits_test.c.o -o bits_test

@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/fold_test.dir/link.d CMakeFiles/fold_test.dir/test/algo/fold_test.c.o -o fold_test

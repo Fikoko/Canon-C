@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/any_all_test.dir/link.d CMakeFiles/any_all_test.dir/test/algo/any_all_test.c.o -o any_all_test

@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/unique_test.dir/link.d CMakeFiles/unique_test.dir/test/algo/unique_test.c.o -o unique_test

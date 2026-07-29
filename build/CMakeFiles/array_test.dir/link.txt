@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/array_test.dir/link.d CMakeFiles/array_test.dir/test/data/array_test.c.o -o array_test

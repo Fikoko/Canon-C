@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/str_split_test.dir/link.d CMakeFiles/str_split_test.dir/test/util/str_split_test.c.o -o str_split_test

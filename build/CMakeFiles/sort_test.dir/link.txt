@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/sort_test.dir/link.d CMakeFiles/sort_test.dir/test/algo/sort_test.c.o -o sort_test

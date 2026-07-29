@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/slice_test.dir/link.d CMakeFiles/slice_test.dir/test/core/slice_test.c.o -o slice_test

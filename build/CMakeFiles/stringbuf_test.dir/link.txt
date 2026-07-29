@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/stringbuf_test.dir/link.d CMakeFiles/stringbuf_test.dir/test/data/stringbuf_test.c.o -o stringbuf_test

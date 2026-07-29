@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/filter_test.dir/link.d CMakeFiles/filter_test.dir/test/algo/filter_test.c.o -o filter_test

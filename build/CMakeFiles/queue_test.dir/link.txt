@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/queue_test.dir/link.d CMakeFiles/queue_test.dir/test/data/queue_test.c.o -o queue_test

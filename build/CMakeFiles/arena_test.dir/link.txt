@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/arena_test.dir/link.d CMakeFiles/arena_test.dir/test/core/arena_test.c.o -o arena_test

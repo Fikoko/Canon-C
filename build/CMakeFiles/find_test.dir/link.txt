@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/find_test.dir/link.d CMakeFiles/find_test.dir/test/algo/find_test.c.o -o find_test

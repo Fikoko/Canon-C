@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/map_test.dir/link.d CMakeFiles/map_test.dir/test/algo/map_test.c.o -o map_test

@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/smallvec_test.dir/link.d CMakeFiles/smallvec_test.dir/test/data/convenience/smallvec_test.c.o -o smallvec_test

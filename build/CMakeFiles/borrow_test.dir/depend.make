@@ -1,2 +1,0 @@
-# Empty dependencies file for borrow_test.
-# This may be replaced when dependencies are built.

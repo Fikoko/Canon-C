@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/str_view_test.dir/link.d CMakeFiles/str_view_test.dir/test/util/str_view_test.c.o -o str_view_test

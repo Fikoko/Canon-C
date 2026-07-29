@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/scope_test.dir/link.d CMakeFiles/scope_test.dir/test/core/scope_test.c.o -o scope_test

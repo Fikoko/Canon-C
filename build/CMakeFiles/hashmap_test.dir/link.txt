@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/hashmap_test.dir/link.d CMakeFiles/hashmap_test.dir/test/data/hashmap_test.c.o -o hashmap_test

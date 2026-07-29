@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/types_test.dir/link.d CMakeFiles/types_test.dir/test/core/primitives/types_test.c.o -o types_test

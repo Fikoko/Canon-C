@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/range_test.dir/link.d CMakeFiles/range_test.dir/test/data/range_test.c.o -o range_test
