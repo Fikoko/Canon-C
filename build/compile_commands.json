@@ -1,0 +1,314 @@
+[
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/bits_test.dir/test/core/primitives/bits_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/bits_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/bits_test.c",
+  "output": "CMakeFiles/bits_test.dir/test/core/primitives/bits_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/checked_test.dir/test/core/primitives/checked_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/checked_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/checked_test.c",
+  "output": "CMakeFiles/checked_test.dir/test/core/primitives/checked_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/compare_test.dir/test/core/primitives/compare_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/compare_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/compare_test.c",
+  "output": "CMakeFiles/compare_test.dir/test/core/primitives/compare_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/contract_test.dir/test/core/primitives/contract_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/contract_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/contract_test.c",
+  "output": "CMakeFiles/contract_test.dir/test/core/primitives/contract_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/limits_test.dir/test/core/primitives/limits_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/limits_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/limits_test.c",
+  "output": "CMakeFiles/limits_test.dir/test/core/primitives/limits_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/types_test.dir/test/core/primitives/types_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/types_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/types_test.c",
+  "output": "CMakeFiles/types_test.dir/test/core/primitives/types_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/ptr_test.dir/test/core/primitives/ptr_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/primitives/ptr_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/primitives/ptr_test.c",
+  "output": "CMakeFiles/ptr_test.dir/test/core/primitives/ptr_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/arena_test.dir/test/core/arena_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/arena_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/arena_test.c",
+  "output": "CMakeFiles/arena_test.dir/test/core/arena_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/pool_test.dir/test/core/pool_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/pool_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/pool_test.c",
+  "output": "CMakeFiles/pool_test.dir/test/core/pool_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/slice_test.dir/test/core/slice_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/slice_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/slice_test.c",
+  "output": "CMakeFiles/slice_test.dir/test/core/slice_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/scope_test.dir/test/core/scope_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/scope_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/scope_test.c",
+  "output": "CMakeFiles/scope_test.dir/test/core/scope_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/region_test.dir/test/core/region_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/region_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/region_test.c",
+  "output": "CMakeFiles/region_test.dir/test/core/region_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/memory_test.dir/test/core/memory_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/memory_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/memory_test.c",
+  "output": "CMakeFiles/memory_test.dir/test/core/memory_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/ownership_test.dir/test/core/ownership_test.c.o -c /home/fikret/Desktop/Canon-C/test/core/ownership_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/core/ownership_test.c",
+  "output": "CMakeFiles/ownership_test.dir/test/core/ownership_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/option_test.dir/test/semantics/option_test.c.o -c /home/fikret/Desktop/Canon-C/test/semantics/option_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/semantics/option_test.c",
+  "output": "CMakeFiles/option_test.dir/test/semantics/option_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/result_test.dir/test/semantics/result_test.c.o -c /home/fikret/Desktop/Canon-C/test/semantics/result_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/semantics/result_test.c",
+  "output": "CMakeFiles/result_test.dir/test/semantics/result_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/borrow_test.dir/test/semantics/borrow_test.c.o -c /home/fikret/Desktop/Canon-C/test/semantics/borrow_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/semantics/borrow_test.c",
+  "output": "CMakeFiles/borrow_test.dir/test/semantics/borrow_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/diag_test.dir/test/semantics/diag_test.c.o -c /home/fikret/Desktop/Canon-C/test/semantics/diag_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/semantics/diag_test.c",
+  "output": "CMakeFiles/diag_test.dir/test/semantics/diag_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/error_test.dir/test/semantics/error_test.c.o -c /home/fikret/Desktop/Canon-C/test/semantics/error_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/semantics/error_test.c",
+  "output": "CMakeFiles/error_test.dir/test/semantics/error_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/vec_test.dir/test/data/vec_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/vec_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/vec_test.c",
+  "output": "CMakeFiles/vec_test.dir/test/data/vec_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/deque_test.dir/test/data/deque_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/deque_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/deque_test.c",
+  "output": "CMakeFiles/deque_test.dir/test/data/deque_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/hashmap_test.dir/test/data/hashmap_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/hashmap_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/hashmap_test.c",
+  "output": "CMakeFiles/hashmap_test.dir/test/data/hashmap_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/array_test.dir/test/data/array_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/array_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/array_test.c",
+  "output": "CMakeFiles/array_test.dir/test/data/array_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/stack_test.dir/test/data/stack_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/stack_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/stack_test.c",
+  "output": "CMakeFiles/stack_test.dir/test/data/stack_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/queue_test.dir/test/data/queue_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/queue_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/queue_test.c",
+  "output": "CMakeFiles/queue_test.dir/test/data/queue_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/util/str -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/header_combination_test.dir/test/integration/header_combination_test.c.o -c /home/fikret/Desktop/Canon-C/test/integration/header_combination_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/integration/header_combination_test.c",
+  "output": "CMakeFiles/header_combination_test.dir/test/integration/header_combination_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/priority_queue_test.dir/test/data/priority_queue_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/priority_queue_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/priority_queue_test.c",
+  "output": "CMakeFiles/priority_queue_test.dir/test/data/priority_queue_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/bitset_test.dir/test/data/bitset_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/bitset_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/bitset_test.c",
+  "output": "CMakeFiles/bitset_test.dir/test/data/bitset_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/stringbuf_test.dir/test/data/stringbuf_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/stringbuf_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/stringbuf_test.c",
+  "output": "CMakeFiles/stringbuf_test.dir/test/data/stringbuf_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/range_test.dir/test/data/range_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/range_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/range_test.c",
+  "output": "CMakeFiles/range_test.dir/test/data/range_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/dynvec_test.dir/test/data/convenience/dynvec_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/convenience/dynvec_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/convenience/dynvec_test.c",
+  "output": "CMakeFiles/dynvec_test.dir/test/data/convenience/dynvec_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/smallvec_test.dir/test/data/convenience/smallvec_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/convenience/smallvec_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/convenience/smallvec_test.c",
+  "output": "CMakeFiles/smallvec_test.dir/test/data/convenience/smallvec_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/dynstring_test.dir/test/data/convenience/dynstring_test.c.o -c /home/fikret/Desktop/Canon-C/test/data/convenience/dynstring_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/data/convenience/dynstring_test.c",
+  "output": "CMakeFiles/dynstring_test.dir/test/data/convenience/dynstring_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/map_test.dir/test/algo/map_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/map_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/map_test.c",
+  "output": "CMakeFiles/map_test.dir/test/algo/map_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/filter_test.dir/test/algo/filter_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/filter_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/filter_test.c",
+  "output": "CMakeFiles/filter_test.dir/test/algo/filter_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/fold_test.dir/test/algo/fold_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/fold_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/fold_test.c",
+  "output": "CMakeFiles/fold_test.dir/test/algo/fold_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/find_test.dir/test/algo/find_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/find_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/find_test.c",
+  "output": "CMakeFiles/find_test.dir/test/algo/find_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/any_all_test.dir/test/algo/any_all_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/any_all_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/any_all_test.c",
+  "output": "CMakeFiles/any_all_test.dir/test/algo/any_all_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/sort_test.dir/test/algo/sort_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/sort_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/sort_test.c",
+  "output": "CMakeFiles/sort_test.dir/test/algo/sort_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/search_test.dir/test/algo/search_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/search_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/search_test.c",
+  "output": "CMakeFiles/search_test.dir/test/algo/search_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/unique_test.dir/test/algo/unique_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/unique_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/unique_test.c",
+  "output": "CMakeFiles/unique_test.dir/test/algo/unique_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/reverse_test.dir/test/algo/reverse_test.c.o -c /home/fikret/Desktop/Canon-C/test/algo/reverse_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/algo/reverse_test.c",
+  "output": "CMakeFiles/reverse_test.dir/test/algo/reverse_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/str_test.dir/test/util/str_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/str_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/str_test.c",
+  "output": "CMakeFiles/str_test.dir/test/util/str_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/str_split_test.dir/test/util/str_split_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/str_split_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/str_split_test.c",
+  "output": "CMakeFiles/str_split_test.dir/test/util/str_split_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/str_join_test.dir/test/util/str_join_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/str_join_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/str_join_test.c",
+  "output": "CMakeFiles/str_join_test.dir/test/util/str_join_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/str_view_test.dir/test/util/str_view_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/str_view_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/str_view_test.c",
+  "output": "CMakeFiles/str_view_test.dir/test/util/str_view_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/intern_test.dir/test/util/intern_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/intern_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/intern_test.c",
+  "output": "CMakeFiles/intern_test.dir/test/util/intern_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/log_test.dir/test/util/log_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/log_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/log_test.c",
+  "output": "CMakeFiles/log_test.dir/test/util/log_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/file_test.dir/test/util/file_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/file_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/file_test.c",
+  "output": "CMakeFiles/file_test.dir/test/util/file_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/semantics -I/home/fikret/Desktop/Canon-C/data -I/home/fikret/Desktop/Canon-C/algo -I/home/fikret/Desktop/Canon-C/util -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/parse_test.dir/test/util/parse_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/parse_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/parse_test.c",
+  "output": "CMakeFiles/parse_test.dir/test/util/parse_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/time_test.dir/test/util/time_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/time_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/time_test.c",
+  "output": "CMakeFiles/time_test.dir/test/util/time_test.c.o"
+},
+{
+  "directory": "/home/fikret/Desktop/Canon-C/build",
+  "command": "/usr/bin/cc  -I/home/fikret/Desktop/Canon-C/core/primitives -I/home/fikret/Desktop/Canon-C/core -I/home/fikret/Desktop/Canon-C/. -O3 -DNDEBUG -std=c99 -Wall -Wextra -Wpedantic -Werror -o CMakeFiles/random_test.dir/test/util/random_test.c.o -c /home/fikret/Desktop/Canon-C/test/util/random_test.c",
+  "file": "/home/fikret/Desktop/Canon-C/test/util/random_test.c",
+  "output": "CMakeFiles/random_test.dir/test/util/random_test.c.o"
+}
+]

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/ownership_test.dir/link.d CMakeFiles/ownership_test.dir/test/core/ownership_test.c.o -o ownership_test

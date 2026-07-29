@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/contract_test.dir/link.d CMakeFiles/contract_test.dir/test/core/primitives/contract_test.c.o -o contract_test

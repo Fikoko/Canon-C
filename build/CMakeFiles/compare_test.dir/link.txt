@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/compare_test.dir/link.d CMakeFiles/compare_test.dir/test/core/primitives/compare_test.c.o -o compare_test

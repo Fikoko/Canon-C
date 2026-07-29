@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/error_test.dir/link.d CMakeFiles/error_test.dir/test/semantics/error_test.c.o -o error_test

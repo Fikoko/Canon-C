@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/pool_test.dir/link.d CMakeFiles/pool_test.dir/test/core/pool_test.c.o -o pool_test

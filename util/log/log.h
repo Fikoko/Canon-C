@@ -40,36 +40,45 @@
 
 #include <stdbool.h>
 
-typedef bool canon_bool_;
-
-/* Instantiate with the typedef, producing result_canon_bool__Error.
- * Then typedef to the canonical name result_bool_Error and provide
- * wrapper functions with the expected names. */
+/* Instantiate exactly as every other canon header does, under the shared
+ * guard, so the struct tag is declared at most once per translation unit. */
 /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
-CANON_RESULT(canon_bool_, Error)
-
-typedef result_canon_bool__Error result_bool_Error;
-
-static inline result_bool_Error result_bool_Error_ok(bool v) {
-    return result_canon_bool__Error_ok(v);
-}
-static inline result_bool_Error result_bool_Error_err(Error e) {
-    return result_canon_bool__Error_err(e);
-}
-static inline bool result_bool_Error_is_ok(result_bool_Error r) {
-    return result_canon_bool__Error_is_ok(r);
-}
-static inline bool result_bool_Error_is_err(result_bool_Error r) {
-    return result_canon_bool__Error_is_err(r);
-}
-static inline bool result_bool_Error_unwrap(result_bool_Error r) {
-    return result_canon_bool__Error_unwrap(r);
-}
-static inline Error result_bool_Error_unwrap_err(result_bool_Error r) {
-    return result_canon_bool__Error_unwrap_err(r);
-}
+CANON_RESULT(bool, Error)
 
 #endif /* CANON_RESULT_BOOL_ERROR_DEFINED */
+
+/* log.h's public API spells this type `result_bool_Error`, but CANON_RESULT
+ * mangles the `bool` keyword through `_Bool`, yielding `result__Bool_Error`.
+ * Use the project's established compatibility shim, guarded by
+ * CANON_RESULT_BOOL_ERROR_COMPAT exactly as algo/fold/fold.h does, so the
+ * alias is declared once per translation unit no matter how many canon
+ * headers a user combines.
+ *
+ * Previously log.h instantiated a SEPARATE type
+ * (`CANON_RESULT(canon_bool_, Error)`) and aliased that to this name under
+ * the instantiation guard, which made log.h mutually exclusive with every
+ * other header providing result_bool_Error. */
+#ifndef CANON_RESULT_BOOL_ERROR_COMPAT
+#define CANON_RESULT_BOOL_ERROR_COMPAT
+typedef result__Bool_Error result_bool_Error;
+#define result_bool_Error_ok         result__Bool_Error_ok
+#define result_bool_Error_err        result__Bool_Error_err
+#define result_bool_Error_is_ok      result__Bool_Error_is_ok
+#define result_bool_Error_is_err     result__Bool_Error_is_err
+#define result_bool_Error_get_ok     result__Bool_Error_get_ok
+#define result_bool_Error_get_err    result__Bool_Error_get_err
+#define result_bool_Error_unwrap     result__Bool_Error_unwrap
+#define result_bool_Error_unwrap_err result__Bool_Error_unwrap_err
+#define result_bool_Error_unwrap_or  result__Bool_Error_unwrap_or
+#define result_bool_Error_expect     result__Bool_Error_expect
+#define result_bool_Error_map        result__Bool_Error_map
+#define result_bool_Error_map_err    result__Bool_Error_map_err
+#define result_bool_Error_and_then   result__Bool_Error_and_then
+#define result_bool_Error_or_else    result__Bool_Error_or_else
+#define result_bool_Error_and        result__Bool_Error_and
+#define result_bool_Error_or         result__Bool_Error_or
+#define result_bool_Error_eq         result__Bool_Error_eq
+#endif /* CANON_RESULT_BOOL_ERROR_COMPAT */
 
 /**
  * @file util/log/log.h

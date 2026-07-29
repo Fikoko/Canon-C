@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/random_test.dir/link.d CMakeFiles/random_test.dir/test/util/random_test.c.o -o random_test

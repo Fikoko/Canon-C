@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/checked_test.dir/link.d CMakeFiles/checked_test.dir/test/core/primitives/checked_test.c.o -o checked_test

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/reverse_test.dir/link.d CMakeFiles/reverse_test.dir/test/algo/reverse_test.c.o -o reverse_test

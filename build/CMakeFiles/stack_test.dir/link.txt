@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/stack_test.dir/link.d CMakeFiles/stack_test.dir/test/data/stack_test.c.o -o stack_test

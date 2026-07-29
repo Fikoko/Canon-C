@@ -48,10 +48,15 @@
 
 /*
  * Ensure result_bool_Error is available to any translation unit that
- * includes fold_decl.h. CANON_RESULT generates static inline functions
- * so re-instantiation is safe.
+ * includes fold_decl.h. Guarded by CANON_RESULT_BOOL_ERROR_DEFINED so the
+ * type is instantiated exactly once per translation unit no matter how
+ * many canon headers a user combines — CANON_RESULT declares a struct
+ * tag, and a second declaration in the same TU is a redefinition error.
  */
+#ifndef CANON_RESULT_BOOL_ERROR_DEFINED
+#define CANON_RESULT_BOOL_ERROR_DEFINED
 /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
 CANON_RESULT(bool, Error)
+#endif /* CANON_RESULT_BOOL_ERROR_DEFINED */
 
 #endif /* CANON_ALGO_FOLD_DECL_H */

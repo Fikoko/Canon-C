@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/priority_queue_test.dir/link.d CMakeFiles/priority_queue_test.dir/test/data/priority_queue_test.c.o -o priority_queue_test

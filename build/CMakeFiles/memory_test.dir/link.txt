@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/memory_test.dir/link.d CMakeFiles/memory_test.dir/test/core/memory_test.c.o -o memory_test

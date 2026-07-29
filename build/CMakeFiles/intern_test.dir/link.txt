@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/intern_test.dir/link.d CMakeFiles/intern_test.dir/test/util/intern_test.c.o -o intern_test

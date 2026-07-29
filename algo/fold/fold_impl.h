@@ -70,7 +70,11 @@
 /*
  * result_bool_Error is instantiated once here so that fold_impl.h is
  * self-contained when included via fold_defn.h in a separate .c file.
- * CANON_RESULT generates static inline functions — re-instantiation
- * from fold.h (which also calls CANON_RESULT) is safe and harmless.
+ * Guarded by CANON_RESULT_BOOL_ERROR_DEFINED: CANON_RESULT declares a
+ * struct tag, so a second instantiation in the same translation unit is
+ * a redefinition error, not a harmless repeat.
  */
+#ifndef CANON_RESULT_BOOL_ERROR_DEFINED
+#define CANON_RESULT_BOOL_ERROR_DEFINED
 CANON_RESULT(bool, Error)
+#endif /* CANON_RESULT_BOOL_ERROR_DEFINED */

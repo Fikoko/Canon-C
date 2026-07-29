@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/limits_test.dir/link.d CMakeFiles/limits_test.dir/test/core/primitives/limits_test.c.o -o limits_test

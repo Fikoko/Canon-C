@@ -376,6 +376,12 @@ canon_c_test(
 )
 
 canon_c_test(
+    NAME     header_combination_test
+    SRC      test/integration/header_combination_test.c
+    INCLUDES core/primitives core semantics data algo util util/str .
+)
+
+canon_c_test(
     NAME     priority_queue_test
     SRC      test/data/priority_queue_test.c
     INCLUDES core/primitives core semantics data .

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/diag_test.dir/link.d CMakeFiles/diag_test.dir/test/semantics/diag_test.c.o -o diag_test

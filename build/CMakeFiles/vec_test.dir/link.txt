@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/vec_test.dir/link.d CMakeFiles/vec_test.dir/test/data/vec_test.c.o -o vec_test

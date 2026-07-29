@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/region_test.dir/link.d CMakeFiles/region_test.dir/test/core/region_test.c.o -o region_test

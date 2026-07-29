@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/dynvec_test.dir/link.d CMakeFiles/dynvec_test.dir/test/data/convenience/dynvec_test.c.o -o dynvec_test

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/deque_test.dir/link.d CMakeFiles/deque_test.dir/test/data/deque_test.c.o -o deque_test

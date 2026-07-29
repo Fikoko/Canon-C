@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/parse_test.dir/link.d CMakeFiles/parse_test.dir/test/util/parse_test.c.o -o parse_test

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/ptr_test.dir/link.d CMakeFiles/ptr_test.dir/test/core/primitives/ptr_test.c.o -o ptr_test

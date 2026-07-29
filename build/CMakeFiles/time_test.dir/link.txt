@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/time_test.dir/link.d CMakeFiles/time_test.dir/test/util/time_test.c.o -o time_test

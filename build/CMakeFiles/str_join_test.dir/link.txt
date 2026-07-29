@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/str_join_test.dir/link.d CMakeFiles/str_join_test.dir/test/util/str_join_test.c.o -o str_join_test
