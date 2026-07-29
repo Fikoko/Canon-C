@@ -239,7 +239,9 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install clang-tidy and Cppcheck (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y clang-tidy cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy cppcheck
       - name: Install Cppcheck (macOS)
         if: matrix.os == 'macos-latest'
         run: brew install cppcheck
@@ -392,7 +394,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install Valgrind
-        run: sudo apt-get install -y valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
       - name: Configure CMake (no sanitizers — conflicts with Valgrind)
         run: |
           cmake -B build \
@@ -420,7 +424,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install Clang with libFuzzer runtime
-        run: sudo apt-get install -y clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang
       - name: Set reusable strings
         id: strings
         shell: bash
@@ -4254,7 +4260,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install Cppcheck
-        run: sudo apt-get install -y cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
       - name: Run MISRA C:2012 analysis on library headers
         shell: bash
         run: |
