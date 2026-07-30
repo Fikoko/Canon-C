@@ -27,13 +27,15 @@
 #include "core/arena.h"
 #include "core/pool.h"
 #include "core/slice.h"
-#include "semantics/option/option.h"
 
-/* CANON_OPTION(usize) must be instantiated before including bitset.h —
-   bitset.h uses option_usize but does not instantiate it itself. */
-CANON_OPTION(usize)
-
-#include "data/bitset.h"
+/* bitset.h is deliberately NOT included here. It requires CANON_OPTION(usize)
+   to be instantiated in the including translation unit, and that macro
+   expands ~14 static inline functions INTO THIS FILE. Clang exempts
+   header-defined functions from -Wunused-function but not main-file ones, so
+   instantiating a type this test does not otherwise use breaks the clang
+   builds. bitset_as_cbytes is covered by test_bitset_cbytes_accessor in
+   test/data/bitset_test.c, which binds through a const Bitset* and therefore
+   carries the same const guarantee. */
 #include "data/priority_queue.h"
 #include "data/stringbuf.h"
 
@@ -54,7 +56,6 @@ static int cmp_int(const void* a, const void* b, void* ctx) {
 int main(void) {
     static u8 arena_buf[256];
     static u8 pool_buf[256];
-    static u64 words[4];
 
     Arena arena;
     arena_init(&arena, arena_buf, sizeof arena_buf);
@@ -94,12 +95,6 @@ int main(void) {
         CHECK(pool_get_const(cp, 0u) != NULL, "pool_get_const on const Pool");
     }
 
-    Bitset bs;
-    bitset_init(&bs, words, 4u * 64u);
-    const Bitset* cb = &bs;
-    cbytes_t b1 = bitset_as_cbytes(cb);
-    CHECK(b1.len == 4u * sizeof(u64), "bitset_as_cbytes length");
-
     StringBuf sb;
     static char sb_buf[64];
     stringbuf_init_buffer(&sb, sb_buf, sizeof sb_buf);
@@ -123,7 +118,6 @@ int main(void) {
 
     CHECK(pool_as_cbytes(NULL).len == 0u,        "pool_as_cbytes(NULL)");
     CHECK(pool_reserved_cbytes(NULL).len == 0u,  "pool_reserved_cbytes(NULL)");
-    CHECK(bitset_as_cbytes(NULL).len == 0u,      "bitset_as_cbytes(NULL)");
     CHECK(pq_as_cbytes(NULL).len == 0u,          "pq_as_cbytes(NULL)");
     CHECK(stringbuf_as_cbytes(NULL).len == 0u,   "stringbuf_as_cbytes(NULL)");
     CHECK(stringbuf_buffer_cbytes(NULL).len == 0u, "stringbuf_buffer_cbytes(NULL)");
