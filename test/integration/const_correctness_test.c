@@ -62,16 +62,24 @@ int main(void) {
     (void)arena_alloc(&arena, 32u);
 
     /* Bind through const-qualified pointers: the compiler enforces the
-       contract we are asserting. */
+       contract this file exists to assert. Every length is DERIVED from the
+       mutable twin or from an accessor — never hardcoded. arena_alloc aligns,
+       so the offset after a 32-byte allocation is 32 PLUS whatever padding
+       the runtime address of arena_buf requires, which is platform-dependent
+       and not something this test should predict. */
     const Arena* ca = &arena;
 
-    cbytes_t a1 = arena_as_cbytes(ca);
-    cbytes_t a2 = arena_buffer_cbytes(ca);
-    cbytes_t a3 = arena_free_cbytes(ca);
-
-    CHECK(a1.len == 32u, "arena_as_cbytes length");
-    CHECK(a2.len == sizeof arena_buf, "arena_buffer_cbytes length");
-    CHECK(a1.len + a3.len == a2.len, "used + free == capacity");
+    CHECK(arena_as_cbytes(ca).len     == arena_as_bytes(&arena).len,
+          "arena_as_cbytes agrees with arena_as_bytes");
+    CHECK(arena_buffer_cbytes(ca).len == arena_buffer_bytes(&arena).len,
+          "arena_buffer_cbytes agrees with its twin");
+    CHECK(arena_free_cbytes(ca).len   == arena_free_bytes(&arena).len,
+          "arena_free_cbytes agrees with its twin");
+    CHECK(arena_buffer_cbytes(ca).len == arena_capacity(ca),
+          "buffer view spans the whole capacity");
+    CHECK(arena_as_cbytes(ca).len + arena_free_cbytes(ca).len
+              == arena_capacity(ca),
+          "used + free == capacity");
 
     Arena pool_arena;
     arena_init(&pool_arena, pool_buf, sizeof pool_buf);
@@ -80,16 +88,14 @@ int main(void) {
         (void)pool_alloc(&pool);
         const Pool* cp = &pool;
 
-        cbytes_t p1 = pool_as_cbytes(cp);
-        cbytes_t p2 = pool_reserved_cbytes(cp);
-
-        /* object_size is aligned up by pool_init, so derive rather than
-           hardcode: used objects occupy used * object_size bytes. */
-        CHECK(p1.len == pool_used(cp) * pool_object_size(cp),
+        CHECK(pool_as_cbytes(cp).len       == pool_as_bytes(&pool).len,
+              "pool_as_cbytes agrees with its twin");
+        CHECK(pool_reserved_cbytes(cp).len == pool_reserved_bytes(&pool).len,
+              "pool_reserved_cbytes agrees with its twin");
+        CHECK(pool_as_cbytes(cp).len == pool_used(cp) * pool_object_size(cp),
               "pool_as_cbytes covers used objects");
-        CHECK(p2.len == pool_capacity(cp) * pool_object_size(cp),
-              "pool_reserved_cbytes covers the whole reserved region");
-        CHECK(p2.len >= p1.len, "reserved covers at least used");
+        CHECK(pool_reserved_cbytes(cp).len >= pool_as_cbytes(cp).len,
+              "reserved covers at least used");
 
         /* pool_get_const remains the read-only element accessor. */
         CHECK(pool_get_const(cp, 0u) != NULL, "pool_get_const on const Pool");
@@ -100,29 +106,27 @@ int main(void) {
     stringbuf_init_buffer(&sb, sb_buf, sizeof sb_buf);
     (void)stringbuf_append_str(&sb, str_from_cstr("abc"));
     const StringBuf* csb = &sb;
-    cbytes_t s1 = stringbuf_as_cbytes(csb);
-    cbytes_t s2 = stringbuf_buffer_cbytes(csb);
-    CHECK(s1.len == 3u, "stringbuf_as_cbytes length");
-    CHECK(s2.len == sizeof sb_buf, "stringbuf_buffer_cbytes length");
+
+    CHECK(stringbuf_as_cbytes(csb).len     == stringbuf_as_bytes(&sb).len,
+          "stringbuf_as_cbytes agrees with its twin");
+    CHECK(stringbuf_buffer_cbytes(csb).len == stringbuf_buffer_bytes(&sb).len,
+          "stringbuf_buffer_cbytes agrees with its twin");
+    CHECK(stringbuf_as_cbytes(csb).len == 3u,
+          "stringbuf_as_cbytes reflects appended length");
 
     /* ── Guard paths ──────────────────────────────────────────────────────
-       The _cbytes accessors added alongside this test carry NULL and
-       empty-state guards. Exercising only the happy path would leave those
-       conditions uncovered and drag the MC/DC report down for every file
-       they live in, so both outcomes of each guard are taken here.
-
-       arena's three _cbytes accessors guard with require_msg(), which the
-       coverage build compiles to ((void)0) via CANON_NO_REQUIRE — they are
-       therefore not NULL-callable and emit no condition. arena_free_cbytes
-       does have a real branch (offset >= capacity), taken below. */
-
-    CHECK(pool_as_cbytes(NULL).len == 0u,        "pool_as_cbytes(NULL)");
-    CHECK(pool_reserved_cbytes(NULL).len == 0u,  "pool_reserved_cbytes(NULL)");
-    CHECK(pq_as_cbytes(NULL).len == 0u,          "pq_as_cbytes(NULL)");
-    CHECK(stringbuf_as_cbytes(NULL).len == 0u,   "stringbuf_as_cbytes(NULL)");
+       The _cbytes accessors carry NULL and empty-state guards. Exercising
+       only the happy path would leave those conditions uncovered. arena's
+       accessors guard with require_msg(), which the coverage build compiles
+       out via CANON_NO_REQUIRE — they are not NULL-callable and emit no
+       condition, so only the container accessors are probed with NULL. */
+    CHECK(pool_as_cbytes(NULL).len == 0u,          "pool_as_cbytes(NULL)");
+    CHECK(pool_reserved_cbytes(NULL).len == 0u,    "pool_reserved_cbytes(NULL)");
+    CHECK(pq_as_cbytes(NULL).len == 0u,            "pq_as_cbytes(NULL)");
+    CHECK(stringbuf_as_cbytes(NULL).len == 0u,     "stringbuf_as_cbytes(NULL)");
     CHECK(stringbuf_buffer_cbytes(NULL).len == 0u, "stringbuf_buffer_cbytes(NULL)");
 
-    /* Empty-pool path: used == 0 is a distinct guard from pool == NULL. */
+    /* Empty pool: used == 0 is a distinct guard from pool == NULL. */
     {
         static u8 e_buf[128];
         Arena e_arena;
@@ -141,10 +145,10 @@ int main(void) {
         static u8 f_buf[64];
         Arena f_arena;
         arena_init(&f_arena, f_buf, sizeof f_buf);
-        while (arena_alloc(&f_arena, 8u) != NULL) { /* fill it */ }
+        while (arena_alloc(&f_arena, 8u) != NULL) { /* fill */ }
         const Arena* cfa = &f_arena;
-        cbytes_t rest = arena_free_cbytes(cfa);
-        CHECK(rest.len < sizeof f_buf, "arena_free_cbytes on exhausted arena");
+        CHECK(arena_free_cbytes(cfa).len == arena_free_bytes(&f_arena).len,
+              "arena_free_cbytes on exhausted arena");
     }
 
     /* A PriorityQueue that exists but is empty: len == 0 guard. */
