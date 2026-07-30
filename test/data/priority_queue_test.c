@@ -738,6 +738,27 @@ static void test_pq_cbytes_accessor(void)
     EXPECT(pq_as_cbytes(NULL).len == 0u);          /* NULL guard   */
     { int v = 5; (void)pq_push(&q, &v); }
     EXPECT(pq_as_cbytes(cq).len == pq_as_bytes(&q).len);
+
+    /* Typed wrappers. DEFINE_PRIORITY_QUEUE emits pq_T_as_cbytes for every
+       instantiation, and this file carries no -Wunused-function pragma
+       (unlike borrow_test.c) because its contract is full API coverage — so
+       both instantiations must be exercised in THIS branch. The
+       pq_fuzz_suppress_unused() block lives in the #else CANON_FUZZING
+       branch and does not cover the ordinary build. */
+    {
+        int      ibuf[8];
+        pq_int   ih;
+        pq_int_init(&ih, ibuf, 8, cmp_int_asc, NULL);
+        const pq_int* cih = &ih;
+        EXPECT(pq_int_as_cbytes(cih).len == pq_int_as_bytes(&ih).len);
+    }
+    {
+        Score     sbuf[8];
+        pq_Score  sh;
+        pq_Score_init(&sh, sbuf, 8, cmp_score, NULL);
+        const pq_Score* csh = &sh;
+        EXPECT(pq_Score_as_cbytes(csh).len == pq_Score_as_bytes(&sh).len);
+    }
 }
 
 int main(void)
