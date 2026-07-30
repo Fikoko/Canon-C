@@ -1247,7 +1247,7 @@ Expected output: `Proved goals: 2819 / 2862` with 43 unproved goals
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-model Typed+Cast -wp-split -wp-timeout 120` |
 | **CI enforcement**     | Yes — 3387/3476 with 89 named goals expected    |
-| **MC/DC coverage**     | 90.6% (58/64 condition outcomes — see MCDC-003) |
+| **MC/DC coverage**     | 89.4% (59/66 condition outcomes — see MCDC-003, 2026-07-30 note) |
 | **Line coverage**      | 100% (97/97)                                    |
 | **CI artifact**        | `wp-proof-arena` (full per-goal breakdown)      |
 
@@ -1561,7 +1561,7 @@ residuals table); the 46 own goals split across cats 2a (8) / 2b (26)
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-model Typed+Cast -wp-split -wp-timeout 120` |
 | **CI enforcement**     | Yes — 3793/3906 with 113 named goals expected   |
-| **MC/DC coverage**     | 91.2% (62/68 condition outcomes — see MCDC-004) |
+| **MC/DC coverage**     | 87.2% (68/78 condition outcomes — see MCDC-004, 2026-07-30 note) |
 | **Line coverage**      | 100% (74/74)                                    |
 | **CI artifact**        | `wp-proof-pool` (full per-goal breakdown)       |
 

@@ -410,7 +410,7 @@ dead path, and the fix is a test, not a deviation record.
 
 A future header introducing its own public `{ptr, len}` type or
 analogous defensive code (stringbuf.h is the next candidate, listed
-provisionally at 74.2% in MCDC-002's pattern note) will need its own
+provisionally at 74.3% post-API-001, 74.2% before it, in MCDC-002's pattern note) will need its own
 per-header MCDC- entry; its unreachability shape and number are not
 transferable from the existing entries. Likewise, the remaining
 Shape-B macro modules (`deque`, `fold` — result and vec have since

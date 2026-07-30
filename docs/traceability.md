@@ -152,16 +152,38 @@
 > methodology hazard recorded in MCDC-001. Lines 2515/2610 →
 > 2524/2619 reflect the sweep's net instrumented-line delta.
 
+> **2026-07-30 (Commit 16/16b, CI #1202).** API-001 added nine `_cbytes`
+> accessors across arena, pool, bitset, priority_queue and stringbuf, each
+> carrying NULL / empty-state guards. Those guards are new conditions and new
+> branches: **MC/DC 1671/1892 → 1692/1922** and **branches 1534/1748 →
+> 1557/1778**, both deltas (+30 total, +21 and +23 hit) fully attributable to
+> the five changed files — no untouched file moved, which was the check that
+> the coverage-run exclusion of the two `test/integration/` compile-time
+> guards had taken effect. Per-file: arena 58/64 → 59/66, pool 62/68 → 68/78,
+> bitset 106/122 → 109/126, priority_queue 57/72 → 62/78, stringbuf 95/128 →
+> 101/136. The aggregate percentage falls 88.3% → 88.0% because the new
+> guards' unreachable halves enter the denominator; see the MCDC-003 and
+> MCDC-004 notes of the same date for which outcomes and why.
+>
+> The **line** figures (2524/2619 → 2566/2665) are NOT solely from this
+> commit: this table was last measured at Commit 9c (2026-07-25) and has
+> since accumulated the instrumented-line effects of Commits 10–15 as well —
+> compare.h's declarator splits (+12), log.h's removed `canon_bool_` wrappers
+> (−10), str_split's loop restructure (+4) and others. The MC/DC and branch
+> columns are unaffected by those commits, which is why they reconcile
+> exactly to this commit while the line column does not.
+
 ### Results
 
 | Metric     | Percentage | Covered    | Total      |
 |------------|------------|------------|------------|
-| Lines      | 96.4%      | 2524       | 2619       |
+| Lines      | 96.3%      | 2566       | 2665       |
 | Functions  | 99.5%      | 621        | 624        |
-| Branches   | 87.8%      | 1534       | 1748       |
-| MC/DC      | 88.3%      | 1671       | 1892       |
+| Branches   | 87.6%      | 1557       | 1778       |
+| MC/DC      | 88.0%      | 1692       | 1922       |
 
-arena.h's MC/DC contribution at 90.6% (58/64) is the achievable
+arena.h's MC/DC contribution at 89.4% (59/66 post-API-001; 90.6% (58/64)
+when this was written) is the achievable
 ceiling under the documented MCDC-003 unreachability — see the
 "Headers at their documented MC/DC ceiling" prose below. The
 contribution increased from 57/64 (89.1%) to 58/64 (90.6%) at the
@@ -190,7 +212,8 @@ macro expansion. The 15 remaining missed outcomes are defensive
 `require_msg` checks under `-DCANON_NO_REQUIRE`, the same coverage
 methodology pattern documented in MCDC-001.
 
-pool.h's MC/DC contribution reached 62/68 (91.2%) at its baseline, the
+pool.h's MC/DC contribution reached 62/68 (91.2%) at its baseline (68/78 =
+87.2% post-API-001, see the 2026-07-30 note above), the
 achievable ceiling under MCDC-004. The four wave-1 gap-closure tests
 (b2644ba / CI #972) moved pool.h from 55/68 to 61/68, and
 `test_init_arena_alloc_fails_after_guard` (98de378 / CI #974) closed the
@@ -401,7 +424,8 @@ by methodology):
   branches are discharged by the inherited type invariant rather
   than re-introducing public-API-unreachable code.
 
-- **arena.h: 90.6% (58/64)** — the ceiling under MCDC-003. The 6
+- **arena.h: 89.4% (59/66 post-API-001; 90.6% (58/64) before)** — the
+  ceiling under MCDC-003 plus one un-closed new outcome. The 6
   missed outcomes split into two categories: 4 structurally
   unreachable overflow-guard subconditions in `arena_alloc` (line
   346) and `arena_alloc_aligned` (line 401), and 2 release-build
@@ -426,7 +450,8 @@ by methodology):
   baseline; the 6 remaining outcomes are the documented ceiling and
   not counted as a coverage regression.
 
-- **pool.h: 91.2% (62/68)** — the ceiling under MCDC-004. The 6
+- **pool.h: 87.2% (68/78 post-API-001; 91.2% (62/68) before)** — the
+  ceiling under MCDC-004 plus four un-audited new outcomes. The 6
   missed outcomes are all the same shape: the `!pool->arena` middle
   subcondition of the defensive `if (!pool || !pool->arena || ...)`
   early return in `pool_get` (line 435), `pool_get_const` (464),
@@ -966,7 +991,7 @@ checks: the verification framework provides the unreachability
 evidence the testing framework cannot. See MCDC-002 in
 `docs/deviations.md` for the formal closure record.
 
-arena.h's MC/DC ceiling at 90.6% (58/64) and the MCDC-003 closure
+arena.h's MC/DC ceiling at 90.6% (58/64; 59/66 post-API-001) and the MCDC-003 closure
 follow the same cross-stream pattern. gcov reports 4 overflow-guard
 subconditions and 2 release-build macro-artifact outcomes as
 uncovered. The 2 macro-artifact outcomes are gcov-14 instrumentation

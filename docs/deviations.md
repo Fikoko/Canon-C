@@ -1124,8 +1124,9 @@ catches both count regressions (new residual class introduced) and
 rename regressions (a contract weakened in a way that produces a new
 residual under a different name).
 
-arena.h achieves 100% line coverage (97/97) and 90.6% MC/DC coverage
-(58/64) — the latter is the achievable ceiling under MCDC-003's
+arena.h achieves 100% line coverage and 89.4% MC/DC coverage
+(59/66 on the post-API-001 surface; see the 2026-07-30 note below —
+90.6% (58/64) before it) — the latter is the achievable ceiling under MCDC-003's
 structural unreachability and the gcov-14 release-build macro artifact
 (see MCDC-003). 22 of 22 user-facing functions are annotated and
 verified; 10 of them are 100% proved (no residuals at all):
@@ -1191,6 +1192,20 @@ transcript is the name-stability record); no residual entered or left
 the categories above, so the classification tables in this record
 remain valid as written. Ratcheted with the acknowledged commit the
 enforcement gate prescribes.
+
+**Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+pinned proved-goal summary ratcheted to 3430/3521 (was 3387/3476; +45 goals, +43 proved), EXPECTED_UNPROVED to 91 (was 89).
+Cause: the three `arena_*_cbytes` accessors added by API-001, each carrying the same ACSL contract as its mutable twin.
+
+**The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered: `typed_cast_arena_free_cbytes_call_cbytes_from_requires` and `..._requires_2`.
+Each new residual is the const twin of a residual this record ALREADY
+documents: `arena_free_cbytes_call_cbytes_from_requires` times out on exactly the obligation its mutable
+counterpart `arena_free_bytes_call_bytes_from_requires` times out on, for the same reason — WP cannot discharge
+the `bytes_from`/`cbytes_from` validity precondition when the pointer
+argument is computed rather than a plain member read. No new CATEGORY of
+residual appeared; the categories in the tables above absorb them
+unchanged, and every pre-existing residual is still present by name
+(roll-calls extended, not replaced). Zero Failed goals.
 
 ## VERIFY-010: WP Limitations Inherited from Substrate Plus pool_invariant Arithmetic and ptr_elem Cascade Residuals (pool.h)
 
@@ -1545,6 +1560,20 @@ the categories above, so the classification tables in this record
 remain valid as written. Ratcheted with the acknowledged commit the
 enforcement gate prescribes.
 
+**Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+pinned proved-goal summary ratcheted to 3884/4003 (was 3793/3906; +97 goals, +91 proved), EXPECTED_UNPROVED to 119 (was 113).
+Cause: the two `pool_*_cbytes` accessors added by API-001 plus the three `arena_*_cbytes` inherited through the two-hop substrate. The inherited/own split moves 89+24 to 91+28.
+
+**The unproved set GREW — this is not the usual scalar-only drift.** Six goals entered: the two inherited `arena_free_cbytes` residuals, plus `typed_cast_pool_as_cbytes_call_cbytes_from_requires{,_2}` and `typed_cast_pool_reserved_cbytes_call_cbytes_from_requires{,_2}`.
+Each new residual is the const twin of a residual this record ALREADY
+documents: `pool_as_cbytes_call_cbytes_from_requires` times out on exactly the obligation its mutable
+counterpart `pool_as_bytes_call_bytes_from_requires` times out on, for the same reason — WP cannot discharge
+the `bytes_from`/`cbytes_from` validity precondition when the pointer
+argument is computed rather than a plain member read. No new CATEGORY of
+residual appeared; the categories in the tables above absorb them
+unchanged, and every pre-existing residual is still present by name
+(roll-calls extended, not replaced). Zero Failed goals.
+
 ## VERIFY-011: WP Limitations Inherited from Substrate Plus region_end Opaque-Hook-Dispatch Residuals (region.h)
 
 | Field          | Value |
@@ -1779,6 +1808,20 @@ transcript is the name-stability record); no residual entered or left
 the categories above, so the classification tables in this record
 remain valid as written. Ratcheted with the acknowledged commit the
 enforcement gate prescribes.
+
+**Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+pinned proved-goal summary ratcheted to 3578/3692 (was 3535/3647; +45 goals, +43 proved), EXPECTED_UNPROVED to 114 (was 112).
+Cause: inherited verbatim from arena.h's three `_cbytes` accessors (VERIFY-009 note of the same date); region.h has no own-goal change. The inherited/own split moves 89+23 to 91+23.
+
+**The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered, both inherited: `typed_cast_arena_free_cbytes_call_cbytes_from_requires{,_2}`.
+Each new residual is the const twin of a residual this record ALREADY
+documents: `arena_free_cbytes_call_cbytes_from_requires` times out on exactly the obligation its mutable
+counterpart `arena_free_bytes_call_bytes_from_requires` times out on, for the same reason — WP cannot discharge
+the `bytes_from`/`cbytes_from` validity precondition when the pointer
+argument is computed rather than a plain member read. No new CATEGORY of
+residual appeared; the categories in the tables above absorb them
+unchanged, and every pre-existing residual is still present by name
+(roll-calls extended, not replaced). Zero Failed goals.
 
 ## VERIFY-012: Contract-Strengthening Closure of Initialization Preconditions (slice.h, memory.h, and downstream)
 
@@ -2929,6 +2972,20 @@ Unknown, MODE: ENFORCED exact-match transcript). Pin provenance
 updated from CI #1152 to CI #1187 in the workflow comments. Ratcheted
 with the acknowledged commit the enforcement gate prescribes.
 
+**Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+pinned proved-goal summary ratcheted to 5231/5429 (was 5188/5384; +45 goals, +43 proved), EXPECTED_UNPROVED to 198 (was 196).
+Cause: inherited verbatim from arena.h's three `_cbytes` accessors via the memory-chain substrate (VERIFY-009 note of the same date); vec's own goal surface is unchanged. Pin provenance updated CI #1187 to CI #1202.
+
+**The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered, both inherited: `typed_cast_arena_free_cbytes_call_cbytes_from_requires{,_2}`.
+Each new residual is the const twin of a residual this record ALREADY
+documents: `arena_free_cbytes_call_cbytes_from_requires` times out on exactly the obligation its mutable
+counterpart `arena_free_bytes_call_bytes_from_requires` times out on, for the same reason — WP cannot discharge
+the `bytes_from`/`cbytes_from` validity precondition when the pointer
+argument is computed rather than a plain member read. No new CATEGORY of
+residual appeared; the categories in the tables above absorb them
+unchanged, and every pre-existing residual is still present by name
+(roll-calls extended, not replaced). Zero Failed goals.
+
 ## MCDC-001: Coverage Flags Methodology
 
 | Field          | Value |
@@ -3079,7 +3136,7 @@ library's robustness.
 **Pattern note**: The same pattern (public `{ptr, len}` types with
 `_empty()` constructors producing `{NULL, 0}`) recurs in other
 Canon-C headers in the 70-80% MC/DC range — `arena.h` (90.6%),
-`pool.h` (73.5%), `stringbuf.h` (74.2%), and others. Each will need
+`pool.h` (87.2% post-API-001), `stringbuf.h` (74.3%), and others. Each will need
 its own per-line audit (per the procedure validated here) before
 opening analogous deviations. Numbers will differ — slice.h's
 4-of-58 ratio (6.9% unreachable defensive) is not directly
@@ -3215,7 +3272,9 @@ distinct dispositions:
 | 5 | `arena_alloc`         | 356  | cond 0 false (`arena_debug_update_(arena)`)                 | Release-build macro no-op artifact |
 | 6 | `arena_alloc_aligned` | 411  | cond 0 false (`arena_debug_update_(arena)`)                 | Release-build macro no-op artifact |
 
-arena.h's gcov-measured MC/DC is 58/64 = 90.6%. The closure of the
+arena.h's gcov-measured MC/DC is 59/66 = 89.4% on the post-API-001
+surface (2026-07-30 note below); it was 58/64 = 90.6% when the analysis
+below was written. The closure of the
 previously-missing `arena_try_alloc_aligned` line 510 outcome
 (`p != NULL` false branch) shipped at CI #962 via the new
 `test_try_alloc_aligned_failure` test; without that closure the
@@ -3335,7 +3394,9 @@ the code being measured.
    debug step surfaces it for human review.
 
 3. **The achievable MC/DC ceiling under the current invariant +
-   constants is 58/64 = 90.6%**. Reaching 90.6% represents 100% of
+   constants is 58/64 = 90.6%** on the surface analysed here (59/66 =
+   89.4% post-API-001 — see the 2026-07-30 note below; the six outcomes
+   below are unchanged). Reaching 90.6% represents 100% of
    API-reachable coverage. The 6 missing outcomes are documented
    here and explained; they are not counted as a coverage regression.
 
@@ -3391,6 +3452,27 @@ reachable outcome has been closed.
 
 ---
 
+**Measurement-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+arena.h's MC/DC surface moved **58/64 (90.6%) → 59/66 (89.4%)**. Cause:
+API-001 added three `arena_*_cbytes` accessors. Two of the three guard only
+with `require_msg()`, which the coverage build compiles out under
+`CANON_NO_REQUIRE` and which therefore contributes no condition (the
+MCDC-001 rule); `arena_free_cbytes` carries a real
+`arena->offset >= arena->capacity` branch, contributing the +2 outcomes.
+One of the two is covered (+1 hit).
+
+**The uncovered outcome is a genuine gap, not a ceiling item, and it is NOT
+counted against the six structurally-unreachable outcomes documented above.**
+The `offset >= capacity` true branch is reachable in principle — a perfectly
+sized allocation can land `offset == capacity` — but filling an arena with a
+loop of equal-sized `arena_alloc` calls generally stops with
+`offset < capacity` because of alignment padding, which is why the
+accompanying test asserts agreement with `arena_free_bytes` rather than a
+zero length. Closing it needs an allocation sequence chosen to land exactly
+on the capacity boundary. Recorded here rather than folded into the ceiling
+so that the ceiling keeps meaning "provably unexecutable".
+
+
 ## MCDC-004: Type-Invariant-Unreachable Defensive Arena Subconditions (pool.h)
 
 | Field          | Value |
@@ -3435,7 +3517,8 @@ b2644ba):
 pool.h's gcov-measured MC/DC at the baseline commit is 61/68 = 89.7%. The
 line-309 reachable-gap closure (see "Reachable gap closure" below) lifts the
 measured value to the documented ceiling of 62/68 = 91.2% — the achievable
-maximum, since the 6 outcomes above are provably unexecutable.
+maximum at the time, since the 6 outcomes above are provably unexecutable.
+(Post-API-001 the surface is 68/78 = 87.2%; see the 2026-07-30 note below.)
 
 Note that three of the six lines carry *other* outcomes on the same line that
 ARE reachable and ARE covered — only the `!pool->arena` (cond 1 true) outcome
@@ -3555,7 +3638,9 @@ every reachable outcome has been closed.
    Conversely, if a future change opens a new uncovered outcome, the debug
    step surfaces it for human review.
 
-3. **The achievable MC/DC ceiling under `pool_invariant` is 62/68 = 91.2%**.
+3. **The achievable MC/DC ceiling under `pool_invariant` is 62/68 = 91.2%**
+   on the surface analysed here (68/78 = 87.2% post-API-001 — see the
+   2026-07-30 note below; the six outcomes below are unchanged).
    Reaching 62/68 represents 100% of API-reachable coverage. The 6 missing
    outcomes are documented here and explained; they are not counted as a
    coverage regression.
@@ -3602,7 +3687,7 @@ invariant produces. pool.h confirms this: its shape is neither slice.h's `!ptr`
 borrow-validity disjunct nor arena.h's overflow-guard arithmetic, but a
 `!pool->arena` arena-validity disjunct discharged under `pool_invariant`. The
 next header to be annotated (stringbuf.h, MCDC-002 lists it provisionally at
-74.2%) will need its own audit; its number and unreachability shape are not
+74.3% post-API-001) will need its own audit; its number and unreachability shape are not
 transferable from pool.h's 6-of-68.
 
 ### Cross-references
@@ -3624,6 +3709,29 @@ transferable from pool.h's 6-of-68.
 
 
 ---
+
+**Measurement-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
+pool.h's MC/DC surface moved **62/68 (91.2%) → 68/78 (87.2%)**. Cause:
+API-001 added `pool_as_cbytes` (guarding `!pool || !pool->arena ||
+pool->used == 0`) and `pool_reserved_cbytes` (guarding `!pool ||
+!pool->arena`) — ten new outcomes, six of them covered by the tests added
+alongside, four not.
+
+**The six outcomes documented above are unchanged** — this record's
+unreachability analysis stands as written; only the denominator moved. The
+four new uncovered outcomes are the `pool->arena == NULL` halves of the two
+new guards, which `pool_invariant` makes unconstructible for any pool that
+`pool_init` has accepted — i.e. the same class as the six already documented,
+arising in new code rather than a new phenomenon.
+
+**Caveat, stated rather than glossed:** that classification is inferred from
+the guard structure and the +6/+10 split, not from a per-outcome gcov audit
+of the kind that produced the table above. The 87.2% figure is measured and
+exact; the claim that exactly four of the ten are unreachable is provisional
+until each is confirmed the same way the original six were. Until then the
+"achievable ceiling" for pool.h should be read as the 62/68 analysis plus an
+un-audited remainder, not as a new pinned ceiling.
+
 
 ## MCDC-005: API-Unreachable Hook-Guard Branch (region.h)
 
