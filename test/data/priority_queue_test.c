@@ -824,6 +824,7 @@ static void pq_fuzz_suppress_unused(void)
     (void)pq_int_remaining;
     (void)pq_int_is_full;
     (void)pq_int_as_bytes;
+    (void)pq_int_as_cbytes;
 
     /* All pq_Score functions — Score type not used in fuzz path */
     (void)pq_Score_init;
@@ -842,6 +843,7 @@ static void pq_fuzz_suppress_unused(void)
     (void)pq_Score_is_empty;
     (void)pq_Score_is_full;
     (void)pq_Score_as_bytes;
+    (void)pq_Score_as_cbytes;
 
     /* option_Score — all unused in fuzz */
     (void)option_Score_some;
