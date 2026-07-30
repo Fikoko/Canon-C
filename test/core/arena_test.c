@@ -804,6 +804,26 @@ static void test_lifetime_reset_to_preserves_id(void)
 
 /* ── Unit test entry point ───────────────────────────────────────────────── */
 
+static void test_arena_cbytes_accessors(void)
+{
+    /* Read-only twins (API-001). Same lengths as the mutable forms. */
+    const Arena* ca = &g_arena;
+    EXPECT(arena_as_cbytes(ca).len     == arena_as_bytes(&g_arena).len);
+    EXPECT(arena_buffer_cbytes(ca).len == arena_buffer_bytes(&g_arena).len);
+    EXPECT(arena_free_cbytes(ca).len   == arena_free_bytes(&g_arena).len);
+
+    /* Exhausted arena drives the offset >= capacity branch. */
+    {
+        static u8 full_buf[64];
+        Arena full;
+        arena_init(&full, full_buf, sizeof full_buf);
+        while (arena_alloc(&full, 8u) != NULL) { /* fill */ }
+        /* Exact exhaustion is allocator-dependent; assert the read-only twin
+           agrees with the mutable form, which exercises the same branch. */
+        EXPECT(arena_free_cbytes(&full).len == arena_free_bytes(&full).len);
+    }
+}
+
 int main(void)
 {
     test_init_state();
@@ -852,6 +872,7 @@ int main(void)
     test_is_full_when_exhausted();
 
     test_arena_as_bytes();
+    test_arena_cbytes_accessors();
     test_arena_buffer_bytes();
     test_arena_free_bytes();
     test_arena_free_bytes_when_full();

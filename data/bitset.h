@@ -801,9 +801,17 @@ static inline option_usize bitset_find_last_option(borrowed(const Bitset*) bs) {
  *
  * Performance: O(1)
  */
-static inline bytes_t bitset_as_bytes(borrowed(const Bitset*) bs) {
+static inline bytes_t bitset_as_bytes(borrowed(Bitset*) bs) {
     if (!bs || !bs->words) { return bytes_empty(); }
     return bytes_from(bs->words, bs->word_count * sizeof(u64));
+}
+
+/**
+ * @brief Read-only twin of bitset_as_bytes() — see API-001
+ */
+static inline cbytes_t bitset_as_cbytes(borrowed(const Bitset*) bs) {
+    if (!bs || !bs->words) { return cbytes_empty(); }
+    return cbytes_from(bs->words, bs->word_count * sizeof(u64));
 }
 
 /**

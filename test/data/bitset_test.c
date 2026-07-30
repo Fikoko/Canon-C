@@ -473,8 +473,19 @@ static void bitset_suppress_unused(void)
 
 /* ── Unit test entry point ───────────────────────────────────────────────── */
 
+static void test_bitset_cbytes_accessor(void)
+{
+    static u64 w[4];
+    Bitset bs;
+    bitset_init(&bs, w, 4u * 64u);
+    const Bitset* cb = &bs;
+    EXPECT(bitset_as_cbytes(cb).len == bitset_as_bytes(&bs).len);
+    EXPECT(bitset_as_cbytes(NULL).len == 0u);
+}
+
 int main(void)
 {
+    test_bitset_cbytes_accessor();
     (void)bitset_suppress_unused;
 
     test_init();

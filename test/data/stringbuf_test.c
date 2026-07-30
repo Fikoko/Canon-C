@@ -488,8 +488,22 @@ static void stringbuf_suppress_unused(void)
 }
 
 /* ── Unit test entry point ───────────────────────────────────────────────── */
+static void test_stringbuf_cbytes_accessors(void)
+{
+    static char sbuf[64];
+    StringBuf sb;
+    stringbuf_init_buffer(&sb, sbuf, sizeof sbuf);
+    (void)stringbuf_append_str(&sb, str_from_cstr("abc"));
+    const StringBuf* csb = &sb;
+    EXPECT(stringbuf_as_cbytes(csb).len     == stringbuf_as_bytes(&sb).len);
+    EXPECT(stringbuf_buffer_cbytes(csb).len == stringbuf_buffer_bytes(&sb).len);
+    EXPECT(stringbuf_as_cbytes(NULL).len     == 0u);
+    EXPECT(stringbuf_buffer_cbytes(NULL).len == 0u);
+}
+
 int main(void)
 {
+    test_stringbuf_cbytes_accessors();
     (void)stringbuf_suppress_unused;
 
     test_init_buffer();

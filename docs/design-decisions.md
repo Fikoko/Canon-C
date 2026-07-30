@@ -770,3 +770,78 @@ the named-goal enforcement.
 - **`docs/decision-families.md`** — Category D ("Boundary decisions with
   the verification layer"). OWN-003 is the first shipped Category D
   example.
+
+## API-001 — Read-only accessors return read-only views
+
+This entry records the const-correctness convention for container byte
+accessors, and the defect that prompted it: ten accessors across five
+headers accepted a `const` pointer and returned mutable access to the
+object's storage, so the `const` qualifier on their parameters was
+unenforceable decoration.
+
+| Field          | Value                                                             |
+| -------------- | ----------------------------------------------------------------- |
+| Status         | Shipped (Commit 16; rule 11.8 cleared by fix, not deviation)      |
+| Scope          | `core/arena.h`, `core/pool.h`, `data/bitset.h`, `data/priority_queue.h`, `data/stringbuf.h` |
+| Category       | A — Public API shape. See `docs/decision-families.md`.            |
+| Cross-refs     | MISRA rule 11.8 (the finding that exposed it); `core/slice.h` `slice_T_as_cbytes` and `data/array.h` (the pre-existing correct pattern); `test/integration/const_correctness_test.c`. |
+
+### The defect
+
+`arena_as_bytes(const Arena*)` returned `bytes_t`, whose `ptr` member is
+`u8*`. A caller holding only a `const Arena*` could therefore obtain a
+writable view of the arena's buffer and mutate it. Demonstrated before the
+fix, compiling cleanly under `-Wall -Wextra -Wpedantic`:
+
+```c
+static void reader_that_should_not_write(const Arena* a) {
+    bytes_t view = arena_as_bytes(a);
+    view.ptr[0] = 0xEE;              /* writes through a const parameter */
+}
+/* before: 0x11    after: 0xEE */
+```
+
+Ten sites shared the shape. `pool_get(const Pool*, usize)` was the starkest:
+it returned a raw mutable `void*` from a const pool, even though
+`pool_get_const` already existed as the read-only element accessor.
+
+The findings were reported by MISRA C:2012 rule 11.8 (*a cast shall not
+remove any const qualification*). They were not style noise: the rule
+identified a genuine hole in a library whose central claim is
+proof-carrying correctness.
+
+### The convention
+
+Already in use in `core/slice.h` (`slice_T_as_cbytes`) and `data/array.h`,
+now applied uniformly:
+
+```
+X_as_bytes (X*)        -> bytes_t     mutable in, mutable out
+X_as_cbytes(const X*)  -> cbytes_t    const in,   read-only out
+```
+
+Nine `_cbytes` twins were added (arena x3, pool x2, bitset x1,
+priority_queue x1, stringbuf x2), each carrying the same ACSL contract as
+its mutable counterpart. The mutable accessors dropped `const` from their
+parameters; because every backing member is already a non-const pointer
+(`u8* buffer`, `u64* words`, `char* data`, `void* data`), the qualifier
+cast disappears entirely and rule 11.8 clears **without any suppression**.
+
+### Compatibility
+
+No caller broke. Every call site in the tree passed a non-const object and
+assigned to `bytes_t`, so the mutable half continued to resolve unchanged.
+One internal caller — the `pq_##type##_as_bytes` wrapper in the typed
+priority-queue macro — did pass a const pointer, and was split into
+mutable and `_cbytes` forms; the compiler found it immediately once the
+hole was closed.
+
+Const access is not lost: it moves to the correctly typed `_cbytes`
+variants, which is the access those callers should have had.
+
+### Guard
+
+`test/integration/const_correctness_test.c` calls every `_cbytes` accessor
+through a genuinely `const`-qualified pointer. Reintroducing a mutable
+return on a const parameter breaks the build rather than silently
+restoring the hole.

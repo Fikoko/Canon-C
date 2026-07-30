@@ -627,9 +627,17 @@ static inline bool pq_is_full(borrowed(const PriorityQueue*) pq) {
  *
  * Performance: O(1)
  */
-static inline bytes_t pq_as_bytes(borrowed(const PriorityQueue*) pq) {
+static inline bytes_t pq_as_bytes(borrowed(PriorityQueue*) pq) {
     if (!pq || !pq->data || (pq->len == 0u)) { return bytes_empty(); }
     return bytes_from(pq->data, pq->len * pq->elem_size);
+}
+
+/**
+ * @brief Read-only twin of pq_as_bytes() — see API-001
+ */
+static inline cbytes_t pq_as_cbytes(borrowed(const PriorityQueue*) pq) {
+    if (!pq || !pq->data || (pq->len == 0u)) { return cbytes_empty(); }
+    return cbytes_from(pq->data, pq->len * pq->elem_size);
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -743,6 +751,7 @@ static inline usize   pq_##type##_capacity(borrowed(const pq_##type*) h)  { retu
 static inline usize   pq_##type##_remaining(borrowed(const pq_##type*) h) { return pq_remaining(&h->_pq); }\
 static inline bool    pq_##type##_is_empty(borrowed(const pq_##type*) h)  { return pq_is_empty(&h->_pq); } \
 static inline bool    pq_##type##_is_full(borrowed(const pq_##type*) h)   { return pq_is_full(&h->_pq); }  \
-static inline bytes_t pq_##type##_as_bytes(borrowed(const pq_##type*) h)  { return pq_as_bytes(&h->_pq); }
+static inline bytes_t  pq_##type##_as_bytes(borrowed(pq_##type*) h)        { return pq_as_bytes(&h->_pq); } \
+static inline cbytes_t pq_##type##_as_cbytes(borrowed(const pq_##type*) h) { return pq_as_cbytes(&h->_pq); }
 
 #endif /* CANON_DATA_PRIORITY_QUEUE_H */

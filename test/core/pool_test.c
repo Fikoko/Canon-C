@@ -804,8 +804,20 @@ static void test_lifetime_two_resets_no_cycle(void)
 
 /* ── Entry point ─────────────────────────────────────────────────────────── */
 
+static void test_pool_cbytes_accessors(void)
+{
+    const Pool* cp = &g_pool;
+    EXPECT(pool_as_cbytes(cp).len       == pool_as_bytes(&g_pool).len);
+    EXPECT(pool_reserved_cbytes(cp).len == pool_reserved_bytes(&g_pool).len);
+    EXPECT(pool_as_cbytes(NULL).len       == 0u);
+    EXPECT(pool_reserved_cbytes(NULL).len == 0u);
+}
+
 int main(void)
 {
+    /* API-001 read-only twins */
+    test_pool_cbytes_accessors();
+
     /* pool_init */
     test_init_basic();
     test_init_reserves_arena_space();

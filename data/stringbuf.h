@@ -734,9 +734,17 @@ static inline str_t stringbuf_as_str(borrowed(const StringBuf*) sb) {
  *
  * Performance: O(1)
  */
-static inline bytes_t stringbuf_as_bytes(borrowed(const StringBuf*) sb) {
+static inline bytes_t stringbuf_as_bytes(borrowed(StringBuf*) sb) {
     if (!sb || !sb->data) { return bytes_empty(); }
     return bytes_from(sb->data, sb->len);
+}
+
+/**
+ * @brief Read-only twin of stringbuf_as_bytes() — see API-001
+ */
+static inline cbytes_t stringbuf_as_cbytes(borrowed(const StringBuf*) sb) {
+    if (!sb || !sb->data) { return cbytes_empty(); }
+    return cbytes_from(sb->data, sb->len);
 }
 
 /**
@@ -750,9 +758,17 @@ static inline bytes_t stringbuf_as_bytes(borrowed(const StringBuf*) sb) {
  *
  * Performance: O(1)
  */
-static inline bytes_t stringbuf_buffer_bytes(borrowed(const StringBuf*) sb) {
+static inline bytes_t stringbuf_buffer_bytes(borrowed(StringBuf*) sb) {
     if (!sb || !sb->data) { return bytes_empty(); }
     return bytes_from(sb->data, sb->capacity);
+}
+
+/**
+ * @brief Read-only twin of stringbuf_buffer_bytes() — see API-001
+ */
+static inline cbytes_t stringbuf_buffer_cbytes(borrowed(const StringBuf*) sb) {
+    if (!sb || !sb->data) { return cbytes_empty(); }
+    return cbytes_from(sb->data, sb->capacity);
 }
 
 /**

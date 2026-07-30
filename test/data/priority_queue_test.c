@@ -728,8 +728,21 @@ static void pq_suppress_unused(void)
 
 /* ── Unit test entry point ───────────────────────────────────────────────── */
 
+static void test_pq_cbytes_accessor(void)
+{
+    PriorityQueue q;
+    static int qbuf[16];
+    pq_init(&q, qbuf, 16u, sizeof(int), cmp_int_asc, NULL);
+    const PriorityQueue* cq = &q;
+    EXPECT(pq_as_cbytes(cq).len == 0u);            /* empty guard */
+    EXPECT(pq_as_cbytes(NULL).len == 0u);          /* NULL guard   */
+    { int v = 5; (void)pq_push(&q, &v); }
+    EXPECT(pq_as_cbytes(cq).len == pq_as_bytes(&q).len);
+}
+
 int main(void)
 {
+    test_pq_cbytes_accessor();
     (void)pq_suppress_unused;
 
     /* init */

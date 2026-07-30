@@ -659,15 +659,36 @@ static inline void arena_reset_to(Arena* arena, ArenaMark mark) {
    Byte views — slice.h integration
    ============================================================================ */
 
+/*
+ * Const-correctness convention (see docs/design-decisions.md, API-001).
+ *
+ * The `_bytes` accessors return a MUTABLE view and therefore take a
+ * mutable Arena*. The `_cbytes` twins take `const Arena*` and return a
+ * read-only cbytes_t. Taking `const Arena*` while returning bytes_t would
+ * hand a caller write access through a pointer it promised not to write
+ * through — which is exactly what these functions used to do.
+ */
+
 /*@
   requires arena_invariant(arena);
   assigns \nothing;
   ensures \result.len == arena->offset;
   ensures \result.len == 0 || \result.ptr == arena->buffer;
 */
-static inline bytes_t arena_as_bytes(const Arena* arena) {
+static inline bytes_t arena_as_bytes(Arena* arena) {
     require_msg(arena != NULL, "arena_as_bytes: arena cannot be NULL");
     return bytes_from(arena->buffer, arena->offset);
+}
+
+/*@
+  requires arena_invariant(arena);
+  assigns \nothing;
+  ensures \result.len == arena->offset;
+  ensures \result.len == 0 || \result.ptr == arena->buffer;
+*/
+static inline cbytes_t arena_as_cbytes(const Arena* arena) {
+    require_msg(arena != NULL, "arena_as_cbytes: arena cannot be NULL");
+    return cbytes_from(arena->buffer, arena->offset);
 }
 
 /*@
@@ -676,9 +697,20 @@ static inline bytes_t arena_as_bytes(const Arena* arena) {
   ensures \result.ptr == arena->buffer;
   ensures \result.len == arena->capacity;
 */
-static inline bytes_t arena_buffer_bytes(const Arena* arena) {
+static inline bytes_t arena_buffer_bytes(Arena* arena) {
     require_msg(arena != NULL, "arena_buffer_bytes: arena cannot be NULL");
     return bytes_from(arena->buffer, arena->capacity);
+}
+
+/*@
+  requires arena_invariant(arena);
+  assigns \nothing;
+  ensures \result.ptr == arena->buffer;
+  ensures \result.len == arena->capacity;
+*/
+static inline cbytes_t arena_buffer_cbytes(const Arena* arena) {
+    require_msg(arena != NULL, "arena_buffer_cbytes: arena cannot be NULL");
+    return cbytes_from(arena->buffer, arena->capacity);
 }
 
 /*@
@@ -689,11 +721,26 @@ static inline bytes_t arena_buffer_bytes(const Arena* arena) {
   ensures arena->offset < arena->capacity ==>
       \result.len == arena->capacity - arena->offset;
 */
-static inline bytes_t arena_free_bytes(const Arena* arena) {
+static inline bytes_t arena_free_bytes(Arena* arena) {
     require_msg(arena != NULL, "arena_free_bytes: arena cannot be NULL");
     if (arena->offset >= arena->capacity) { return bytes_empty(); }
     return bytes_from(ptr_offset(arena->buffer, arena->offset),
                       arena->capacity - arena->offset);
+}
+
+/*@
+  requires arena_invariant(arena);
+  assigns \nothing;
+  ensures arena->offset >= arena->capacity ==>
+      (\result.ptr == \null && \result.len == 0);
+  ensures arena->offset < arena->capacity ==>
+      \result.len == arena->capacity - arena->offset;
+*/
+static inline cbytes_t arena_free_cbytes(const Arena* arena) {
+    require_msg(arena != NULL, "arena_free_cbytes: arena cannot be NULL");
+    if (arena->offset >= arena->capacity) { return cbytes_empty(); }
+    return cbytes_from(ptr_offset_const(arena->buffer, arena->offset),
+                       arena->capacity - arena->offset);
 }
 
 /* ============================================================================

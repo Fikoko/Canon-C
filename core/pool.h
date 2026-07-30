@@ -446,7 +446,7 @@ static inline bool pool_try_alloc_zero(Pool* pool, void** out) {
   complete behaviors;
   disjoint behaviors;
 */
-static inline void* pool_get(const Pool* pool, usize i) {
+static inline void* pool_get(Pool* pool, usize i) {
     void* base;
     void* p;
 
@@ -556,11 +556,26 @@ static inline usize pool_memory_reserved(const Pool* pool) { return pool ? (pool
   assigns  \nothing;
   ensures  \result.len == 0 ==> \result.ptr == \null;
 */
-static inline bytes_t pool_as_bytes(const Pool* pool) {
+static inline bytes_t pool_as_bytes(Pool* pool) {
     void* base;
     if (!pool || !pool->arena || (pool->used == 0u)) { return bytes_empty(); }
     base = ptr_offset(pool->arena->buffer, pool->base_mark);
     return bytes_from(base, pool->object_size * pool->used);
+}
+
+/**
+ * @brief Read-only twin of pool_as_bytes() — see API-001
+ */
+/*@
+  requires pool == \null || pool_invariant(pool);
+  assigns  \nothing;
+  ensures  \result.len == 0 ==> \result.ptr == \null;
+*/
+static inline cbytes_t pool_as_cbytes(const Pool* pool) {
+    const void* base;
+    if (!pool || !pool->arena || (pool->used == 0u)) { return cbytes_empty(); }
+    base = ptr_offset_const(pool->arena->buffer, pool->base_mark);
+    return cbytes_from(base, pool->object_size * pool->used);
 }
 
 /**
@@ -572,11 +587,25 @@ static inline bytes_t pool_as_bytes(const Pool* pool) {
   requires pool == \null || pool_invariant(pool);
   assigns  \nothing;
 */
-static inline bytes_t pool_reserved_bytes(const Pool* pool) {
+static inline bytes_t pool_reserved_bytes(Pool* pool) {
     void* base;
     if (!pool || !pool->arena) { return bytes_empty(); }
     base = ptr_offset(pool->arena->buffer, pool->base_mark);
     return bytes_from(base, pool->object_size * pool->capacity);
+}
+
+/**
+ * @brief Read-only twin of pool_reserved_bytes() — see API-001
+ */
+/*@
+  requires pool == \null || pool_invariant(pool);
+  assigns  \nothing;
+*/
+static inline cbytes_t pool_reserved_cbytes(const Pool* pool) {
+    const void* base;
+    if (!pool || !pool->arena) { return cbytes_empty(); }
+    base = ptr_offset_const(pool->arena->buffer, pool->base_mark);
+    return cbytes_from(base, pool->object_size * pool->capacity);
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

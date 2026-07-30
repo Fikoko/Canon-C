@@ -3324,7 +3324,18 @@ jobs:
         # not defined. Excluding it here is honest about what the
         # coverage build measures: the fallback path of the Canon-C
         # library headers, not the assertion infrastructure itself.
-        run: ctest --build-config Debug --output-on-failure --exclude-regex '^contract_test$'
+        # Also excluded: the two test/integration/ guards. They are
+        # COMPILE-TIME assertions — header_combination_test proves public
+        # headers can be combined, const_correctness_test proves read-only
+        # accessors reject mutable use (API-001). Neither adds behavioural
+        # coverage, but both include many headers shallowly, and the MC/DC
+        # aggregation below takes the MAX condition total per file across
+        # translation units. A broad-but-shallow TU therefore DISPLACES a
+        # narrow-but-thorough one as the max and lowers the reported
+        # percentage for files nobody changed. Excluding them keeps the
+        # report measuring behavioural coverage. They still run in every
+        # other job, where their failure modes (compile errors) surface.
+        run: ctest --build-config Debug --output-on-failure --exclude-regex '^(contract_test|header_combination_test|const_correctness_test)$'
       - name: Run MC/DC cover TUs (Shape-B modules)
         working-directory: build
         # Cover TUs are not ctests — run them directly so their .gcda is
@@ -4346,7 +4357,7 @@ jobs:
           echo "  Total violations incl. canary: ${TOTAL}"
           echo "  Real violations:               $((TOTAL - CANARY))"
           echo ""
-          echo "  Expected real count: 63 (pinned; cppcheck 2.13.0,"
+          echo "  Expected real count: 53 (pinned; cppcheck 2.13.0,"
           echo "  suppression set MISRA-DEV-001..012; 190 - 36 rule-17.8"
           echo "  sites eliminated by the parameter-local-copy sweep"
           echo "  (bits.h SWAR/cascade/rotation/smear bodies x22, clamp"
