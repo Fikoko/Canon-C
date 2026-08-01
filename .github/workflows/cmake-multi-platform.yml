@@ -37,6 +37,15 @@ on:
 #                     expand to single instructions with no branches for
 #                     gcov to see).
 #   misra           — Linux only, MISRA C:2012 advisory analysis
+#   compcert        — Linux only, INFORMATIONAL, upstream repository only.
+#                     Compiles and runs the test suite with ccomp (the
+#                     formally verified C compiler) as portability evidence.
+#                     NOT a gate: continue-on-error, and no other evidence
+#                     stream depends on it. Restricted by an `if:` guard to
+#                     the upstream repo because CompCert's non-commercial
+#                     licence covers THIS project's evaluation use only —
+#                     a fork must obtain its own licence from AbsInt before
+#                     enabling it. See docs/compcert-licensing.md.
 #   lifetime-debug  — All platforms, Release + Debug, compatible compilers.
 #                     Builds and tests the suite with CANON_LIFETIME=debug
 #                     to exercise the runtime lifetime-tracking path
@@ -4370,22 +4379,31 @@ jobs:
           echo "  Real violations:               $((TOTAL - CANARY))"
           echo ""
           echo "  Expected real count: 53 (pinned; cppcheck 2.13.0,"
-          echo "  suppression set MISRA-DEV-001..012; 190 - 36 rule-17.8"
-          echo "  sites eliminated by the parameter-local-copy sweep"
-          echo "  (bits.h SWAR/cascade/rotation/smear bodies x22, clamp"
-          echo "  folds in slice/borrow/priority_queue/range/str, pointer"
-          echo "  walks in parse/str, NULL-defaults in intern/str_join;"
-          echo "  ACSL-transparent by the formals-denote-pre-state rule)"
-          echo "  - 2 rule-10.7 (the deliberately carried bits_rotl/rotr"
-          echo "  composites, cleared by the u64 hoisted-shift locals in"
-          echo "  the same reshape - the WP-watched corner deferred since"
-          echo "  the 10.4 sweep). One 17.8-masked bare 63 suffixed and"
-          echo "  one shadowed 15.6 clamp folded in-commit (never CI-"
-          echo "  visible). Net endpoint surfacings: ZERO - absolute-"
-          echo "  state audit empty on every touched span. Sites from"
-          echo "  the CI #1186 artifact; pre-verified by report diff +"
-          echo "  assembly proof (48 TUs byte-identical, 2 __LINE__-only,"
-          echo "  1 explained str_compare hot/cold-split relayout)."
+          echo "  suppression set MISRA-DEV-001..012 + 014..017)."
+          echo ""
+          echo "  The ledger reads as TWO SEGMENTS joined at Commit 12,"
+          echo "  because MISRA-SCAN-001 re-baselined the analysis surface"
+          echo "  itself (template fragments are not translation units):"
+          echo "    pre-2026-07-25 surface: 1672 -> 108"
+          echo "    corrected surface:       98 ->  53"
+          echo "  -10 of that step is the INSTRUMENT, not the code, and the"
+          echo "  two segments are not directly comparable. See"
+          echo "  MISRA-SCAN-001 for the reachability proof that excluding"
+          echo "  28 fragments loses no analysis coverage."
+          echo ""
+          echo "  Eighteen rules now held at zero — fourteen by fix"
+          echo "  (21.1, 10.4, 15.6, 12.1, 14.4, 17.7, 20.7, 17.8, 10.7,"
+          echo "  13.3, 12.3, 14.2, 10.8, 11.8) and four by documented"
+          echo "  deviation (19.2 unions, 21.3 allocation, 21.6 stdio,"
+          echo "  2.3 static-assertion idiom — MISRA-DEV-014..017)."
+          echo ""
+          echo "  Two of those rules found REAL DEFECTS rather than style"
+          echo "  noise: rule 5.7 exposed eleven public header pairs that"
+          echo "  could not be compiled together (Commit 15, guarded by"
+          echo "  test/integration/header_combination_test.c), and rule"
+          echo "  11.8 exposed ten accessors that took a const pointer and"
+          echo "  returned mutable access to the object storage (API-001,"
+          echo "  guarded by test/integration/const_correctness_test.c)."
           echo ""
           echo "  NOTE — per-line masking: cppcheck reports at most ONE"
           echo "  misra violation per source line. Counts are therefore a"
@@ -4406,9 +4424,14 @@ jobs:
           echo "  (Polyspace, LDRA, PC-lint) that emits categorized output."
           echo ""
           echo "  Deviations documented in: docs/deviations.md"
-          echo "  (MISRA-DEV-001..010 project-wide; MISRA-DEV-011 inline"
-          echo "  at util/time.h; MISRA-DEV-012 inline at 117 template-"
-          echo "  machinery macros; MISRA-CFG-001 tool)"
+          echo "  (MISRA-DEV-001..010 project-wide, applied as the"
+          echo "  command-line suppressions above; MISRA-DEV-011 inline at"
+          echo "  util/time.h; MISRA-DEV-012 inline at 117 template-"
+          echo "  machinery macros; MISRA-DEV-014..017 inline at 33"
+          echo "  design-identity sites; MISRA-CFG-001 tool."
+          echo "  MISRA-DEV-013 is SUPERSEDED — MISRA-SCAN-001 removed the"
+          echo "  condition it existed for and its 13 suppressions were"
+          echo "  deleted, verified dead beforehand.)"
           echo "==============================================="
           # Real violations are advisory by design. When MISRA compliance
           # is mature, uncomment to enforce a zero-real-violations gate:
@@ -4525,3 +4548,186 @@ jobs:
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
         run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+
+  # -------------------------------------------------------------------------
+  # 12. CompCert — Linux only, INFORMATIONAL, upstream repository only
+  #
+  #   Compiles and runs the test suite with ccomp, the formally verified C
+  #   compiler, as portability evidence: the sources are accepted by a
+  #   compiler whose translation is proved to preserve semantics.
+  #
+  #   LICENSING — read docs/compcert-licensing.md before enabling this.
+  #   CompCert's non-commercial release is used here as a CI-only evaluation
+  #   tool under the INRIA Non-Commercial License, per written confirmation
+  #   from AbsInt (2026-07-10). That permission covers THIS project's
+  #   non-commercial evaluation use and does NOT extend to third parties.
+  #
+  #   The `if:` guard below therefore restricts the job to the upstream
+  #   repository. A fork does not run it unless its owner edits this
+  #   condition — an explicit, deliberate act — because running it in a
+  #   commercial context would be the fork owner's own use of CompCert and
+  #   requires their own licence from AbsInt (https://www.absint.com/).
+  #   The default is "off for everyone but upstream" rather than "on unless
+  #   you notice the docs", so nobody inherits a licensing obligation by
+  #   forking.
+  #
+  #   `continue-on-error: true` keeps this stream INFORMATIONAL, as the
+  #   licensing record states. It is portability evidence, not a gate: a
+  #   ccomp failure must never block a merge, and no other evidence stream
+  #   (WP proofs, MC/DC, MISRA, fuzzing, sanitizers) depends on it.
+  # -------------------------------------------------------------------------
+  compcert:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.repository == 'eclipse-canon-c/Canon-C'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Restore opam / CompCert cache
+        id: compcert-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          key: opam-Linux-ocaml-4.14.2-compcert-3.15-v1
+
+      - name: Install OCaml and opam
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y opam m4 pkg-config
+
+      - name: Initialise opam and install CompCert
+        if: steps.compcert-cache.outputs.cache-hit != 'true'
+        run: |
+          # coq-compcert is the non-commercial release (INRIA NCL). The
+          # build compiles CompCert's Coq proofs and is slow (~40-60 min)
+          # on a cold cache; the cache key above makes that a one-off.
+          opam init --bare --disable-sandboxing --yes
+          opam switch create compcert 4.14.2 --yes
+          eval $(opam env --switch=compcert)
+          opam repository add coq-released https://coq.inria.fr/opam/released --yes
+          opam install coq-compcert --yes
+
+      - name: Record CompCert version (provenance for the licensing record)
+        run: |
+          eval $(opam env --switch=compcert)
+          ccomp -version
+
+      - name: Compile and run the test suite with ccomp
+        shell: bash
+        run: |
+          eval $(opam env --switch=compcert)
+
+          # Canon-C's GNU-extension escape hatches, all pre-existing and
+          # documented — none added for CompCert's benefit:
+          #
+          #   CANON_NO_GNU_EXTENSIONS     range.h's RANGE_FOR falls back from
+          #                               typeof() to an isize cast;
+          #                               contract.h's CANON_UNREACHABLE_HINT
+          #                               becomes ((void)0) instead of
+          #                               __builtin_unreachable().
+          #   CANON_CHECKED_FORCE_FALLBACK  checked.h uses its portable
+          #                               overflow arithmetic instead of
+          #                               __builtin_*_overflow.
+          #   CANON_BITS_FORCE_FALLBACK   bits.h uses its portable clz/ctz/
+          #                               popcount instead of the builtins.
+          #
+          # The two FORCE_FALLBACK flags are the SAME ones the coverage job
+          # uses. They are needed here for a reason worth stating: ccomp
+          # delegates preprocessing to the system cpp, so __GNUC__ is defined
+          # while the headers are preprocessed and the builtin branches are
+          # selected — but ccomp itself does not implement
+          # __builtin_add_overflow and friends. Forcing the fallback selects
+          # the paths that are portable C99, which is what this job is
+          # evidence about.
+          #
+          # -fall enables CompCert's optional features (struct passing and
+          # return by value, bit-fields, etc). Canon-C passes bytes_t, str_t
+          # and Result by value throughout, so this is not optional for it.
+          CCOMP_FLAGS=(
+            -fall
+            -DCANON_NO_GNU_EXTENSIONS
+            -DCANON_CHECKED_FORCE_FALLBACK
+            -DCANON_BITS_FORCE_FALLBACK
+            -I core/primitives -I core -I semantics -I .
+          )
+          # The include set is deliberately NARROW. Tests reference library
+          # headers path-qualified from the repo root ("data/bitset.h"), so
+          # `-I .` covers them; only nine primitives are included bare
+          # (bits.h, checked.h, ptr.h, ...), which is what the other three
+          # entries are for. Adding `-I util` breaks the build: it puts
+          # util/time.h ahead of the system <time.h> on the search path, so
+          # `struct timespec` never gets declared and time_test fails to
+          # compile. Verified with GCC under exactly these flags before this
+          # job was written: 53/53 translation units compile and run.
+
+          mkdir -p ccomp-out
+          COMPILED=0; RAN=0; FAILED_COMPILE=(); FAILED_RUN=()
+
+          # The test suite is the compile surface rather than the headers
+          # themselves: Canon-C is header-only, and several headers are not
+          # standalone translation units by design — hashmap needs
+          # HASHMAP_KEY_TYPE defined by the includer, bitset needs a
+          # CANON_OPTION(usize) instantiation (see MISRA-SCAN-001 and the
+          # Commit 15 header-combination work). The tests ARE complete TUs,
+          # they instantiate what they use, and together they include every
+          # public header.
+          while IFS= read -r t; do
+            n=$(basename "$t" .c)
+            if ccomp "${CCOMP_FLAGS[@]}" -o "ccomp-out/$n" "$t" \
+                 > "ccomp-out/$n.log" 2>&1; then
+              COMPILED=$((COMPILED+1))
+              if "./ccomp-out/$n" > "ccomp-out/$n.run.log" 2>&1; then
+                RAN=$((RAN+1))
+              else
+                FAILED_RUN+=("$n")
+              fi
+            else
+              FAILED_COMPILE+=("$n")
+            fi
+          done < <(find test -name '*_test.c' | sort)
+
+          TOTAL=$(find test -name '*_test.c' | wc -l)
+          echo "==============================================="
+          echo "  CompCert portability evidence (INFORMATIONAL)"
+          echo "==============================================="
+          echo "  translation units:  ${TOTAL}"
+          echo "  compiled by ccomp:  ${COMPILED}"
+          echo "  ran successfully:   ${RAN}"
+
+          if [ ${#FAILED_COMPILE[@]} -gt 0 ]; then
+            echo ""
+            echo "  did not compile (${#FAILED_COMPILE[@]}):"
+            for n in "${FAILED_COMPILE[@]}"; do
+              echo "    --- $n ---"
+              sed 's/^/      /' "ccomp-out/$n.log" | head -15
+            done
+          fi
+          if [ ${#FAILED_RUN[@]} -gt 0 ]; then
+            echo ""
+            echo "  compiled but failed at runtime (${#FAILED_RUN[@]}):"
+            for n in "${FAILED_RUN[@]}"; do
+              echo "    --- $n ---"
+              sed 's/^/      /' "ccomp-out/$n.run.log" | tail -15
+            done
+          fi
+          echo "==============================================="
+          echo "  This stream is informational — see"
+          echo "  docs/compcert-licensing.md for what it does and"
+          echo "  does not claim, and for the licensing boundary."
+          echo "==============================================="
+
+          # Non-zero exit still surfaces in the log; continue-on-error keeps
+          # the run green, per the licensing record's "optional /
+          # informational" requirement.
+          if [ ${#FAILED_COMPILE[@]} -gt 0 ] || [ ${#FAILED_RUN[@]} -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload CompCert logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: compcert-logs
+          path: ccomp-out/*.log
+          if-no-files-found: ignore
