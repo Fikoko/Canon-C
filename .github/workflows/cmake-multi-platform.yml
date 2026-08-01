@@ -4589,7 +4589,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam
-          key: opam-Linux-ocaml-4.14.2-compcert-3.15-v1
+          # Key tracks the PINNED CompCert version below. Bump both
+          # together, deliberately — same policy as the cppcheck $Version
+          # pin in static-analysis and the CVC5 pin in framac-setup, and
+          # for a sharper reason here: this job's output is evidence, and
+          # "compiles cleanly under a formally verified compiler" is a
+          # claim about a SPECIFIC compiler. A key that does not track the
+          # version would restore a stale toolchain after an upstream
+          # release with nothing to signal the change.
+          key: opam-Linux-ocaml-4.14.2-compcert-3.17-v1
 
       - name: Install OCaml and opam
         run: |
@@ -4599,19 +4607,32 @@ jobs:
       - name: Initialise opam and install CompCert
         if: steps.compcert-cache.outputs.cache-hit != 'true'
         run: |
-          # coq-compcert is the non-commercial release (INRIA NCL). The
-          # build compiles CompCert's Coq proofs and is slow (~40-60 min)
-          # on a cold cache; the cache key above makes that a one-off.
+          # coq-compcert is the non-commercial release (INRIA NCL).
+          # VERSION IS PINNED: an unpinned `opam install coq-compcert`
+          # takes whatever is latest, so the toolchain behind an evidence
+          # claim could change without any commit saying so. Bump this and
+          # the cache key together, then re-read the run summary — a new
+          # CompCert may accept or reject different constructs.
+          # Cold build ~12 min (measured, CI #1205); cached thereafter.
           opam init --bare --disable-sandboxing --yes
           opam switch create compcert 4.14.2 --yes
           eval $(opam env --switch=compcert)
           opam repository add coq-released https://coq.inria.fr/opam/released --yes
-          opam install coq-compcert --yes
+          opam install coq-compcert.3.17 --yes
 
       - name: Record CompCert version (provenance for the licensing record)
+        # Also a pin check: if ccomp reports anything other than the pinned
+        # version, the cache key and the install line have drifted apart and
+        # the evidence claim is about a compiler nobody chose.
         run: |
           eval $(opam env --switch=compcert)
           ccomp -version
+          if ! ccomp -version | grep -q "version 3.17"; then
+            echo "FAIL: ccomp is not the pinned 3.17 — cache key and install"
+            echo "      line have drifted. Reconcile both before trusting"
+            echo "      this run as portability evidence."
+            exit 1
+          fi
 
       - name: Compile and run the test suite with ccomp
         shell: bash
