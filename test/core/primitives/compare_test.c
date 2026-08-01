@@ -89,24 +89,37 @@ static int sign_of(int v) { return (v > 0) - (v < 0); }
 /* =========================================================================
  * Helper macros
  *
- * CONTRACT3(fn, lo_val, hi_val, mid_val)
+ * CONTRACT3(type, fn, lo_val, hi_val, mid_val)
  *   Requires lo_val < mid_val < hi_val in the ascending ordering.
  *   Verifies: equal, less, greater, and antisymmetry for all three pairs.
  *
- * DESC_REVERSES(asc_fn, desc_fn, val_a, val_b)
+ * DESC_REVERSES(type, asc_fn, desc_fn, val_a, val_b)
  *   Verifies desc returns -sign(asc) for unequal inputs, 0 for equal.
- *   IMPORTANT: val_a and val_b must be the exact type expected by the
- *   comparator. For f32 comparators use (f32) casts; for f64 use plain
- *   double literals. Passing the wrong size causes a stack buffer overflow
- *   because __typeof__ allocates a variable of the literal's type and the
- *   comparator dereferences it as a wider type.
+ *
+ * `type` is the EXACT parameter type the comparator dereferences — u8 for
+ * algo_cmp_u8, f64 for algo_cmp_f64, and so on. It is written explicitly
+ * rather than deduced, for two reasons:
+ *
+ *   1. Portability. These macros previously used __typeof__(lo_val), a GNU
+ *      extension. CompCert rejects it (found by the `compcert` CI job on its
+ *      first run — compare_test was the one translation unit of 53 it would
+ *      not accept), and the library's own typeof use in range.h is already
+ *      guarded behind CANON_NO_GNU_EXTENSIONS. C99 has no portable typeof,
+ *      so the type has to be named.
+ *
+ *   2. Safety. Deducing the local's type from the LITERAL meant a mistyped
+ *      argument silently allocated a narrower variable than the comparator
+ *      dereferenced — a stack buffer over-read that the old comment warned
+ *      about in prose but nothing enforced. Naming the type makes the
+ *      declaration authoritative: a mismatched literal is now a conversion
+ *      the compiler checks, not a memory error at run time.
  * ====================================================================== */
 
-#define CONTRACT3(fn, lo_val, hi_val, mid_val)                              \
+#define CONTRACT3(type, fn, lo_val, hi_val, mid_val)                        \
     do {                                                                    \
-        __typeof__(lo_val) _lo  = (lo_val);                                 \
-        __typeof__(lo_val) _hi  = (hi_val);                                 \
-        __typeof__(lo_val) _mid = (mid_val);                                \
+        type _lo  = (lo_val);                                               \
+        type _hi  = (hi_val);                                               \
+        type _mid = (mid_val);                                              \
         EXPECT(fn(&_lo,  &_lo,  NULL) == 0);                                \
         EXPECT(fn(&_hi,  &_hi,  NULL) == 0);                                \
         EXPECT(fn(&_mid, &_mid, NULL) == 0);                                \
@@ -124,10 +137,10 @@ static int sign_of(int v) { return (v > 0) - (v < 0); }
               -sign_of(fn(&_hi,  &_mid, NULL)));                            \
     } while (0)
 
-#define DESC_REVERSES(asc_fn, desc_fn, val_a, val_b)                        \
+#define DESC_REVERSES(type, asc_fn, desc_fn, val_a, val_b)                  \
     do {                                                                    \
-        __typeof__(val_a) _a = (val_a);                                     \
-        __typeof__(val_b) _b = (val_b);                                     \
+        type _a = (val_a);                                                  \
+        type _b = (val_b);                                                  \
         int _asc  = asc_fn(&_a,  &_b,  NULL);                              \
         int _desc = desc_fn(&_a, &_b,  NULL);                              \
         if (_asc != 0) {                                                    \
@@ -143,7 +156,7 @@ static int sign_of(int v) { return (v > 0) - (v < 0); }
 
 TEST(cmp_u8) {
     /* CONTRACT3 requires lo < mid < hi */
-    CONTRACT3(algo_cmp_u8, (u8)0, (u8)255, (u8)128);
+    CONTRACT3(u8, algo_cmp_u8, (u8)0, (u8)255, (u8)128);
 
     /* Boundary spot checks */
     {
@@ -153,41 +166,41 @@ TEST(cmp_u8) {
         EXPECT(algo_cmp_u8(&one, &one, NULL) == 0);
     }
 
-    DESC_REVERSES(algo_cmp_u8, algo_cmp_u8_desc, (u8)10, (u8)20);
-    DESC_REVERSES(algo_cmp_u8, algo_cmp_u8_desc, (u8)5,  (u8)5);
+    DESC_REVERSES(u8, algo_cmp_u8, algo_cmp_u8_desc, (u8)10, (u8)20);
+    DESC_REVERSES(u8, algo_cmp_u8, algo_cmp_u8_desc, (u8)5,  (u8)5);
 }
 
 TEST(cmp_u16) {
-    CONTRACT3(algo_cmp_u16, (u16)0, (u16)65535, (u16)1000);
+    CONTRACT3(u16, algo_cmp_u16, (u16)0, (u16)65535, (u16)1000);
     {
         u16 lo = 999, hi = 1000;
         EXPECT(algo_cmp_u16(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_u16(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_u16, algo_cmp_u16_desc, (u16)100, (u16)200);
-    DESC_REVERSES(algo_cmp_u16, algo_cmp_u16_desc, (u16)7,   (u16)7);
+    DESC_REVERSES(u16, algo_cmp_u16, algo_cmp_u16_desc, (u16)100, (u16)200);
+    DESC_REVERSES(u16, algo_cmp_u16, algo_cmp_u16_desc, (u16)7,   (u16)7);
 }
 
 TEST(cmp_u32) {
-    CONTRACT3(algo_cmp_u32, (u32)0, (u32)0xFFFFFFFFU, (u32)0x80000000U);
+    CONTRACT3(u32, algo_cmp_u32, (u32)0, (u32)0xFFFFFFFFU, (u32)0x80000000U);
     {
         u32 lo = 0x7FFFFFFFU, hi = 0x80000000U;
         EXPECT(algo_cmp_u32(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_u32(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_u32, algo_cmp_u32_desc, (u32)1, (u32)2);
-    DESC_REVERSES(algo_cmp_u32, algo_cmp_u32_desc, (u32)0, (u32)0);
+    DESC_REVERSES(u32, algo_cmp_u32, algo_cmp_u32_desc, (u32)1, (u32)2);
+    DESC_REVERSES(u32, algo_cmp_u32, algo_cmp_u32_desc, (u32)0, (u32)0);
 }
 
 TEST(cmp_u64) {
-    CONTRACT3(algo_cmp_u64, (u64)0, (u64)~0ULL, (u64)1);
+    CONTRACT3(u64, algo_cmp_u64, (u64)0, (u64)~0ULL, (u64)1);
     {
         u64 lo = 0x100000000ULL, hi = 0x200000000ULL;
         EXPECT(algo_cmp_u64(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_u64(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_u64, algo_cmp_u64_desc, (u64)0xDEADBEEFULL, (u64)0xCAFEBABEULL);
-    DESC_REVERSES(algo_cmp_u64, algo_cmp_u64_desc, (u64)42, (u64)42);
+    DESC_REVERSES(u64, algo_cmp_u64, algo_cmp_u64_desc, (u64)0xDEADBEEFULL, (u64)0xCAFEBABEULL);
+    DESC_REVERSES(u64, algo_cmp_u64, algo_cmp_u64_desc, (u64)42, (u64)42);
 }
 
 /* =========================================================================
@@ -195,7 +208,7 @@ TEST(cmp_u64) {
  * ====================================================================== */
 
 TEST(cmp_i8) {
-    CONTRACT3(algo_cmp_i8, (i8)-128, (i8)127, (i8)0);
+    CONTRACT3(i8, algo_cmp_i8, (i8)-128, (i8)127, (i8)0);
     {
         i8 neg = -1, pos = 1, zero = 0;
         EXPECT(algo_cmp_i8(&neg,  &pos,  NULL) < 0);
@@ -203,35 +216,35 @@ TEST(cmp_i8) {
         EXPECT(algo_cmp_i8(&zero, &zero, NULL) == 0);
         EXPECT(algo_cmp_i8(&neg,  &zero, NULL) < 0);
     }
-    DESC_REVERSES(algo_cmp_i8, algo_cmp_i8_desc, (i8)-1, (i8)1);
-    DESC_REVERSES(algo_cmp_i8, algo_cmp_i8_desc, (i8)0,  (i8)0);
+    DESC_REVERSES(i8, algo_cmp_i8, algo_cmp_i8_desc, (i8)-1, (i8)1);
+    DESC_REVERSES(i8, algo_cmp_i8, algo_cmp_i8_desc, (i8)0,  (i8)0);
 }
 
 TEST(cmp_i16) {
-    CONTRACT3(algo_cmp_i16, (i16)-32768, (i16)32767, (i16)0);
+    CONTRACT3(i16, algo_cmp_i16, (i16)-32768, (i16)32767, (i16)0);
     {
         i16 lo = -1, hi = 0;
         EXPECT(algo_cmp_i16(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_i16(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_i16, algo_cmp_i16_desc, (i16)-100, (i16)100);
-    DESC_REVERSES(algo_cmp_i16, algo_cmp_i16_desc, (i16)5,    (i16)5);
+    DESC_REVERSES(i16, algo_cmp_i16, algo_cmp_i16_desc, (i16)-100, (i16)100);
+    DESC_REVERSES(i16, algo_cmp_i16, algo_cmp_i16_desc, (i16)5,    (i16)5);
 }
 
 TEST(cmp_i32) {
-    CONTRACT3(algo_cmp_i32, (i32)(-2147483647 - 1), (i32)2147483647, (i32)0);
+    CONTRACT3(i32, algo_cmp_i32, (i32)(-2147483647 - 1), (i32)2147483647, (i32)0);
     {
         i32 min_val = (-2147483647 - 1);
         i32 max_val = 2147483647;
         EXPECT(algo_cmp_i32(&min_val, &max_val, NULL) < 0);
         EXPECT(algo_cmp_i32(&max_val, &min_val, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_i32, algo_cmp_i32_desc, (i32)-1, (i32)1);
-    DESC_REVERSES(algo_cmp_i32, algo_cmp_i32_desc, (i32)0,  (i32)0);
+    DESC_REVERSES(i32, algo_cmp_i32, algo_cmp_i32_desc, (i32)-1, (i32)1);
+    DESC_REVERSES(i32, algo_cmp_i32, algo_cmp_i32_desc, (i32)0,  (i32)0);
 }
 
 TEST(cmp_i64) {
-    CONTRACT3(algo_cmp_i64,
+    CONTRACT3(i64, algo_cmp_i64,
               (i64)(-9223372036854775807LL - 1),
               (i64)9223372036854775807LL,
               (i64)0LL);
@@ -240,8 +253,8 @@ TEST(cmp_i64) {
         EXPECT(algo_cmp_i64(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_i64(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_i64, algo_cmp_i64_desc, (i64)-1LL, (i64)1LL);
-    DESC_REVERSES(algo_cmp_i64, algo_cmp_i64_desc, (i64)42LL, (i64)42LL);
+    DESC_REVERSES(i64, algo_cmp_i64, algo_cmp_i64_desc, (i64)-1LL, (i64)1LL);
+    DESC_REVERSES(i64, algo_cmp_i64, algo_cmp_i64_desc, (i64)42LL, (i64)42LL);
 }
 
 /* =========================================================================
@@ -249,14 +262,14 @@ TEST(cmp_i64) {
  * ====================================================================== */
 
 TEST(cmp_usize) {
-    CONTRACT3(algo_cmp_usize, (usize)0, (usize)~(usize)0, (usize)42);
+    CONTRACT3(usize, algo_cmp_usize, (usize)0, (usize)~(usize)0, (usize)42);
     {
         usize lo = 100, hi = 200;
         EXPECT(algo_cmp_usize(&lo, &hi, NULL) < 0);
         EXPECT(algo_cmp_usize(&hi, &lo, NULL) > 0);
     }
-    DESC_REVERSES(algo_cmp_usize, algo_cmp_usize_desc, (usize)1, (usize)2);
-    DESC_REVERSES(algo_cmp_usize, algo_cmp_usize_desc, (usize)0, (usize)0);
+    DESC_REVERSES(usize, algo_cmp_usize, algo_cmp_usize_desc, (usize)1, (usize)2);
+    DESC_REVERSES(usize, algo_cmp_usize, algo_cmp_usize_desc, (usize)0, (usize)0);
 }
 
 TEST(cmp_isize) {
@@ -265,19 +278,22 @@ TEST(cmp_isize) {
         isize min_val = (isize)(((usize)1) << (sizeof(isize) * 8 - 1));
         isize max_val = (isize)(((usize)~(usize)0) >> 1);
         isize zero    = 0;
-        CONTRACT3(algo_cmp_isize, min_val, max_val, zero);
+        CONTRACT3(isize, algo_cmp_isize, min_val, max_val, zero);
     }
-    DESC_REVERSES(algo_cmp_isize, algo_cmp_isize_desc, (isize)-1, (isize)1);
-    DESC_REVERSES(algo_cmp_isize, algo_cmp_isize_desc, (isize)0,  (isize)0);
+    DESC_REVERSES(isize, algo_cmp_isize, algo_cmp_isize_desc, (isize)-1, (isize)1);
+    DESC_REVERSES(isize, algo_cmp_isize, algo_cmp_isize_desc, (isize)0,  (isize)0);
 }
 
 /* =========================================================================
  * f32 comparator — including NaN and INFINITY
  *
- * NOTE: All literals passed to DESC_REVERSES for f32 comparators must have
- * the F suffix so __typeof__ allocates a float (4 bytes). Passing a plain
- * double literal (8 bytes) to an f32 comparator causes a stack buffer
- * overflow because algo_cmp_f32 dereferences the pointer as float*.
+ * NOTE: the `f32` type argument to DESC_REVERSES is what makes the local a
+ * float (4 bytes) — the F suffix on the literals is now consistency, not
+ * load-bearing. Before the explicit type parameter the local's type was
+ * deduced from the literal, so a plain double literal (8 bytes) silently
+ * produced a stack buffer over-read when algo_cmp_f32 dereferenced the
+ * pointer as float*. Naming the type removes that failure mode: a
+ * mismatched literal is now just a conversion the compiler checks.
  * ====================================================================== */
 
 TEST(cmp_f32) {
@@ -325,10 +341,10 @@ TEST(cmp_f32) {
     EXPECT(algo_cmp_f32(&neg_big, &big, NULL) < 0);
     EXPECT(algo_cmp_f32(&big, &neg_big, NULL) > 0);
 
-    /* desc reverses — use F-suffix literals so __typeof__ gives float */
-    DESC_REVERSES(algo_cmp_f32, algo_cmp_f32_desc, -1.0F, 1.0F);
-    DESC_REVERSES(algo_cmp_f32, algo_cmp_f32_desc,  0.0F, 0.0F);
-    DESC_REVERSES(algo_cmp_f32, algo_cmp_f32_desc, (f32)INFINITY, 1.0F);
+    /* desc reverses — the f32 type argument fixes the local's width */
+    DESC_REVERSES(f32, algo_cmp_f32, algo_cmp_f32_desc, -1.0F, 1.0F);
+    DESC_REVERSES(f32, algo_cmp_f32, algo_cmp_f32_desc,  0.0F, 0.0F);
+    DESC_REVERSES(f32, algo_cmp_f32, algo_cmp_f32_desc, (f32)INFINITY, 1.0F);
 
     /* desc: NaN sorted first */
     EXPECT(algo_cmp_f32_desc(&nan1, &pos, NULL) < 0);
@@ -395,9 +411,9 @@ TEST(cmp_f64) {
     EXPECT(algo_cmp_f64(&big, &neg_big, NULL) > 0);
 
     /* desc reverses — use plain double literals (no F suffix) */
-    DESC_REVERSES(algo_cmp_f64, algo_cmp_f64_desc, -1.0, 1.0);
-    DESC_REVERSES(algo_cmp_f64, algo_cmp_f64_desc,  0.0, 0.0);
-    DESC_REVERSES(algo_cmp_f64, algo_cmp_f64_desc, (f64)INFINITY, 1.0);
+    DESC_REVERSES(f64, algo_cmp_f64, algo_cmp_f64_desc, -1.0, 1.0);
+    DESC_REVERSES(f64, algo_cmp_f64, algo_cmp_f64_desc,  0.0, 0.0);
+    DESC_REVERSES(f64, algo_cmp_f64, algo_cmp_f64_desc, (f64)INFINITY, 1.0);
 
     /* desc: NaN sorted first */
     EXPECT(algo_cmp_f64_desc(&nan1, &pos, NULL) < 0);
@@ -460,28 +476,28 @@ TEST(total_order_properties) {
  * ====================================================================== */
 
 TEST(desc_reverses_asc) {
-    DESC_REVERSES(algo_cmp_u8,    algo_cmp_u8_desc,    (u8)0,    (u8)255);
-    DESC_REVERSES(algo_cmp_u16,   algo_cmp_u16_desc,   (u16)0,   (u16)65535);
-    DESC_REVERSES(algo_cmp_u32,   algo_cmp_u32_desc,   (u32)0,   (u32)0xFFFFFFFFU);
-    DESC_REVERSES(algo_cmp_u64,   algo_cmp_u64_desc,   (u64)0,   (u64)~0ULL);
-    DESC_REVERSES(algo_cmp_i8,    algo_cmp_i8_desc,    (i8)-128, (i8)127);
-    DESC_REVERSES(algo_cmp_i16,   algo_cmp_i16_desc,   (i16)-32768, (i16)32767);
-    DESC_REVERSES(algo_cmp_i32,   algo_cmp_i32_desc,
+    DESC_REVERSES(u8, algo_cmp_u8,    algo_cmp_u8_desc,    (u8)0,    (u8)255);
+    DESC_REVERSES(u16, algo_cmp_u16,   algo_cmp_u16_desc,   (u16)0,   (u16)65535);
+    DESC_REVERSES(u32, algo_cmp_u32,   algo_cmp_u32_desc,   (u32)0,   (u32)0xFFFFFFFFU);
+    DESC_REVERSES(u64, algo_cmp_u64,   algo_cmp_u64_desc,   (u64)0,   (u64)~0ULL);
+    DESC_REVERSES(i8, algo_cmp_i8,    algo_cmp_i8_desc,    (i8)-128, (i8)127);
+    DESC_REVERSES(i16, algo_cmp_i16,   algo_cmp_i16_desc,   (i16)-32768, (i16)32767);
+    DESC_REVERSES(i32, algo_cmp_i32,   algo_cmp_i32_desc,
                   (i32)(-2147483647 - 1), (i32)2147483647);
-    DESC_REVERSES(algo_cmp_i64,   algo_cmp_i64_desc,
+    DESC_REVERSES(i64, algo_cmp_i64,   algo_cmp_i64_desc,
                   (i64)(-9223372036854775807LL - 1),
                   (i64)9223372036854775807LL);
-    DESC_REVERSES(algo_cmp_usize, algo_cmp_usize_desc, (usize)0,  (usize)~(usize)0);
-    DESC_REVERSES(algo_cmp_isize, algo_cmp_isize_desc, (isize)-1, (isize)1);
+    DESC_REVERSES(usize, algo_cmp_usize, algo_cmp_usize_desc, (usize)0,  (usize)~(usize)0);
+    DESC_REVERSES(isize, algo_cmp_isize, algo_cmp_isize_desc, (isize)-1, (isize)1);
     /* f32: must use F-suffix literals */
-    DESC_REVERSES(algo_cmp_f32,   algo_cmp_f32_desc,   -1.0F, 1.0F);
+    DESC_REVERSES(f32, algo_cmp_f32,   algo_cmp_f32_desc,   -1.0F, 1.0F);
     /* f64: must use plain double literals */
-    DESC_REVERSES(algo_cmp_f64,   algo_cmp_f64_desc,   -1.0,  1.0);
+    DESC_REVERSES(f64, algo_cmp_f64,   algo_cmp_f64_desc,   -1.0,  1.0);
 
     /* Equal values */
-    DESC_REVERSES(algo_cmp_u32,   algo_cmp_u32_desc,   (u32)42,  (u32)42);
-    DESC_REVERSES(algo_cmp_i64,   algo_cmp_i64_desc,   (i64)-1,  (i64)-1);
-    DESC_REVERSES(algo_cmp_f64,   algo_cmp_f64_desc,   3.14,     3.14);
+    DESC_REVERSES(u32, algo_cmp_u32,   algo_cmp_u32_desc,   (u32)42,  (u32)42);
+    DESC_REVERSES(i64, algo_cmp_i64,   algo_cmp_i64_desc,   (i64)-1,  (i64)-1);
+    DESC_REVERSES(f64, algo_cmp_f64,   algo_cmp_f64_desc,   3.14,     3.14);
 }
 
 /* =========================================================================

@@ -258,17 +258,43 @@ static void test_init_reservation_mul_overflow(void)
  * the line-309 guard. The arena offset is left at the 1-byte throwaway. */
 static void test_init_arena_alloc_fails_after_guard(void)
 {
-    static u8 small_buf[65];
+    /* The window this test aims at is reached only if the FIRST allocation
+     * lands at offset 1 exactly — which requires arena_alloc to insert no
+     * padding, which requires the arena's base to be CANON_DEFAULT_ALIGN
+     * aligned already.
+     *
+     * A plain `static u8 buf[65]` does NOT guarantee that. C99 only requires
+     * alignof(unsigned char) == 1; GCC and Clang happen to over-align arrays
+     * of this size to 16 bytes, so the test passed everywhere it had ever
+     * run. CompCert does not over-align, and the `compcert` CI job caught it
+     * on its first run: with a base at offset%16 == k > 0 the throwaway lands
+     * at pad + 1 instead of 1, raw remaining drops to 64 - pad, and pool_init
+     * returns false at the EARLY guard rather than at line 309 — the test
+     * would still "pass" its EXPECT(!ok) while silently no longer exercising
+     * the branch it exists for. The EXPECT(arena_used == 1) below is what
+     * failed, and it is what makes this test self-checking; keep it.
+     *
+     * Align the base explicitly so the precondition is guaranteed rather
+     * than inherited from a compiler's discretion. ptr_align_up is the
+     * library's own primitive (ptr.h, fully proved and 100% MC/DC), so this
+     * introduces no hand-rolled pointer arithmetic. */
+    static u8 small_raw[65 + CANON_DEFAULT_ALIGN];
+    u8*       small_buf = (u8*)ptr_align_up(small_raw, CANON_DEFAULT_ALIGN);
     Arena     small_arena;
     void*     throwaway;
     bool      ok;
 
-    memset(small_buf, 0xAB, sizeof(small_buf));
-    arena_init(&small_arena, small_buf, sizeof(small_buf)); /* capacity 65 */
+    memset(small_raw, 0xAB, sizeof(small_raw));
+    arena_init(&small_arena, small_buf, 65); /* capacity 65, aligned base */
+
+    /* Precondition made explicit: an aligned base means the first alloc
+     * inserts no padding, so the offset arithmetic below holds. */
+    EXPECT(((uintptr_t)small_buf % CANON_DEFAULT_ALIGN) == 0u);
 
     /* Push offset to 1 (unaligned) → arena_alloc will insert pad = 15. */
     throwaway = arena_alloc(&small_arena, 1);
     EXPECT_NOT_NULL(throwaway);
+    EXPECT(arena_used(&small_arena) == 1);   /* pad was 0 — window is open */
 
     /* needed = 16 * 4 = 64. raw remaining = 65 - 1 = 64 → guard passes.
      * arena_alloc: 1 + 15 + 64 = 80 > 65 → NULL → pool_init false at L309. */
