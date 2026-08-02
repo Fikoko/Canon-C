@@ -1971,6 +1971,65 @@ jobs:
           MACHDEP=gcc_x86_32
           echo "Using -machdep ${MACHDEP}"
 
+          # ---- POSITIVE CONTROL: prove the flag actually changes the model.
+          #
+          # The first run of this job (CI #1209) returned a byte-identical
+          # result to the 64-bit baseline: same 3430/3521, same 88 timeouts
+          # and 3 unknown, the same 91 residual names, zero delta in either
+          # direction. That is a strong width-invariance claim IF the
+          # instrument genuinely differed — and it is also EXACTLY what a
+          # silently-ignored flag would produce. A null result is evidence
+          # only when the instrument is known to have changed, so the run now
+          # establishes that first.
+          #
+          # Both halves matter. -machdep sets Frama-C's internal type model,
+          # but arena.h's width-dependent behaviour flows through
+          # CANON_USIZE_MAX = SIZE_MAX, fixed at PREPROCESSING time by
+          # whichever stdint.h is resolved. Were Frama-C's own libc headers
+          # bypassed for the host's, sizeof(size_t) could be 4 while SIZE_MAX
+          # stayed 2^64-1 — an incoherent model producing a meaningless run.
+          # The probe pins both, and the negative control below confirms the
+          # probe discriminates rather than passing for some other reason.
+          printf '%s\n' \
+            '#include <stddef.h>' \
+            '#include <stdint.h>' \
+            'typedef char probe_size_t[(sizeof(size_t) == 4u)    ? 1 : -1];' \
+            'typedef char probe_ptr   [(sizeof(void*)  == 4u)    ? 1 : -1];' \
+            'typedef char probe_smax  [(SIZE_MAX == 0xFFFFFFFFu) ? 1 : -1];' \
+            > machdep_probe.c
+
+          echo "=== positive control: does ${MACHDEP} change the model? ==="
+          CONTROL_OK=1
+          if frama-c -machdep "${MACHDEP}" machdep_probe.c > probe32.log 2>&1; then
+            echo "  PASS: under ${MACHDEP} sizeof(size_t)==4, sizeof(void*)==4,"
+            echo "        SIZE_MAX==0xFFFFFFFF. Type model and headers agree."
+          else
+            CONTROL_OK=0
+            echo "  FAIL: the probe was not accepted under ${MACHDEP}. Any"
+            echo "        'no difference' result below is then meaningless —"
+            echo "        it would mean the flag is inert, NOT that the proof"
+            echo "        surface is width-invariant."
+            head -20 probe32.log || true
+          fi
+
+          if frama-c -machdep gcc_x86_64 machdep_probe.c > probe64.log 2>&1; then
+            CONTROL_OK=0
+            echo "  WARNING: the same probe ALSO passed at gcc_x86_64, so it"
+            echo "           does not discriminate between widths and proves"
+            echo "           nothing. Treat the control as inconclusive."
+          else
+            echo "  PASS: the probe is rejected at gcc_x86_64, so it genuinely"
+            echo "        discriminates between the two machine models."
+          fi
+
+          if [ "${CONTROL_OK}" -eq 1 ]; then
+            echo "  CONTROL ESTABLISHED — the comparison below is meaningful."
+          else
+            echo "  CONTROL NOT ESTABLISHED — do not cite the numbers below"
+            echo "  as 32-bit evidence until this section passes."
+          fi
+          echo "==============================================="
+
           set +e
           frama-c -wp -wp-rte \
             -machdep "${MACHDEP}" \
