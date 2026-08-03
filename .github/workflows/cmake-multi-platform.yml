@@ -1908,7 +1908,7 @@ jobs:
   
 
   # -------------------------------------------------------------------------
-  # 5b. arena.h at 32-bit — REPORT ONLY (width-axis proof evidence)
+  # 5b. arena.h at 32-bit — ENFORCED (width-axis proof evidence)
   #
   #   Every other WP job runs at Frama-C's DEFAULT machine model, which is
   #   64-bit. Tier 1, however, promises `size_t >= 32 bits`, and the whole
@@ -1938,16 +1938,42 @@ jobs:
   #       overflow in a 64-bit usize can overflow in a 32-bit one.
   #   The second outcome would be a genuine finding about a supported tier.
   #
-  #   REPORT-ONLY, per the project's promotion convention (region, vec,
-  #   borrow and diag were each report-only for several runs before being
-  #   pinned). There is deliberately NO pin: pinning a number nobody has
-  #   measured is the anti-pattern the ratchet-to-measured discipline exists
-  #   to prevent. Promote by pinning EXPECTED_PROVED / EXPECTED_UNPROVED /
-  #   CHECKS from an observed run, in one acknowledged commit, once the
-  #   residual set is seen to be name-stable across runs.
+  #   ENFORCED as of CI #1210, following two name-stable report-only runs —
+  #   the diag precedent (#1132 report-only, #1133 name-stable, then pinned).
   #
-  #   The payload is the DIFF against the 64-bit residual set printed at the
-  #   end. That is what turns one run into an answer.
+  #   MEASURED RESULT: the arena proof surface is IDENTICAL at 32-bit and
+  #   64-bit. Same 3430 / 3521 proved, same 91 residuals, same 91 names,
+  #   zero delta in either direction.
+  #
+  #     run           proved        T   U  T+U | Alt-Ergo  CVC5   Z3
+  #     64-bit #1202  3430 / 3521  88   3   91 |      325    11   29
+  #     32-bit #1209  3430 / 3521  88   3   91 |      326     9   30
+  #     32-bit #1210  3430 / 3521  85   6   91 |      347     6   12
+  #
+  #   The two 32-bit runs differ from EACH OTHER more than either differs
+  #   from 64-bit: the Timeout/Unknown split moved 88/3 -> 85/6 and Z3 went
+  #   from 30 goals to 12. The 91-name SET did not move. That is what rules
+  #   out a deterministic-replay artifact — the solvers demonstrably behaved
+  #   differently and the outcome set held regardless. It is also independent
+  #   justification for pooling Timeout with Unknown, the house rule adopted
+  #   in the 2026-07-16 retrofit: the split is noise, the union is signal.
+  #
+  #   The result is only meaningful because the positive control below
+  #   establishes that -machdep actually changed the model. Without it a null
+  #   result would be indistinguishable from an inert flag.
+  #
+  #   ENFORCEMENT SHAPE — deliberately different from every other WP job.
+  #   The others pin their own numbers. This one pins EQUALITY WITH THE
+  #   64-BIT SET: the gate is that the symmetric difference is empty. There
+  #   is no second copy of the residual list to drift out of step, which is
+  #   the failure mode this project has already been bitten by (Commit 9b
+  #   ratcheted the gating scalars and left six jobs printing stale numbers).
+  #
+  #   COUPLING — READ BEFORE RATCHETING ARENA. When arena's 64-bit pin moves,
+  #   this job's embedded baseline list and EXPECTED_PROVED must move in the
+  #   SAME commit. A best-effort cross-check below parses the 64-bit job's
+  #   CHECKS array out of this very workflow file and warns if the two lists
+  #   have diverged, so the coupling is not purely a matter of remembering.
   # -------------------------------------------------------------------------
   frama-c-arena-32:
     needs: build
@@ -1956,7 +1982,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
-      - name: "WP: core/arena.h at 32-bit (REPORT ONLY)"
+      - name: "WP: core/arena.h at 32-bit (ENFORCED — set equality with 64-bit)"
         run: |
           eval $(opam env --switch=frama-c)
 
@@ -2050,7 +2076,7 @@ jobs:
           echo ""
           echo "==============================================="
           echo "  WP (arena.h, ${MACHDEP}) exit status: ${WP_EXIT}"
-          echo "  MODE: REPORT ONLY — no pin, never fails the build."
+          echo "  MODE: ENFORCED — gate is SET EQUALITY with the 64-bit residuals."
           echo "  64-bit baseline for comparison: 3430 / 3521 proved,"
           echo "  91 residuals (VERIFY-009)."
           echo "==============================================="
@@ -2059,9 +2085,9 @@ jobs:
           if [ -z "${PROVED_LINE}" ]; then
             echo "NOTE: no verification summary — WP did not complete."
             echo "      If the failure mentions the machdep, pick a name from"
-            echo "      the list above. Report-only: not failing the build."
+            echo "      the list above."
             grep -E "^\[(kernel|wp)" wp_arena32_output.txt | head -20 || true
-            exit 0
+            exit 1
           fi
           echo "  ${PROVED_LINE}"
 
@@ -2182,21 +2208,94 @@ jobs:
           BASELINE_EOF
           sort -u -o res64.txt res64.txt
 
+          # Best-effort coupling check: pull the 64-bit job's CHECKS array
+          # out of this workflow and compare it with the baseline embedded
+          # above. Advisory only — a formatting change could defeat the
+          # parse, and a parse failure must not masquerade as a proof result.
+          WF=.github/workflows/cmake-multi-platform.yml
+          awk '/wp_arena_output.txt/{f=1} f&&/CHECKS=\(/{g=1;next} g&&/^ *\)/{exit} g{print}' "$WF" \
+            | tr -d '" ' | grep -E '^typed_cast_' | sort -u > res64_from_wf.txt || true
+          if [ -s res64_from_wf.txt ]; then
+            if diff -q res64.txt res64_from_wf.txt > /dev/null; then
+              echo "  coupling check: this job's baseline matches the 64-bit"
+              echo "  job's CHECKS array ($(wc -l < res64.txt) names)."
+            else
+              echo "  WARNING: this job's embedded baseline DIFFERS from the"
+              echo "  64-bit job's CHECKS array. One was ratcheted without the"
+              echo "  other. Reconcile before trusting the comparison:"
+              diff res64.txt res64_from_wf.txt | head -20 || true
+            fi
+          else
+            echo "  coupling check: could not parse the 64-bit CHECKS array"
+            echo "  (advisory only — not a failure)."
+          fi
+
+          ONLY64=$(comm -23 res64.txt res32.txt | wc -l)
+          ONLY32=$(comm -13 res64.txt res32.txt | wc -l)
+          BOTH=$(comm -12 res64.txt res32.txt | wc -l)
+
           echo ""
           echo "  --- Residual at 64-bit, NOT at 32-bit (newly PROVED) ---"
           comm -23 res64.txt res32.txt | sed 's/^/    /' || true
-          echo "  count: $(comm -23 res64.txt res32.txt | wc -l)"
+          echo "  count: ${ONLY64}"
           echo ""
           echo "  --- Residual at 32-bit, NOT at 64-bit (width-specific) ---"
           comm -13 res64.txt res32.txt | sed 's/^/    /' || true
-          echo "  count: $(comm -13 res64.txt res32.txt | wc -l)"
+          echo "  count: ${ONLY32}"
           echo ""
           echo "  --- Present at both widths ---"
-          echo "  count: $(comm -12 res64.txt res32.txt | wc -l)"
+          echo "  count: ${BOTH}"
           echo "==============================================="
-          echo "  Report-only. Classify both deltas in VERIFY-009 before"
-          echo "  pinning anything."
+
+          # ---- GATES (enforced as of CI #1210) ----------------------------
+          FAILURES=0
+
+          # Gate A — the control must hold, or nothing below means anything.
+          if [ "${CONTROL_OK}" -ne 1 ]; then
+            echo "FAIL: machdep control not established — the comparison is"
+            echo "      not evidence about 32-bit. Fix the control first."
+            FAILURES=$((FAILURES + 1))
+          fi
+
+          # Gate B — no falsified contract, at any width.
+          if [ "${FAILED_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${FAILED_COUNT} goal(s) FAILED at 32-bit. A contract"
+            echo "      that holds at 64-bit is falsified at a width Tier 1"
+            echo "      promises. Classify in VERIFY-009 before anything else."
+            FAILURES=$((FAILURES + 1))
+          fi
+
+          # Gate C — pinned goal surface, must move with the 64-bit pin.
+          PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
+          if [ "${PROVED_COUNT}" != "3430 / 3521" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 3430 / 3521)."
+            echo "      If arena's 64-bit pin also moved, ratchet BOTH jobs"
+            echo "      and this job's embedded baseline in one commit."
+            FAILURES=$((FAILURES + 1))
+          fi
+
+          # Gate D — set equality with the 64-bit residuals, both directions.
+          # This is the whole point of the job: the claim is not "91 residuals"
+          # but "the same 91". A goal newly proved at 32-bit is as much a
+          # surface change as one newly resistant, and both land here.
+          if [ "${ONLY64}" -ne 0 ] || [ "${ONLY32}" -ne 0 ]; then
+            echo "FAIL: the 32-bit residual set is no longer identical to the"
+            echo "      64-bit set (${ONLY64} newly proved, ${ONLY32} width-specific)."
+            echo "      Width-invariance is the claim this job enforces."
+            echo "      Reclassify in VERIFY-009, then ratchet deliberately."
+            FAILURES=$((FAILURES + 1))
+          fi
+
+          if [ "${FAILURES}" -eq 0 ]; then
+            echo "PASS: arena.h proves identically at 32-bit and 64-bit —"
+            echo "      3430/3521, 91 residuals, same 91 names, zero delta."
+            echo "      Machdep control established. Tier 1's minimum width"
+            echo "      is evidenced, not asserted."
+          else
+            echo "FAIL: ${FAILURES} enforcement check(s) missed — see above."
+          fi
           echo "==============================================="
+          if [ "${FAILURES}" -ne 0 ]; then exit 1; fi
       - name: Upload WP proof output (arena.h, 32-bit)
         if: always()
         uses: actions/upload-artifact@v6

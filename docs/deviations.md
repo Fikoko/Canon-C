@@ -1207,6 +1207,86 @@ residual appeared; the categories in the tables above absorb them
 unchanged, and every pre-existing residual is still present by name
 (roll-calls extended, not replaced). Zero Failed goals.
 
+### Width-axis evidence (2026-08-02, CI #1209/#1210) — VERIFY-009-W
+
+Every WP job in this project runs at Frama-C's default machine model, which
+is 64-bit. Tier 1, however, promises `size_t >= 32 bits`, and this record's
+own cond-0 unreachability argument reasons explicitly about both widths
+(`SIZE_MAX = 2^32 - 1` on 32-bit, `2^64 - 1` on 64-bit). The proof stream
+therefore evidenced ONE of the two widths the library claims to support —
+the same gap the `build-32bit` job was added to close for the TEST stream,
+which the proofs had not caught up with.
+
+**Measured result: the arena proof surface is IDENTICAL at 32-bit and
+64-bit.**
+
+| run | machdep | proved | Timeout | Unknown | T+U | Alt-Ergo | CVC5 | Z3 |
+|---|---|---|---|---|---|---|---|---|
+| #1202 | default (64-bit) | 3430 / 3521 | 88 | 3 | 91 | 325 | 11 | 29 |
+| #1209 | `gcc_x86_32` | 3430 / 3521 | 88 | 3 | 91 | 326 | 9 | 30 |
+| #1210 | `gcc_x86_32` | 3430 / 3521 | 85 | 6 | 91 | 347 | 6 | 12 |
+
+Same proved count, same residual count, and — checked by name, not by
+count — **the same 91 residuals, with zero delta in either direction**. No
+goal proves at one width and resists at the other.
+
+**Why the null result is evidence rather than an absent measurement.** A
+result identical to the baseline is exactly what a silently-ignored
+`-machdep` flag would produce, so the run establishes a positive control
+before reporting: under `gcc_x86_32` it requires `sizeof(size_t) == 4`,
+`sizeof(void*) == 4` AND `SIZE_MAX == 0xFFFFFFFF`, and it requires the same
+probe to be REJECTED at `gcc_x86_64`. Both halves matter — `-machdep` sets
+Frama-C's internal type model, but this header's width-dependent behaviour
+flows through `CANON_USIZE_MAX = SIZE_MAX`, fixed at preprocessing time by
+whichever `stdint.h` is resolved; had the host's headers been used instead
+of Frama-C's, `sizeof(size_t)` could have been 4 while `SIZE_MAX` stayed
+`2^64 - 1`, an incoherent model whose signature is precisely an unchanged
+result. The control passed both directions at #1210.
+
+**Why the two 32-bit runs are the strongest part of the evidence.** They
+differ from EACH OTHER more than either differs from 64-bit: the
+Timeout/Unknown split moved 88/3 to 85/6 and Z3's share went from 30 goals
+to 12. The 91-name set did not move. That rules out a deterministic-replay
+artifact — the solvers demonstrably behaved differently and the outcome set
+held regardless. It is also independent justification for pooling Timeout
+with Unknown, the house rule adopted in the 2026-07-16 retrofit: the split
+is run-to-run noise, the union is the signal.
+
+**Cond 0 specifically.** The unreachability argument recorded above holds at
+32-bit, and needed no CI job to establish — it is arithmetic on two
+compile-time constants. `CANON_ARENA_MAX_SIZE + (CANON_DEFAULT_ALIGN - 1)`
+is `2^30 + 15 = 1073741839`, against `CANON_USIZE_MAX = 4294967295`. The
+margin is **4x**, where at 64-bit it is 1.7e10. It is a designed
+relationship — the arena cap is exactly a quarter of the 32-bit address
+space — but it is worth stating that the argument at 32-bit rests on a
+factor of four rather than on the astronomical headroom the 64-bit reading
+suggests. Cond 1 is unaffected: its unreachability is purely mathematical
+and independent of any project constant, as recorded above.
+
+**Enforcement.** Promoted from report-only to enforced at CI #1210, after
+two name-stable runs — the `diag` precedent (#1132 report-only, #1133
+name-stable, then pinned). The gate is deliberately a different shape from
+every other WP job: rather than pinning its own numbers, `frama-c-arena-32`
+pins **set equality with the 64-bit residuals**, failing if the symmetric
+difference is non-empty in either direction. A goal newly proved at 32-bit
+is as much a surface change as one newly resistant, and a swap that leaves
+the count at 91 while changing the set would pass a count-only gate. There
+is deliberately no second copy of the 91 names to drift out of step, that
+being the failure mode this project has already been bitten by.
+
+**Coupling — read before ratcheting this record's pin.** When arena's
+64-bit pin moves, `frama-c-arena-32`'s embedded baseline list and its
+`EXPECTED_PROVED` must move in the SAME commit. The job carries a
+best-effort cross-check that parses the 64-bit job's `CHECKS` array out of
+the workflow and warns on divergence, but the warning is advisory and does
+not substitute for doing it.
+
+**Scope.** This is arena only. pool, region and vec inherit arena's surface
+transitively and are the natural next candidates; slice, memory and ptr sit
+below it. Nothing here evidences those units at 32-bit, and nothing here
+says anything about 16-bit, which the Tier 1 guard in `limits.h` refuses
+outright.
+
 ## VERIFY-010: WP Limitations Inherited from Substrate Plus pool_invariant Arithmetic and ptr_elem Cascade Residuals (pool.h)
 
 | Field          | Value |
