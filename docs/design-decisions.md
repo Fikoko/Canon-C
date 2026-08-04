@@ -20,8 +20,13 @@
       Non-macro substrate entries landed: VERIFY-009/-010/-011 and, closing
       the set, VERIFY-016 + MCDC-008 (borrow.h, CI #1110); §7 and §8 carry
       the ID-specific cross-references OWN-001 promised.
-    - CHANGELOG entry for v1.3.0 — TODO: confirm anchor when CHANGELOG is
-      updated for the release. Inline as {TODO: CHANGELOG v1.3.0 anchor}.
+    - Release record for v1.3.0 — this project keeps NO CHANGELOG file, by
+      design. The change record is the CI history itself: every landed
+      commit has an Actions run carrying its verification, coverage and
+      MISRA results, and the records in this directory cite those runs by
+      number. `RELEASES.md` carries the versioning policy (only >= v1.2.0
+      is semantically frozen). Cite a CI run or a commit SHA, never a
+      CHANGELOG anchor.
     - OWN-002 — Arena/Pool restamp migration; shipped post-v1.3.0 at
       CI #944. See OWN-002 entry below.
   ============================================================================
@@ -45,7 +50,7 @@ formally-verified primitive layer described in the README's
 | Scope          | All owning container types in `core/` and `data/`                 |
 | Build knob     | `CANON_LIFETIME=off` (default) or `CANON_LIFETIME=debug` — see `CMakeLists.txt` |
 | Verification   | Runtime-validated via `test/semantics/borrow_test.c` across all 16 configs. The non-macro substrate is now WP-verified end to end: `arena.h` (VERIFY-009), `pool.h` (VERIFY-010), `region.h` including `lifetime_assert_valid` (VERIFY-011), `lifetime.h` (N/A — typedefs only), and the non-macro surface of `semantics/borrow.h` (VERIFY-016, verified under the default `CANON_LIFETIME`-off configuration — the exact shipped ABI bodies). Macro-templated bodies remain runtime-only by construction (see §7). |
-| Cross-refs     | README sections *"Borrow lifetime — know when a borrowed value is still valid"*, *"What about compile-time ownership enforcement?"*, *"From shared vocabulary to compositional verification"*; `CMakeLists.txt` `CANON_LIFETIME` block; `docs/verification.md`, `docs/deviations.md`, `docs/traceability.md` (substrate VERIFY-NNN entries land here as headers get annotated); {TODO: CHANGELOG v1.3.0 anchor}; OWN-002 (Arena/Pool restamp migration, shipped post-v1.3.0). |
+| Cross-refs     | README sections *"Borrow lifetime — know when a borrowed value is still valid"*, *"What about compile-time ownership enforcement?"*, *"From shared vocabulary to compositional verification"*; `CMakeLists.txt` `CANON_LIFETIME` block; `docs/verification.md`, `docs/deviations.md`, `docs/traceability.md` (substrate VERIFY-NNN entries land here as headers get annotated); `RELEASES.md` plus the CI run history, which together serve as this project's change record in place of a CHANGELOG; OWN-002 (Arena/Pool restamp migration, shipped post-v1.3.0). |
 
 ### Phase chronology
 
@@ -451,7 +456,8 @@ sits alongside formal proof for the non-macro headers once they land.
   its documented 36/38 = 94.7% ceiling (MCDC-008); the three
   `_get(NULL)` defensive outcomes are closed by
   `CANON_NO_REQUIRE`-gated tests in `borrow_test.c`.
-- **CHANGELOG**, v1.3.0 — `{TODO: CHANGELOG v1.3.0 anchor}`.
+- **Release record**, v1.3.0 — no CHANGELOG file exists; the CI run history
+  is the per-commit change record and `RELEASES.md` the versioning policy.
 - **OWN-002** — Arena/Pool restamp migration. Shipped at CI #944
   (commits 2a7c0ba / a7c0413 / 83fa70b). Closes the two-reset cycle
   documented in §4 by migrating Arena and Pool from XOR-with-constant

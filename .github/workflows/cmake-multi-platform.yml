@@ -3213,8 +3213,10 @@ jobs:
   # is the proof-stream regression detector; the per-line coverage debug
   # step in the coverage job is the measurement-stream one.
   #
-  # Promoted from report-only to enforced as of {TODO: promotion CI #}
-  # (VERIFY-016/MCDC-008 landed in the same PR): report-only first at
+  # Promoted from report-only to enforced at commit 79ad684 (2026-07-05,
+  # "Change borrow.h to enforced status in CI" — the commit that flips
+  # ENFORCE=0 -> 1; its Actions run is the record). VERIFY-016/MCDC-008
+  # landed in the same PR. Report-only first at
   # 383bf9f (CI #1109, 27 unproved — the final 19 plus 8 call-site
   # chaining goals from slice.h contracts mirrored by shape); aligned to
   # slice.h's real clauses at 262a503 (CI #1110): 2433/2452 proved,
@@ -3248,7 +3250,7 @@ jobs:
         # ABI guarantee; the lifetime-debug path stays runtime-verified by
         # borrow_test.c across the CI matrix (OWN-001 §7).
         #
-        # Promoted from report-only as of {TODO: promotion CI #}; see the
+        # Promoted from report-only at 79ad684 (2026-07-05); see the
         # banner above for the #1109 -> #1110 chronology and VERIFY-016 in
         # docs/deviations.md for the full residual classification.
         # (2026-07-16 retrofit): Failed now gated explicitly via note_fail
@@ -3436,8 +3438,9 @@ jobs:
   #
   # Chronology: report-only first at d8566d5 (CI #1132, 300s, 59 unproved);
   # re-measured name-stable at 1597a51 (CI #1133, 120s, 59 — same goal set
-  # at both timeouts, refuting time-starvation); pinned at {TODO: sha}
-  # (CI #{TODO}, actions run 28967245082, 120s, 17m21s) after the trusted-
+  # at both timeouts, refuting time-starvation); pinned at 1965b23
+  # (2026-07-08, actions run 28967245082, 120s, 17m21s) — the same commit
+  # set ENFORCE=1 and EXPECTED_PROVED="3050 / 3060" — after the trusted-
   # stdio-axiom alignment in diag.h closed 49 of the 59 (32 valid_fmt
   # caller obligations deleted by weakening the axiom requires to
   # format != \null; 17 rf_/r_terminated goals closed by the axiom's
@@ -3486,7 +3489,7 @@ jobs:
         # to (Timeout|Unknown).
         run: |
           eval $(opam env --switch=frama-c)
-          # ---- ENFORCEMENT VALUES: pinned at CI #{TODO} ({TODO: sha}) ----
+          # ---- ENFORCEMENT VALUES: pinned at 1965b23 (2026-07-08) ----
           ENFORCE=1
           EXPECTED_UNPROVED=10
           EXPECTED_PROVED="3050 / 3060"
