@@ -175,6 +175,13 @@ For current numbers, see:
   category, rationale, and mitigation.
 - **`docs/traceability.md`** — coverage record (lines, branches, MC/DC),
   per-header coverage results, and history of measurements.
+- **`docs/misra-campaign.md`** — what the MISRA C:2012 advisory count means
+  and what it does not. Read this one first if you are evaluating the
+  evidence rather than looking up a specific finding: it explains why the
+  headline reduction cannot be read as a defect count, separates the two
+  real defects the campaign found from the classification work that made up
+  most of the number, and states which of the remaining findings are worth
+  acting on and which are not.
 
 All currently unproved goals are demonstrated triple-prover-resistant
 under Alt-Ergo + Z3 + CVC5 with a 120-second timeout, and fall into a
