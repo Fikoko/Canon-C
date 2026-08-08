@@ -1,53 +1,43 @@
 name: VC identity (paper experiment)
 
 # ---------------------------------------------------------------------------
-# MANUAL TRIGGER ONLY. Phased harness for the FM 2027 paper's VC-identity
-# measurement: does WP hand the solvers the SAME generated task for a
+# MANUAL TRIGGER ONLY. Does WP hand the solvers the SAME generated task for a
 # substrate goal inside a larger composing unit?
 #
-# ---------------------------------------------------------------------------
-# STATE OF THE MEASUREMENT
+# RUN LOG
+#   #1 phase 3 : arena 3430/3521 full provers, 740 cache entries;
+#                vec offline vs that cache 4882/5429
+#   #2 phase 2 : vec Qed-only 4644/5429 ; arena Qed-only 3065/3521
+#   #3 phase 6 : -wp-gen produced nothing — cause found in #4
+#   #4 phase 7 : cause was a bad prover name, "Prover 'why3:alt-ergo' not
+#                found in why3.conf". Correct spelling is plain `alt-ergo`
+#                (why3.conf registers it as Alt-Ergo:2.6.3). Also confirmed
+#                -wp-report-json works and emits, PER GOAL: goal name, source
+#                file, function, verdict, and the prover that discharged it
+#                (including "qed"). Its floats are written "0." which stock
+#                json.load rejects — repaired below.
 #
-#   SOUND, keep:
-#     arena.h has exactly 365 goals that needed a prover and proved
-#     (3430 full - 3065 Qed-only). Corroborated independently by the
-#     per-prover attribution in docs/deviations.md VERIFY-009-W
-#     (#1202: Alt-Ergo 325 + CVC5 11 + Z3 29 = 365), and all three runs
-#     there sum to 365 while the internal split swings 325->347.
-#     WP's proof cache is CONTENT-ADDRESSED on generated task text, not on
-#     goal name: run #1 showed result__Bool_Error goals marked (Cached)
-#     although arena.h's include closure contains no result.h.
+# SOUND SO FAR: arena has exactly 365 goals that needed a prover and proved
+#   (3430 - 3065), corroborated by VERIFY-009-W's per-prover attribution at
+#   #1202 (325 + 11 + 29). WP's cache is CONTENT-addressed, not name-keyed.
 #
-#   NOT IDENTIFIABLE, do NOT put in the paper:
-#     vec offline-with-arena-cache 4882 minus vec Qed-only 4644 = 238 is not
-#     "substrate tasks reused", and 365 - 238 = 127 is not "tasks rebuilt
-#     differently". Confounded two ways:
-#       (i)  Qed precedence — the two counts are over different populations
-#            (arena 3,521 vs vec 5,429); an arena Qed rate of 90.7% inside
-#            vec absorbs all 127 with zero task divergence.
-#       (ii) content-addressed collisions inflate the 238.
-#
-#   RUNS SO FAR
-#     #1 phase 3 : arena 3430/3521, 740 cache entries; vec offline 4882/5429
-#     #2 phase 2 : vec Qed-only 4644/5429; arena Qed-only 3065/3521
-#     #3 phase 6 : -wp-gen produced 0 files under four prover spellings and
-#                  WP ABORTED with "Deferred error message was emitted during
-#                  execution ... Plug-in wp aborted: invalid user input."
-#                  The causing message was above the tail we printed.
-#                  Phase 7 finds it.
+# NOT IDENTIFIABLE, never published: 4882 - 4644 = 238 and 365 - 238 = 127.
+#   Those subtract across two different goal populations and assume Qed's
+#   reach is context-invariant, which is the very question. Phase 9 replaces
+#   them with a per-goal, name-level three-way split.
 # ---------------------------------------------------------------------------
 
 on:
   workflow_dispatch:
     inputs:
-      phase7_diagnose:
-        description: "Phase 7 — diagnose the -wp-gen abort and probe -wp-report-json (~3 min)"
+      phase10_taskhash:
+        description: "Phase 10 — -wp-gen task hashes with the CORRECT prover name (~15 min)"
         type: boolean
         default: true
-      phase8_json_names:
-        description: "Phase 8 — name-level, fully identifiable measurement via JSON (~1.5h)"
+      phase9_json:
+        description: "Phase 9 — per-goal three-way split via JSON, identifiable (~1h15)"
         type: boolean
-        default: false
+        default: true
 
 env:
   ARENA_INC: "-I core/primitives -I core -I ."
@@ -62,176 +52,164 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
 
-      # ---------------------------------------------------------- phase 7
-      # Everything here is restricted to ONE small function with -wp-fct, so
-      # each probe takes seconds. Full logs are printed, not tails.
-      - name: "Phase 7 — diagnose"
-        if: ${{ inputs.phase7_diagnose }}
+      # --------------------------------------------------------- phase 10
+      - name: "Phase 10 — generated-task hashes (direct, no provers)"
+        if: ${{ inputs.phase10_taskhash }}
         run: |
           eval $(opam env --switch=frama-c)
           set +e
           OUT=$GITHUB_WORKSPACE/vc-out; mkdir -p "$OUT"
-          BASE="-wp ${MODEL} -wp-fct arena_capacity"
-          CPP="-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG"
 
-          echo "############ 7.0  warn-key syntax ############"
-          frama-c -wp-help 2>&1 | grep -iE "warn-key|msg-key" -A3 | head -30
-
-          echo ""
-          echo "############ 7.1  -wp-gen, ONE function, FULL log ############"
-          frama-c $BASE -wp-gen -wp-prover why3:alt-ergo -wp-out "$OUT/g1" \
+          echo "=== arena.h, -wp-gen -wp-prover alt-ergo ==="
+          frama-c -wp ${MODEL} -wp-gen -wp-prover alt-ergo -wp-out "$OUT/arena" \
             "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/g1.log" 2>&1
-          echo "exit=$?  files=$(find "$OUT/g1" -type f 2>/dev/null | wc -l)"
-          echo "----- full log -----"; cat "$OUT/g1.log"
+            core/arena.h > "$OUT/gen-arena.log" 2>&1
+          echo "exit=$?  files=$(find "$OUT/arena" -type f 2>/dev/null | wc -l)"
+          grep -E "User Error|aborted" "$OUT/gen-arena.log" | head -5
 
-          echo ""
-          echo "############ 7.2  same, pedantic-assigns silenced ############"
-          frama-c $BASE -wp-gen -wp-prover why3:alt-ergo -wp-out "$OUT/g2" \
-            -wp-warn-key pedantic-assigns=inactive \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/g2.log" 2>&1
-          echo "exit=$?  files=$(find "$OUT/g2" -type f 2>/dev/null | wc -l)"
-          grep -E "User Error|aborted|Warning" "$OUT/g2.log" | head -10
+          echo "=== vec_verify.h, -wp-gen -wp-prover alt-ergo ==="
+          frama-c -wp ${MODEL} -wp-gen -wp-prover alt-ergo -wp-out "$OUT/vec" \
+            "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
+            vmacros/vdrivers/vec_verify.h > "$OUT/gen-vec.log" 2>&1
+          echo "exit=$?  files=$(find "$OUT/vec" -type f 2>/dev/null | wc -l)"
+          grep -E "User Error|aborted" "$OUT/gen-vec.log" | head -5
 
-          echo ""
-          echo "############ 7.3  -wp-gen with NO -wp-out ############"
-          frama-c $BASE -wp-gen -wp-prover why3:alt-ergo \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/g3.log" 2>&1
-          echo "exit=$?"; grep -E "User Error|aborted|session|Generated" "$OUT/g3.log" | head -10
-
-          echo ""
-          echo "############ 7.4  no -wp-gen, does the SAME cmd work? ############"
-          frama-c $BASE -wp-prover why3:alt-ergo -wp-out "$OUT/g4" \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/g4.log" 2>&1
-          echo "exit=$?  files=$(find "$OUT/g4" -type f 2>/dev/null | wc -l)"
-          grep -E "Proved goals|User Error|aborted" "$OUT/g4.log" | head -5
-
-          echo ""
-          echo "############ 7.5  -wp-report-json schema probe ############"
-          frama-c $BASE -wp-prover alt-ergo -wp-timeout 5 \
-            -wp-report-json "$OUT/probe.json" \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/g5.log" 2>&1
-          echo "exit=$?"
-          if [ -s "$OUT/probe.json" ]; then
-            echo "JSON produced, $(wc -c < "$OUT/probe.json") bytes. First 2000:"
-            head -c 2000 "$OUT/probe.json"; echo
-            echo "--- top-level keys ---"
-            python3 -c "import json,sys; d=json.load(open('$OUT/probe.json')); print(type(d), list(d)[:20] if isinstance(d,dict) else len(d))" 2>&1
-          else
-            echo "NO JSON produced"; grep -E "User Error|aborted" "$OUT/g5.log" | head -5
+          A=$(find "$OUT/arena" -type f 2>/dev/null | wc -l)
+          V=$(find "$OUT/vec" -type f 2>/dev/null | wc -l)
+          if [ "$A" -eq 0 ] || [ "$V" -eq 0 ]; then
+            echo "no task files — phase 9 carries the measurement"; exit 0
           fi
+
+          echo ""
+          echo "=== layout ==="
+          find "$OUT/arena" -type f | sed "s|$OUT/arena/||" | sort | head -20
+
+          ( cd "$OUT/arena" && find . -type f -exec sha256sum {} \; ) | sed 's|\./||' | sort -k2 > "$OUT/arena.sha"
+          ( cd "$OUT/vec"   && find . -type f -exec sha256sum {} \; ) | sed 's|\./||' | sort -k2 > "$OUT/vec.sha"
+          awk '{print $2}' "$OUT/arena.sha" | sort > "$OUT/arena.names"
+          awk '{print $2}' "$OUT/vec.sha"   | sort > "$OUT/vec.names"
+          comm -12 "$OUT/arena.names" "$OUT/vec.names" > "$OUT/shared.names"
+
+          SAME=0; DIFF=0; : > "$OUT/changed.names"
+          while IFS= read -r n; do
+            a=$(awk -v k="$n" '$2==k{print $1; exit}' "$OUT/arena.sha")
+            b=$(awk -v k="$n" '$2==k{print $1; exit}' "$OUT/vec.sha")
+            if [ "$a" = "$b" ]; then SAME=$((SAME+1)); else DIFF=$((DIFF+1)); echo "$n" >> "$OUT/changed.names"; fi
+          done < "$OUT/shared.names"
+
+          echo ""
+          echo "============= PHASE 10: DIRECT TASK IDENTITY ============="
+          echo "  arena task files            : $A"
+          echo "  vec task files              : $V"
+          echo "  shared by goal path         : $(wc -l < "$OUT/shared.names")"
+          echo "  BYTE-IDENTICAL              : $SAME"
+          echo "  CONTENT CHANGED             : $DIFF"
+          echo "  first 30 changed:"; head -30 "$OUT/changed.names"
+          echo "========================================================="
           exit 0
 
-      # ---------------------------------------------------------- phase 8
-      # Fully identifiable, name-level, and independent of -wp-gen.
-      #
-      #   Q_arena = arena-named goals proved by Qed alone in ARENA's TU
-      #   Q_vec   = arena-named goals proved by Qed alone in VEC's TU
-      #   H_vec   = arena-named goals proved in VEC's TU with arena's cache
-      #
-      #   Qed absorption (confound i, MEASURED) = |Q_vec| - |Q_arena|
-      #   task-identical arena goals            = |H_vec| - |Q_vec|
-      #   divergent                             = 365 - (|H_vec| - |Q_vec|)
-      #
-      # Restricting every set to arena-named goals also removes the
-      # content-addressed collision confound (ii).
-      - name: "Phase 8 — name-level identifiable measurement"
-        if: ${{ inputs.phase8_json_names }}
+      # ---------------------------------------------------------- phase 9
+      - name: "Phase 9 — per-goal three-way split (JSON)"
+        if: ${{ inputs.phase9_json }}
         run: |
           eval $(opam env --switch=frama-c)
           set +e
           OUT=$GITHUB_WORKSPACE/vc-out; mkdir -p "$OUT"
-          CACHE=$GITHUB_WORKSPACE/wpcache; EMPTY=$GITHUB_WORKSPACE/empty
-          mkdir -p "$CACHE" "$EMPTY"
+          CACHE=$GITHUB_WORKSPACE/wpcache; mkdir -p "$CACHE"
 
-          echo "=== 8.1 arena, full provers, populate cache + JSON ==="
+          echo "=== 9.1 arena.h, full provers, populate cache, JSON (~1h) ==="
           frama-c -wp ${MODEL} -wp-prover alt-ergo,z3,cvc5 -wp-timeout 120 \
             -wp-cache update -wp-cache-dir "$CACHE" \
             -wp-report-json "$OUT/arena-full.json" \
             "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/8.1.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/8.1.log")"
+            core/arena.h > "$OUT/9.1.log" 2>&1
+          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/9.1.log")"
+          echo "  cache entries: $(find "$CACHE" -type f | wc -l)"
 
-          echo "=== 8.2 arena, Qed only (empty cache) + JSON ==="
-          frama-c -wp ${MODEL} -wp-cache offline -wp-cache-dir "$EMPTY" \
-            -wp-report-json "$OUT/arena-qed.json" \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/8.2.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/8.2.log")"
-
-          echo "=== 8.3 vec, Qed only (empty cache) + JSON ==="
-          frama-c -wp ${MODEL} -wp-cache offline -wp-cache-dir "$EMPTY" \
-            -wp-report-json "$OUT/vec-qed.json" \
-            "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            vmacros/vdrivers/vec_verify.h > "$OUT/8.3.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/8.3.log")"
-
-          echo "=== 8.4 vec, offline against arena's cache + JSON ==="
+          echo "=== 9.2 vec's TU, offline vs that cache, JSON (~15 min) ==="
           frama-c -wp ${MODEL} -wp-cache offline -wp-cache-dir "$CACHE" \
-            -wp-report-json "$OUT/vec-cached.json" \
+            -wp-report-json "$OUT/vec-offline.json" \
             "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            vmacros/vdrivers/vec_verify.h > "$OUT/8.4.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/8.4.log")"
+            vmacros/vdrivers/vec_verify.h > "$OUT/9.2.log" 2>&1
+          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/9.2.log")"
 
           echo ""
-          echo "=== 8.5 set arithmetic over ARENA-NAMED goals only ==="
+          echo "=== 9.3 per-goal three-way split ==="
           python3 - <<'PY'
-          import json, os, re, sys
+          import json, os, re, collections
           OUT = os.environ['GITHUB_WORKSPACE'] + '/vc-out'
-          # arena's own functions, from the header itself
-          src = open('core/arena.h').read()
-          fns = set(re.findall(r'\b(arena_[a-z0-9_]+)\s*\(', src))
-          print(f"  arena function names found: {len(fns)}")
 
           def load(p):
-              try: return json.load(open(p))
-              except Exception as e:
-                  print(f"  !! {os.path.basename(p)}: {e}"); return None
+              t = open(p).read()
+              t = re.sub(r'(\d)\.(?=\s*[,}\]])', r'\1.0', t)   # "0." -> "0.0"
+              return json.loads(t)
 
-          def proved_names(doc):
-              """Walk whatever shape -wp-report-json emits and collect
-              (goal-name, status) pairs. Schema printed by phase 7."""
-              out = set()
-              def walk(o):
-                  if isinstance(o, dict):
-                      g = o.get('goal') or o.get('property') or o.get('name')
-                      s = str(o.get('status') or o.get('verdict') or '')
-                      if g and s.lower() in ('valid','proved','true'):
-                          out.add(str(g))
-                      for v in o.values(): walk(v)
-                  elif isinstance(o, list):
-                      for v in o: walk(v)
-              walk(doc); return out
+          def index(doc):
+              d = {}
+              for g in doc:
+                  if not isinstance(g, dict) or 'goal' not in g: continue
+                  provers = [str(p.get('prover','')).lower()
+                             for p in (g.get('provers') or [])
+                             if p.get('success')]
+                  d[g['goal']] = {
+                      'file': os.path.basename(str(g.get('file',''))),
+                      'fn': g.get('function',''),
+                      'verdict': str(g.get('verdict','')).lower(),
+                      'by': provers }
+              return d
 
-          docs = {k: load(f"{OUT}/{k}.json")
-                  for k in ('arena-full','arena-qed','vec-qed','vec-cached')}
-          if any(v is None for v in docs.values()):
-              print("  JSON missing — rerun phase 7 and fix the schema walker")
-              sys.exit(0)
+          A = index(load(f"{OUT}/arena-full.json"))
+          V = index(load(f"{OUT}/vec-offline.json"))
+          print(f"  arena goals in JSON: {len(A)}   vec goals in JSON: {len(V)}")
 
-          S = {k: proved_names(v) for k, v in docs.items()}
-          def arena_only(names):
-              return {n for n in names if any(f in n for f in fns)}
-          A = {k: arena_only(v) for k, v in S.items()}
-          for k in S: print(f"  {k:12s} proved={len(S[k]):5d}  arena-named={len(A[k]):5d}")
+          # arena's own goals, by SOURCE FILE — exact, not a name heuristic
+          arena_goals = {k: v for k, v in A.items() if v['file'] == 'arena.h'}
+          print(f"  goals attributed to arena.h: {len(arena_goals)}")
 
-          absorb = len(A['vec-qed']) - len(A['arena-qed'])
-          ident  = len(A['vec-cached']) - len(A['vec-qed'])
-          prover = len(A['arena-full']) - len(A['arena-qed'])
+          qed_only   = {k for k, v in arena_goals.items()
+                        if v['verdict'] == 'valid' and v['by'] == ['qed']}
+          prover_won = {k for k, v in arena_goals.items()
+                        if v['verdict'] == 'valid' and any(p != 'qed' for p in v['by'])}
+          residual   = {k for k, v in arena_goals.items() if v['verdict'] != 'valid'}
+          print(f"  arena.h: Qed-only {len(qed_only)}, prover-discharged "
+                f"{len(prover_won)}, residual {len(residual)}")
+
+          absorbed = identical = diverged = absent = 0
+          div_names, abs_names = [], []
+          for g in sorted(prover_won):
+              v = V.get(g)
+              if v is None:
+                  absent += 1; continue
+              if v['verdict'] != 'valid':
+                  diverged += 1; div_names.append(g)
+              elif v['by'] == ['qed']:
+                  absorbed += 1; abs_names.append(g)
+              else:
+                  identical += 1
+
+          n = len(prover_won)
           print()
-          print("  ================= IDENTIFIABLE RESULT =================")
-          print(f"  arena goals needing a prover (arena's own TU) : {prover}")
-          print(f"  Qed ABSORPTION inside vec (confound i, measured): {absorb}")
-          print(f"  arena goals with an IDENTICAL task in vec      : {ident}")
-          print(f"  => task DIVERGENCE                             : {prover - ident - max(absorb,0)}")
-          print("  Non-zero divergence => the composition result is NOT a")
-          print("  determinism corollary. Zero => it is, and the paper should")
-          print("  say so and lead with the perturbations that change the task.")
-          print("  =======================================================")
+          print("  ============ IDENTIFIABLE THREE-WAY SPLIT ============")
+          print(f"  arena goals needing a prover in arena's own TU : {n}")
+          print(f"    -> in vec, discharged by a NAMED prover")
+          print(f"       (provers disabled => cache hit => SAME TASK): {identical}")
+          print(f"    -> in vec, discharged by QED")
+          print(f"       (context strengthened Qed — a context effect): {absorbed}")
+          print(f"    -> in vec, NOT proved (task diverged)           : {diverged}")
+          print(f"    -> not present in vec's JSON at all             : {absent}")
+          print()
+          print("  Non-zero 'task diverged' => the composition result is NOT a")
+          print("  determinism corollary. Zero diverged AND zero absorbed =>")
+          print("  it is, and the paper leads with the perturbations that DO")
+          print("  change the task (width, source churn, closure, addition).")
+          print("  ======================================================")
+          print()
+          print("  first 25 DIVERGED:"); [print("   ", x) for x in div_names[:25]]
+          print("  first 10 QED-ABSORBED:"); [print("   ", x) for x in abs_names[:10]]
+
+          by_fn = collections.Counter(A[g]['fn'] for g in div_names)
+          print("\n  diverged goals by function (top 15):")
+          for f, c in by_fn.most_common(15): print(f"    {c:4d}  {f}")
           PY
           exit 0
 
