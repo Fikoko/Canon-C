@@ -1,0 +1,157 @@
+name: VC identity (paper experiment)
+
+# ---------------------------------------------------------------------------
+# One-off measurement for the FM 2027 paper. MANUAL TRIGGER ONLY — this does
+# not run on push and does not gate anything.
+#
+# QUESTION: when arena.h's proof obligations are re-derived inside vec's
+# mega-TU, does WP hand the solvers the SAME task, or a different one?
+#
+#   Same task  -> the composition result is a corollary of WP's determinism.
+#                 Demote it in the paper; lead with residual pinning and the
+#                 perturbation axes (which are untouched by this, because P4
+#                 and P7 change the CODE, not just the context).
+#   Different  -> the verdicts held across genuinely different prover inputs.
+#                 That is a finding, and it ends the "isn't this just
+#                 determinism?" objection in one sentence.
+#
+# Two independent instruments, weakest first:
+#
+#   PHASE A  -wp-gen task dump + byte diff.        ~10 min, no provers.
+#   PHASE B  proof-cache replay.                   ~1.5 h, decisive.
+#            WP keys its proof cache on a hash of the GENERATED PROVER TASK.
+#            Populate the cache from arena's home run, then re-run vec's TU
+#            in cache-only mode: every substrate goal that still comes back
+#            PROVED is a hash hit, i.e. cryptographic proof that the task is
+#            byte-identical. Goals that go unproved are genuine misses.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_cache_phase:
+        description: "Run PHASE B (proof-cache replay, ~1.5h). Phase A is always run."
+        type: boolean
+        default: true
+
+jobs:
+  vc-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/framac-setup
+
+      # ------------------------------------------------------------- PHASE A
+      - name: "PHASE A — generate obligations and byte-diff the tasks"
+        run: |
+          eval $(opam env --switch=frama-c)
+          set +e
+          OUT=$GITHUB_WORKSPACE/vc-out
+          mkdir -p "$OUT"
+          frama-c -version
+
+          gen () {   # gen <label> <outdir> <includes> <target>
+            local label="$1" dir="$2" inc="$3" tgt="$4"
+            for P in why3 alt-ergo; do
+              rm -rf "$dir"; mkdir -p "$dir"
+              frama-c -wp -wp-rte -wp-model Typed+Cast -wp-split \
+                -wp-gen -wp-prover "$P" -wp-out "$dir" \
+                -cpp-extra-args=" $inc -DCANON_NO_REQUIRE -DNDEBUG" \
+                "$tgt" > "$OUT/$label.$P.log" 2>&1
+              local n=$(find "$dir" -type f 2>/dev/null | wc -l)
+              echo "  $label via -wp-prover $P: $n files"
+              [ "$n" -gt 0 ] && { echo "$P" > "$dir.prover"; return 0; }
+            done
+            return 1
+          }
+
+          echo "=== generating: arena.h at home ==="
+          gen arena "$OUT/arena-home" "-I core/primitives -I core -I ." core/arena.h
+
+          echo "=== generating: the same substrate inside vec's TU ==="
+          gen vec "$OUT/vec" "-I core/primitives -I core -I semantics -I data -I ." \
+              vmacros/vdrivers/vec_verify.h
+
+          echo ""
+          echo "=== output layout (25 entries each) ==="
+          find "$OUT/arena-home" -type f | sed "s|$OUT/arena-home/||" | sort | head -25
+          echo "  total: $(find "$OUT/arena-home" -type f | wc -l)"
+          echo "---"
+          find "$OUT/vec" -type f | sed "s|$OUT/vec/||" | sort | head -25
+          echo "  total: $(find "$OUT/vec" -type f | wc -l)"
+
+          echo ""
+          echo "=== byte-identity over paths present in BOTH runs ==="
+          ( cd "$OUT/arena-home" && find . -type f | sort ) > "$OUT/a.list"
+          ( cd "$OUT/vec"        && find . -type f | sort ) > "$OUT/b.list"
+          comm -12 "$OUT/a.list" "$OUT/b.list" > "$OUT/shared.list"
+          echo "shared paths: $(wc -l < "$OUT/shared.list")"
+          SAME=0; DIFF=0
+          while IFS= read -r f; do
+            if cmp -s "$OUT/arena-home/$f" "$OUT/vec/$f"; then SAME=$((SAME+1))
+            else DIFF=$((DIFF+1)); [ "$DIFF" -le 20 ] && echo "  DIFFERS: $f"; fi
+          done < "$OUT/shared.list"
+          echo ""
+          echo "  RESULT (phase A): identical=$SAME  differing=$DIFF"
+          echo ""
+          echo "=== files mentioning an arena goal, either side ==="
+          grep -rl "arena_alloc\|arena_fits\|align_up" "$OUT/arena-home" 2>/dev/null | head -5
+          grep -rl "arena_alloc\|arena_fits\|align_up" "$OUT/vec" 2>/dev/null | head -5
+          exit 0
+
+      # ------------------------------------------------------------- PHASE B
+      - name: "PHASE B — proof-cache replay (the decisive instrument)"
+        if: ${{ inputs.run_cache_phase }}
+        run: |
+          eval $(opam env --switch=frama-c)
+          set +e
+          OUT=$GITHUB_WORKSPACE/vc-out
+          CACHE=$GITHUB_WORKSPACE/wpcache
+          mkdir -p "$OUT" "$CACHE"
+
+          echo "=== populating the cache from arena.h's home run (full proving) ==="
+          frama-c -wp -wp-rte -wp-model Typed+Cast \
+            -wp-prover alt-ergo,z3,cvc5 -wp-timeout 120 -wp-split \
+            -wp-cache update -wp-cache-dir "$CACHE" \
+            -cpp-extra-args=" -I core/primitives -I core -I . -DCANON_NO_REQUIRE -DNDEBUG" \
+            core/arena.h > "$OUT/arena-cache-update.log" 2>&1
+          echo "  arena: $(grep -E '^\[wp\] Proved goals:' "$OUT/arena-cache-update.log")"
+          echo "  cache entries: $(find "$CACHE" -type f | wc -l)"
+          grep -i "cache" "$OUT/arena-cache-update.log" | head -10
+
+          echo ""
+          echo "=== replaying vec's TU against that cache, provers DISABLED ==="
+          echo "    Every goal proved here is a task-hash HIT => byte-identical task."
+          frama-c -wp -wp-rte -wp-model Typed+Cast -wp-split \
+            -wp-cache offline -wp-cache-dir "$CACHE" \
+            -cpp-extra-args=" -I core/primitives -I core -I semantics -I data -I . -DCANON_NO_REQUIRE -DNDEBUG" \
+            vmacros/vdrivers/vec_verify.h > "$OUT/vec-cache-offline.log" 2>&1
+          echo "  vec (offline): $(grep -E '^\[wp\] Proved goals:' "$OUT/vec-cache-offline.log")"
+          grep -i "cache" "$OUT/vec-cache-offline.log" | head -10
+
+          echo ""
+          echo "==================== HOW TO READ THIS ===================="
+          echo "arena's home run proved 3430 goals and cached that many tasks."
+          echo "In vec's offline replay, the proved count is the number of"
+          echo "arena tasks that hashed IDENTICALLY inside the mega-TU:"
+          echo ""
+          echo "  ~3430 proved  -> tasks identical. The composition result is a"
+          echo "                   determinism corollary. Demote it; lead with"
+          echo "                   residual pinning + P4/P7."
+          echo "  ~0 proved     -> every task differs and the verdicts held"
+          echo "                   anyway. That is the finding. Put it in the"
+          echo "                   abstract."
+          echo "  in between    -> the most interesting outcome: report the"
+          echo "                   hit/miss split per substrate module."
+          echo "========================================================="
+          exit 0
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vc-identity
+          path: |
+            vc-out/**
+          retention-days: 90
