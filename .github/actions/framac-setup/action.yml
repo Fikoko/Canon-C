@@ -219,7 +219,17 @@ runs:
             fi
           done
           if [ "${REGISTERED}" -ne 1 ]; then
-            echo "WARN: all cvc5 registration attempts failed — WP will run without cvc5"
+            echo "FAIL: all cvc5 registration attempts failed."
+            echo "      Every class-(a) deviation in docs/deviations.md is"
+            echo "      licensed by a 'triple-prover-resistant' claim, which"
+            echo "      means Alt-Ergo, Z3 AND cvc5 were all tried and all"
+            echo "      failed. Running dual-prover silently invalidates that"
+            echo "      standard for every goal measured in this run, so this"
+            echo "      is gated here — at the one place the claim is either"
+            echo "      true or false — rather than per job, where a TU that"
+            echo "      simply never needs cvc5 is indistinguishable from a"
+            echo "      broken configuration."
+            exit 1
           fi
         else
           echo ""
