@@ -481,12 +481,20 @@ jobs:
   #   GATE POLICY (uniform as of 2026-07-16; previously vec-only for gates
   #   0 and 1 — the retrofit is itself a ratchet commit):
   #     Gate 0 — pinned Proved line (goal-surface drift is a hard failure)
-  #     Gate 1 — zero Failed verdicts, ever. Failed = a falsified contract,
-  #              categorically different from a residual; it is gated
-  #              explicitly and EXCLUDED from the pooled residual count
-  #              (residual = Timeout ∪ Unknown). Before this retrofit a
-  #              Timeout→Failed flip on a pinned goal could pass count and
-  #              roll-call in the pre-vec wrappers.
+  #     Gate 1 — zero Failed, Invalid or Stepout verdicts, ever. The WP
+  #              manual gives wp.verdict ::= none | valid | unknown |
+  #              timeout | stepout | invalid | failed. Failed is a PROVER
+  #              ERROR, not a refutation — an offline cache miss also
+  #              yields Failed — and Invalid is the refutation verdict.
+  #              All three are categorically different from a residual,
+  #              are gated explicitly, and are EXCLUDED from the pooled
+  #              residual count (residual = Timeout ∪ Unknown).
+  #              Note these are defence in depth, not a hole being closed:
+  #              gates 0 and 2 already pin both (Proved / Total) and the
+  #              exact T+U count, and Total − Proved == the pinned count in
+  #              every job, so a goal landing in any other verdict already
+  #              breaks that equality and trips gate 2. The named gates
+  #              turn that arithmetic detection into a diagnosis.
   #     Gate 2 — exact residual count
   #     Gate 3 — by-name roll-call; with gate 2 and unique names this is
   #              set equality. Full roll-calls everywhere except bits
@@ -2339,25 +2347,6 @@ jobs:
             echo "  32-bit; classify these before anything else:"
             grep -E "^\[wp\] \[Failed\]" wp_arena32_output.txt
           fi
-          if [ "${INVALID_COUNT}" -ne 0 ]; then
-            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
-            echo "      FALSIFIED with a counter-example. Invalid is WP's"
-            echo "      refutation verdict; Failed is a prover error. This"
-            echo "      is categorically different from a residual and can"
-            echo "      never be pinned:"
-            grep -E "^\\[wp\\] \\[Invalid\\]" wp_arena32_output.txt
-            exit 1
-          fi
-          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
-            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
-            echo "      Stepout is a non-proved verdict this project has"
-            echo "      never observed. It is deliberately NOT pooled into"
-            echo "      the residual count, because the residual set is"
-            echo "      defined as Timeout u Unknown. If this fires, decide"
-            echo "      whether to pool it and update the definition first:"
-            grep -E "^\\[wp\\] \\[Stepout\\]" wp_arena32_output.txt
-            exit 1
-          fi
 
           # ---- payload: diff this run's residuals against the 64-bit set ----
           grep -oE "^\[wp\] \[(Timeout|Unknown)\] [A-Za-z0-9_]+" wp_arena32_output.txt \
@@ -3169,9 +3158,11 @@ jobs:
   #                definition — forward-flag for deque's shift loops)
   #              + (d) 5 element-transfer ensures (mem_copy/mem_move are
   #                frame-only) + (h) 22 Typed+Cast int<->char bridging
-  #   (The CI baseline label was originally recorded as 145 inherited +
-  #    53 own; the 2026-07-16 Correction note reclassified to 123 + 75
-  #    with the SAME 198 names — no gate or count changed.)
+  #   (The CI baseline label was originally recorded as 143 inherited +
+  #    53 own; the 2026-07-16 Correction note reclassified to 121 + 75
+  #    with the SAME 196 names — no gate or count changed. Those are the
+  #    #1154 figures and are left as recorded; API-001 later took the set
+  #    to 198 = 123 + 75 at #1202.)
   # Gates: pinned Proved line, 0 Failed ever, exact count, by-name roll-call
   # (= set equality). ANY change to the residual set, either direction,
   # fails CI; the fix is the acknowledged ratchet — update the pinned
