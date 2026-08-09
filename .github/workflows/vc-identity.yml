@@ -4,45 +4,57 @@ name: VC identity (paper experiment)
 # MANUAL TRIGGER ONLY. Does WP hand the solvers the SAME generated task for a
 # substrate goal inside a larger composing unit?
 #
-# RUN LOG
+# RUN LOG — three readings, two of them wrong. Read before trusting anything.
+#
 #   #1 phase 3 : arena 3430/3521 full provers, 740 cache entries;
-#                vec offline vs that cache 4882/5429
-#   #2 phase 2 : vec Qed-only 4644/5429 ; arena Qed-only 3065/3521
-#   #3 phase 6 : -wp-gen produced nothing — cause found in #4
-#   #4 phase 7 : cause was a bad prover name, "Prover 'why3:alt-ergo' not
-#                found in why3.conf". Correct spelling is plain `alt-ergo`
-#                (why3.conf registers it as Alt-Ergo:2.6.3). Also confirmed
-#                -wp-report-json works and emits, PER GOAL: goal name, source
-#                file, function, verdict, and the prover that discharged it
-#                (including "qed"). Its floats are written "0." which stock
-#                json.load rejects — repaired below.
+#                vec offline vs that cache 4885/5429.
+#   #2 phase 2 : vec Qed-only 4644/5429 ; arena Qed-only 3065/3521.
+#                READING "127 tasks diverged" — WRONG. Subtracts across two
+#                different goal populations and assumes Qed's reach is
+#                context-invariant, which is the question being asked.
+#   #4 phase 7 : -wp-gen failed only because 'why3:alt-ergo' is not a prover
+#                name here (why3.conf registers Alt-Ergo:2.6.3, reached as
+#                plain `alt-ergo`). -wp-report-json works and emits PER GOAL:
+#                name, source file, function, verdict, and which prover
+#                succeeded (including "qed"). Its floats print as "0." which
+#                stock json.load rejects.
+#   #5 phase 9 : per-goal split over arena.h's 605 goals — 461 Qed-only,
+#                96 prover-discharged, 48 residual (the 48 independently
+#                confirms arena's own-residual count; the CI comment saying
+#                "43 inherited + 46 own" = 89 is STALE, it is 43 + 48 = 91).
+#                Of the 96: 83 same-task, 0 Qed-absorbed, 13 unproved.
+#                READING "13 diverged" — WRONG. The replay carried no
+#                -wp-prover flag, so only the default prover's cache entries
+#                were consulted. 11 of the 13 had been closed by Z3 and had
+#                no Alt-Ergo entry to find; only 1 of the 83 was Z3-closed.
+#                Prover-order artifact, not divergence.
 #
-# SOUND SO FAR: arena has exactly 365 goals that needed a prover and proved
-#   (3430 - 3065), corroborated by VERIFY-009-W's per-prover attribution at
-#   #1202 (325 + 11 + 29). WP's cache is CONTENT-addressed, not name-keyed.
+#   WHAT SURVIVES: arena has 96 prover-discharged goals in arena.h itself
+#   (365 across its whole TU, corroborated by VERIFY-009-W's 325+11+29).
+#   Qed absorption between the two TUs is measured at ZERO. WP's cache is
+#   content-addressed, not name-keyed.
 #
-# NOT IDENTIFIABLE, never published: 4882 - 4644 = 238 and 365 - 238 = 127.
-#   Those subtract across two different goal populations and assume Qed's
-#   reach is context-invariant, which is the very question. Phase 9 replaces
-#   them with a per-goal, name-level three-way split.
+#   OPEN: true task divergence is <= 2 goals and may be 0. Phase 11 settles
+#   it with all three provers in the replay AND a positive control.
 # ---------------------------------------------------------------------------
 
 on:
   workflow_dispatch:
     inputs:
-      phase10_taskhash:
-        description: "Phase 10 — -wp-gen task hashes with the CORRECT prover name (~15 min)"
+      phase11:
+        description: "Phase 11 — corrected replay, all provers, WITH positive control"
         type: boolean
         default: true
-      phase9_json:
-        description: "Phase 9 — per-goal three-way split via JSON, identifiable (~1h15)"
+      rebuild_cache:
+        description: "Force re-proving arena to rebuild the cache (~1h). Off = reuse cached."
         type: boolean
-        default: true
+        default: false
 
 env:
   ARENA_INC: "-I core/primitives -I core -I ."
   VEC_INC: "-I core/primitives -I core -I semantics -I data -I ."
   MODEL: "-wp-rte -wp-model Typed+Cast -wp-split"
+  PROVERS: "-wp-prover alt-ergo,z3,cvc5 -wp-timeout 120"
 
 jobs:
   vc-identity:
@@ -52,164 +64,154 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
 
-      # --------------------------------------------------------- phase 10
-      - name: "Phase 10 — generated-task hashes (direct, no provers)"
-        if: ${{ inputs.phase10_taskhash }}
-        run: |
-          eval $(opam env --switch=frama-c)
-          set +e
-          OUT=$GITHUB_WORKSPACE/vc-out; mkdir -p "$OUT"
+      # The 1h arena proving run is the expensive part. Cache it keyed on the
+      # content of every header in arena's include closure, so iterating on
+      # the replay costs ~20 min instead of ~1h20.
+      - name: Cache the populated WP proof cache
+        id: wpcache
+        uses: actions/cache@v5
+        with:
+          path: wpcache
+          key: wpcache-arena-${{ hashFiles('core/arena.h','core/memory.h','core/slice.h','core/primitives/*.h') }}-v1
 
-          echo "=== arena.h, -wp-gen -wp-prover alt-ergo ==="
-          frama-c -wp ${MODEL} -wp-gen -wp-prover alt-ergo -wp-out "$OUT/arena" \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/gen-arena.log" 2>&1
-          echo "exit=$?  files=$(find "$OUT/arena" -type f 2>/dev/null | wc -l)"
-          grep -E "User Error|aborted" "$OUT/gen-arena.log" | head -5
-
-          echo "=== vec_verify.h, -wp-gen -wp-prover alt-ergo ==="
-          frama-c -wp ${MODEL} -wp-gen -wp-prover alt-ergo -wp-out "$OUT/vec" \
-            "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            vmacros/vdrivers/vec_verify.h > "$OUT/gen-vec.log" 2>&1
-          echo "exit=$?  files=$(find "$OUT/vec" -type f 2>/dev/null | wc -l)"
-          grep -E "User Error|aborted" "$OUT/gen-vec.log" | head -5
-
-          A=$(find "$OUT/arena" -type f 2>/dev/null | wc -l)
-          V=$(find "$OUT/vec" -type f 2>/dev/null | wc -l)
-          if [ "$A" -eq 0 ] || [ "$V" -eq 0 ]; then
-            echo "no task files — phase 9 carries the measurement"; exit 0
-          fi
-
-          echo ""
-          echo "=== layout ==="
-          find "$OUT/arena" -type f | sed "s|$OUT/arena/||" | sort | head -20
-
-          ( cd "$OUT/arena" && find . -type f -exec sha256sum {} \; ) | sed 's|\./||' | sort -k2 > "$OUT/arena.sha"
-          ( cd "$OUT/vec"   && find . -type f -exec sha256sum {} \; ) | sed 's|\./||' | sort -k2 > "$OUT/vec.sha"
-          awk '{print $2}' "$OUT/arena.sha" | sort > "$OUT/arena.names"
-          awk '{print $2}' "$OUT/vec.sha"   | sort > "$OUT/vec.names"
-          comm -12 "$OUT/arena.names" "$OUT/vec.names" > "$OUT/shared.names"
-
-          SAME=0; DIFF=0; : > "$OUT/changed.names"
-          while IFS= read -r n; do
-            a=$(awk -v k="$n" '$2==k{print $1; exit}' "$OUT/arena.sha")
-            b=$(awk -v k="$n" '$2==k{print $1; exit}' "$OUT/vec.sha")
-            if [ "$a" = "$b" ]; then SAME=$((SAME+1)); else DIFF=$((DIFF+1)); echo "$n" >> "$OUT/changed.names"; fi
-          done < "$OUT/shared.names"
-
-          echo ""
-          echo "============= PHASE 10: DIRECT TASK IDENTITY ============="
-          echo "  arena task files            : $A"
-          echo "  vec task files              : $V"
-          echo "  shared by goal path         : $(wc -l < "$OUT/shared.names")"
-          echo "  BYTE-IDENTICAL              : $SAME"
-          echo "  CONTENT CHANGED             : $DIFF"
-          echo "  first 30 changed:"; head -30 "$OUT/changed.names"
-          echo "========================================================="
-          exit 0
-
-      # ---------------------------------------------------------- phase 9
-      - name: "Phase 9 — per-goal three-way split (JSON)"
-        if: ${{ inputs.phase9_json }}
+      - name: "Phase 11 — corrected replay + positive control"
+        if: ${{ inputs.phase11 }}
         run: |
           eval $(opam env --switch=frama-c)
           set +e
           OUT=$GITHUB_WORKSPACE/vc-out; mkdir -p "$OUT"
           CACHE=$GITHUB_WORKSPACE/wpcache; mkdir -p "$CACHE"
 
-          echo "=== 9.1 arena.h, full provers, populate cache, JSON (~1h) ==="
-          frama-c -wp ${MODEL} -wp-prover alt-ergo,z3,cvc5 -wp-timeout 120 \
-            -wp-cache update -wp-cache-dir "$CACHE" \
-            -wp-report-json "$OUT/arena-full.json" \
-            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            core/arena.h > "$OUT/9.1.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/9.1.log")"
-          echo "  cache entries: $(find "$CACHE" -type f | wc -l)"
-
-          echo "=== 9.2 vec's TU, offline vs that cache, JSON (~15 min) ==="
-          frama-c -wp ${MODEL} -wp-cache offline -wp-cache-dir "$CACHE" \
-            -wp-report-json "$OUT/vec-offline.json" \
-            "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
-            vmacros/vdrivers/vec_verify.h > "$OUT/9.2.log" 2>&1
-          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/9.2.log")"
+          if [ "${{ steps.wpcache.outputs.cache-hit }}" = "true" ] && [ "${{ inputs.rebuild_cache }}" != "true" ]; then
+            echo "=== 11.1 reusing cached WP cache ($(find "$CACHE" -type f | wc -l) entries) ==="
+            frama-c -wp ${MODEL} ${PROVERS} -wp-cache update -wp-cache-dir "$CACHE" \
+              -wp-report-json "$OUT/arena-full.json" \
+              "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
+              core/arena.h > "$OUT/11.1.log" 2>&1
+          else
+            echo "=== 11.1 arena.h, full provers, populate cache (~1h) ==="
+            frama-c -wp ${MODEL} ${PROVERS} -wp-cache update -wp-cache-dir "$CACHE" \
+              -wp-report-json "$OUT/arena-full.json" \
+              "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
+              core/arena.h > "$OUT/11.1.log" 2>&1
+          fi
+          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/11.1.log")   entries=$(find "$CACHE" -type f | wc -l)"
 
           echo ""
-          echo "=== 9.3 per-goal three-way split ==="
-          python3 - <<'PY'
-          import json, os, re, collections
-          OUT = os.environ['GITHUB_WORKSPACE'] + '/vc-out'
+          echo "=== 11.2 POSITIVE CONTROL: arena replayed against its OWN cache ==="
+          echo "    provers disabled, all three consulted. MUST reproduce 3430/3521."
+          frama-c -wp ${MODEL} ${PROVERS} -wp-cache offline -wp-cache-dir "$CACHE" \
+            -wp-report-json "$OUT/arena-offline.json" \
+            "-cpp-extra-args= ${ARENA_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
+            core/arena.h > "$OUT/11.2.log" 2>&1
+          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/11.2.log")"
 
+          echo ""
+          echo "=== 11.3 vec's TU, offline vs arena's cache, ALL THREE PROVERS ==="
+          frama-c -wp ${MODEL} ${PROVERS} -wp-cache offline -wp-cache-dir "$CACHE" \
+            -wp-report-json "$OUT/vec-offline.json" \
+            "-cpp-extra-args= ${VEC_INC} -DCANON_NO_REQUIRE -DNDEBUG" \
+            vmacros/vdrivers/vec_verify.h > "$OUT/11.3.log" 2>&1
+          echo "  $(grep -E '^\[wp\] Proved goals:' "$OUT/11.3.log")"
+
+          echo ""
+          python3 - <<'PY'
+          import json, re, os, collections
+          OUT = os.environ['GITHUB_WORKSPACE'] + '/vc-out'
           def load(p):
               t = open(p).read()
-              t = re.sub(r'(\d)\.(?=\s*[,}\]])', r'\1.0', t)   # "0." -> "0.0"
-              return json.loads(t)
-
+              return json.loads(re.sub(r'(\d)\.(?=\s*[,}\]])', r'\1.0', t))
           def index(doc):
               d = {}
               for g in doc:
                   if not isinstance(g, dict) or 'goal' not in g: continue
-                  provers = [str(p.get('prover','')).lower()
-                             for p in (g.get('provers') or [])
-                             if p.get('success')]
-                  d[g['goal']] = {
-                      'file': os.path.basename(str(g.get('file',''))),
-                      'fn': g.get('function',''),
-                      'verdict': str(g.get('verdict','')).lower(),
-                      'by': provers }
+                  d[g['goal']] = dict(
+                      file=os.path.basename(str(g.get('file',''))),
+                      fn=g.get('function',''),
+                      verdict=str(g.get('verdict','')).lower(),
+                      won=[str(p.get('prover','')) for p in (g.get('provers') or [])
+                           if p.get('success')])
               return d
 
-          A = index(load(f"{OUT}/arena-full.json"))
-          V = index(load(f"{OUT}/vec-offline.json"))
-          print(f"  arena goals in JSON: {len(A)}   vec goals in JSON: {len(V)}")
+          A  = index(load(f"{OUT}/arena-full.json"))
+          AO = index(load(f"{OUT}/arena-offline.json"))
+          V  = index(load(f"{OUT}/vec-offline.json"))
 
-          # arena's own goals, by SOURCE FILE — exact, not a name heuristic
-          arena_goals = {k: v for k, v in A.items() if v['file'] == 'arena.h'}
-          print(f"  goals attributed to arena.h: {len(arena_goals)}")
+          arena = {k:v for k,v in A.items() if v['file']=='arena.h'}
+          pw = {k:v for k,v in arena.items()
+                if v['verdict']=='valid' and any(p.lower()!='qed' for p in v['won'])}
+          print(f"  arena.h goals {len(arena)} ; prover-discharged {len(pw)}")
 
-          qed_only   = {k for k, v in arena_goals.items()
-                        if v['verdict'] == 'valid' and v['by'] == ['qed']}
-          prover_won = {k for k, v in arena_goals.items()
-                        if v['verdict'] == 'valid' and any(p != 'qed' for p in v['by'])}
-          residual   = {k for k, v in arena_goals.items() if v['verdict'] != 'valid'}
-          print(f"  arena.h: Qed-only {len(qed_only)}, prover-discharged "
-                f"{len(prover_won)}, residual {len(residual)}")
+          def split(target, label):
+              same = [g for g in pw if target.get(g,{}).get('verdict')=='valid'
+                      and any(p.lower()!='qed' for p in target[g]['won'])]
+              qed  = [g for g in pw if target.get(g,{}).get('verdict')=='valid'
+                      and target[g]['won']==['qed']]
+              lost = [g for g in pw if target.get(g,{}).get('verdict','') not in ('valid',)]
+              print(f"\n  --- {label} ---")
+              print(f"    same task (cache hit) : {len(same)}")
+              print(f"    Qed-absorbed          : {len(qed)}")
+              print(f"    NOT resolved          : {len(lost)}")
+              return same, qed, lost
 
-          absorbed = identical = diverged = absent = 0
-          div_names, abs_names = [], []
-          for g in sorted(prover_won):
-              v = V.get(g)
-              if v is None:
-                  absent += 1; continue
-              if v['verdict'] != 'valid':
-                  diverged += 1; div_names.append(g)
-              elif v['by'] == ['qed']:
-                  absorbed += 1; abs_names.append(g)
-              else:
-                  identical += 1
+          cs, cq, cl = split(AO, "POSITIVE CONTROL: arena vs its own cache")
+          if cl:
+              print("    !! CONTROL LEAKS — the instrument loses these even with an")
+              print("       identical task. Subtract this floor from the vec result.")
+              for g in sorted(cl)[:15]:
+                  print(f"       {','.join(p for p in pw[g]['won'] if p.lower()!='qed'):<18} {g}")
+          else:
+              print("    control clean: every prover-discharged goal round-trips.")
 
-          n = len(prover_won)
-          print()
-          print("  ============ IDENTIFIABLE THREE-WAY SPLIT ============")
-          print(f"  arena goals needing a prover in arena's own TU : {n}")
-          print(f"    -> in vec, discharged by a NAMED prover")
-          print(f"       (provers disabled => cache hit => SAME TASK): {identical}")
-          print(f"    -> in vec, discharged by QED")
-          print(f"       (context strengthened Qed — a context effect): {absorbed}")
-          print(f"    -> in vec, NOT proved (task diverged)           : {diverged}")
-          print(f"    -> not present in vec's JSON at all             : {absent}")
-          print()
-          print("  Non-zero 'task diverged' => the composition result is NOT a")
-          print("  determinism corollary. Zero diverged AND zero absorbed =>")
-          print("  it is, and the paper leads with the perturbations that DO")
-          print("  change the task (width, source churn, closure, addition).")
-          print("  ======================================================")
-          print()
-          print("  first 25 DIVERGED:"); [print("   ", x) for x in div_names[:25]]
-          print("  first 10 QED-ABSORBED:"); [print("   ", x) for x in abs_names[:10]]
+          vs, vq, vl = split(V, "vec's TU vs arena's cache")
+          true_div = sorted(set(vl) - set(cl))
+          print(f"\n  ================= RESULT =================")
+          print(f"  instrument loss floor (control)      : {len(cl)}")
+          print(f"  unresolved in vec                    : {len(vl)}")
+          print(f"  TRUE TASK DIVERGENCE (vec minus floor): {len(true_div)}")
+          print(f"  Qed absorption                       : {len(vq)}")
+          print("  ==========================================")
+          for g in true_div[:25]:
+              print(f"    {','.join(p for p in pw[g]['won'] if p.lower()!='qed'):<18} {g}")
+          by = collections.Counter(A[g]['fn'] for g in true_div)
+          if by:
+              print("\n  diverged by function:")
+              for f,c in by.most_common(15): print(f"    {c:4d}  {f}")
 
-          by_fn = collections.Counter(A[g]['fn'] for g in div_names)
-          print("\n  diverged goals by function (top 15):")
-          for f, c in by_fn.most_common(15): print(f"    {c:4d}  {f}")
+          # ---- the stopping rule, encoded. This experiment ends here. ----
+          floor = len(cl); n = len(pw)
+          print("\n" + "#"*62)
+          if floor > max(2, 0.05 * n):
+              print("  BRANCH C — CONTROL LEAKED (%d of %d)." % (floor, n))
+              print("  The cache instrument cannot measure task identity here:")
+              print("  it loses goals whose task is identical BY CONSTRUCTION.")
+              print("  STOP. Do not run a phase 12. Record in Sect. 9 that")
+              print("  whether the generated tasks are identical across units")
+              print("  is not answerable with the available instrumentation,")
+              print("  and lead the paper with P3/P4/P6/P7, which change the")
+              print("  task by construction and do not depend on this.")
+          elif len(true_div) == 0:
+              print("  BRANCH B — NO DIVERGENCE ABOVE THE FLOOR.")
+              print("  WP builds the same task for substrate goals in the")
+              print("  composing unit. The composition identity (P1) IS a")
+              print("  corollary of determinism. STOP.")
+              print("  Say so plainly in Sect. 2, demote P1 to the setting")
+              print("  rather than the result, delete the 'isn't this")
+              print("  expected?' rebuttal in Sect. 9 and replace it with this")
+              print("  measurement, and lead with P3/P4/P6/P7.")
+          else:
+              print("  BRANCH A — %d GOALS DIVERGE ABOVE A FLOOR OF %d."
+                    % (len(true_div), floor))
+              print("  WP hands the solvers a DIFFERENT query for these named")
+              print("  obligations inside the larger unit, and the verdicts")
+              print("  hold anyway. P1 is a finding, not a corollary. STOP.")
+              print("  One sentence in the abstract; Sect. 2's null model")
+              print("  becomes a measured fact; the by-function breakdown")
+              print("  above is the mechanism paragraph for Sect. 5.3.")
+          print("  Either way this line of enquiry is CLOSED. The next")
+          print("  experiment worth running is the application-layer")
+          print("  specimen study of Sect. 11, not a phase 12.")
+          print("#"*62)
           PY
           exit 0
 
