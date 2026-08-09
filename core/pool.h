@@ -70,8 +70,10 @@
  * need to keep post-pool allocations alive across a pool reset, use a
  * separate arena for the pool.
  *
- * pool_get() always verifies that the object being accessed lies within the
- * reserved region — this detects use-after-reset bugs at all build levels.
+ * pool_get() verifies that the object being accessed lies within the reserved
+ * region, detecting use-after-reset bugs. This check is a require_msg, so it
+ * is compiled out under -DCANON_NO_REQUIRE (the configuration the WP proofs
+ * run under); it is present at default and debug build levels.
  *
  * Safe patterns:
  * ✓ Dedicated arena exclusively for the pool

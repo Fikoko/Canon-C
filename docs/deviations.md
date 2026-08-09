@@ -1197,6 +1197,8 @@ enforcement gate prescribes.
 pinned proved-goal summary ratcheted to 3430/3521 (was 3387/3476; +45 goals, +43 proved), EXPECTED_UNPROVED to 91 (was 89).
 Cause: the three `arena_*_cbytes` accessors added by API-001, each carrying the same ACSL contract as its mutable twin.
 
+**Reading note (2026-08-09).** The body of this record above was written against the pre-API-001 figures and still says **46 arena.h-own** residuals and a 89-goal total. Those numbers are historically correct for the baseline they describe and are left as written; the enforced state since CI #1202 is **48 arena.h-own** and 91 (43 inherited + 48 own), the two added goals being the `arena_free_cbytes` const twins. Where the two disagree, the CI pin governs.
+
 **The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered: `typed_cast_arena_free_cbytes_call_cbytes_from_requires` and `..._requires_2`.
 Each new residual is the const twin of a residual this record ALREADY
 documents: `arena_free_cbytes_call_cbytes_from_requires` times out on exactly the obligation its mutable
@@ -1449,9 +1451,21 @@ buffer valid through `capacity - 1`. For `i < used <= capacity`, the slot
 `base_mark + i * object_size` lies in `[base_mark, end_mark)`, hence within the
 valid buffer range. The C computation matches `ptr_elem`'s contract; the
 obstacle is the uintptr_t round-trip through `ptr_offset` / `ptr_elem` bodies
-(VERIFY-006 cat 3), not a real bounds gap. `pool_get`'s runtime `require_msg`
-region check (`(u8*)p - buffer < end_mark`) is the runtime backstop, exercised
-at all build levels.
+(VERIFY-006 cat 3), not a real bounds gap.
+
+**Configuration of the compensating control (corrected 2026-08-09).** An
+earlier revision of this argument cited `pool_get`'s runtime `require_msg`
+region check (`(u8*)p - buffer < end_mark`) as "the runtime backstop, exercised
+at all build levels". That was wrong twice over and is withdrawn. First, every
+WP job runs `-DCANON_NO_REQUIRE`, under which `contract.h` expands
+`require_msg` to `((void)0)`, so the check does not exist in the configuration
+in which this obligation is unproved. Second, the check lives in `pool_get`,
+not in the function carrying the goal, so it would not discharge it even where
+it is compiled in. What actually carries this obligation is the manual argument
+above, from `pool_invariant`, and nothing else; the runtime check is a
+defence-in-depth measure at default and debug build levels only. Per the
+evidence standard, every class-(a) and class-(c) argument must now name the
+build configuration in which any cited control exists.
 
 #### Category 2c: bytes_from / mem_zero / mem_secure_zero call-sites (5)
 
@@ -1643,6 +1657,8 @@ enforcement gate prescribes.
 **Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
 pinned proved-goal summary ratcheted to 3884/4003 (was 3793/3906; +97 goals, +91 proved), EXPECTED_UNPROVED to 119 (was 113).
 Cause: the two `pool_*_cbytes` accessors added by API-001 plus the three `arena_*_cbytes` inherited through the two-hop substrate. The inherited/own split moves 89+24 to 91+28.
+
+**Reading note (2026-08-09).** The body of this record above was written against the pre-API-001 figures and still says 89 inherited + 24 pool.h-own = 113. Those numbers are historically correct for the baseline they describe and are left as written; the enforced state since CI #1202 is 91 inherited + 28 pool.h-own = 119. Where the two disagree, the CI pin governs.
 
 **The unproved set GREW — this is not the usual scalar-only drift.** Six goals entered: the two inherited `arena_free_cbytes` residuals, plus `typed_cast_pool_as_cbytes_call_cbytes_from_requires{,_2}` and `typed_cast_pool_reserved_cbytes_call_cbytes_from_requires{,_2}`.
 Each new residual is the const twin of a residual this record ALREADY
@@ -1892,6 +1908,8 @@ enforcement gate prescribes.
 **Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
 pinned proved-goal summary ratcheted to 3578/3692 (was 3535/3647; +45 goals, +43 proved), EXPECTED_UNPROVED to 114 (was 112).
 Cause: inherited verbatim from arena.h's three `_cbytes` accessors (VERIFY-009 note of the same date); region.h has no own-goal change. The inherited/own split moves 89+23 to 91+23.
+
+**Reading note (2026-08-09).** The body of this record above was written against the pre-API-001 figures and still says 89 inherited + 23 region.h-own = 112. Those numbers are historically correct for the baseline they describe and are left as written; the enforced state since CI #1202 is 91 inherited + 23 region.h-own = 114. Where the two disagree, the CI pin governs.
 
 **The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered, both inherited: `typed_cast_arena_free_cbytes_call_cbytes_from_requires{,_2}`.
 Each new residual is the const twin of a residual this record ALREADY
@@ -2964,6 +2982,11 @@ categories (g) and (h) — neither predicted, both now recorded forward.
 
 ### Enforcement and runtime
 
+*(Figures below describe the CI #1154 baseline. Since CI #1202 the
+enforced values are `5231 / 5429` and an exact count of 198; see the
+Goal-surface reclassification notes above. The gate DESIGN is
+unchanged.)*
+
 The `frama-c-vec` CI step enforces **set equality** through four
 gates: (0) the pinned Proved line `5184 / 5380` (catches silent
 goal-surface drift — a function dropping out of the TU leaves the
@@ -3055,6 +3078,8 @@ with the acknowledged commit the enforcement gate prescribes.
 **Goal-surface reclassification (2026-07-30, CI #1202, Commit 16/16b):**
 pinned proved-goal summary ratcheted to 5231/5429 (was 5188/5384; +45 goals, +43 proved), EXPECTED_UNPROVED to 198 (was 196).
 Cause: inherited verbatim from arena.h's three `_cbytes` accessors via the memory-chain substrate (VERIFY-009 note of the same date); vec's own goal surface is unchanged. Pin provenance updated CI #1187 to CI #1202.
+
+**Reading note (2026-08-09).** The body of this record above was written against the pre-API-001 figures and still says 196 residuals, a 121-goal inherited arm and an 89-goal core arm. Those numbers are historically correct for the baseline they describe and are left as written; the enforced state since CI #1202 is 198 residuals, a 123-goal inherited arm and a 91-goal core arm (the 91 machine-diffed set-identical to arena's roll-call on 2026-08-09). Where the two disagree, the CI pin governs.
 
 **The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered, both inherited: `typed_cast_arena_free_cbytes_call_cbytes_from_requires{,_2}`.
 Each new residual is the const twin of a residual this record ALREADY

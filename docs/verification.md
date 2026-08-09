@@ -1632,8 +1632,11 @@ remaining 9 (`pool_init`, `pool_alloc`, `pool_alloc_zero`, `pool_get`,
 - **Indexed-access bounds**: when `pool_get` / `pool_get_const` succeed, the
   returned slot satisfies `\valid` over the object's byte range. The
   `in_bounds_ensures_part4` validity conjuncts are the cat 2b residuals (the
-  ptr_elem uintptr_t round-trip), but the runtime `require_msg` region check
-  is the backstop exercised at all build levels.
+  ptr_elem uintptr_t round-trip). The runtime `require_msg` region check is
+  NOT a backstop for them: it is compiled out by `-DCANON_NO_REQUIRE`, the
+  configuration WP runs under, and it sits in `pool_get` rather than in the
+  function carrying the goal. See the corrected argument in VERIFY-010
+  cat 2b.
 
 - **Absence of runtime errors** (`-wp-rte`): WP proves no execution of any
   annotated function can trigger signed overflow, division by zero, invalid

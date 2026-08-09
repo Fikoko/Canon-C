@@ -19,12 +19,15 @@ on:
 #   frama-c-*       — Linux only, formal verification (WP proofs). One job
 #                     per verified header (frama-c-checked, -bits, -compare,
 #                     -ptr, -slice, -memory, -arena, -pool, -region, -error,
-#                     -borrow, -diag), plus one per macro-module driver
+#                     -borrow, -diag), plus frama-c-arena-32, which re-runs
+#                     arena.h under -machdep gcc_x86_32 and gates SET
+#                     EQUALITY with the 64-bit residuals (VERIFY-009-W),
+#                     plus one per macro-module driver
 #                     (frama-c-option, -result, -vec), which run over a
 #                     driver in vmacros/vdrivers/ rather than a header
 #                     directly (Shape-B modules). All run in parallel and
 #                     share the composite setup action at
-#                     .github/actions/framac-setup. All FIFTEEN are ENFORCED
+#                     .github/actions/framac-setup. All SIXTEEN are ENFORCED
 #                     (hard proved/unproved baselines); region and vec run
 #                     in their own isolated jobs (long runs, ~1h40m and
 #                     ~2h50m, but enforced like the rest). Additional
@@ -545,6 +548,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=2
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -556,6 +561,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in checked.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_output.txt
             exit 1
           fi
           # Gate 0 — pinned goal surface.
@@ -594,6 +618,7 @@ jobs:
         with:
           name: wp-proof-checked
           path: wp_output.txt
+          retention-days: 90
   frama-c-bits:
     needs: build
     runs-on: ubuntu-latest
@@ -642,6 +667,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_bits_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_bits_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_bits_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_bits_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_bits_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=15
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -652,6 +679,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in bits.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_bits_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_bits_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_bits_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -692,6 +738,7 @@ jobs:
         with:
           name: wp-proof-bits
           path: wp_bits_output.txt
+          retention-days: 90
   frama-c-compare:
     needs: build
     runs-on: ubuntu-latest
@@ -731,6 +778,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_compare_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_compare_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_compare_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_compare_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_compare_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
@@ -742,10 +791,29 @@ jobs:
             grep -E "^\[wp\] \[Failed\]" wp_compare_output.txt
             exit 1
           fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_compare_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_compare_output.txt
+            exit 1
+          fi
           if [ "${UNPROVED_COUNT}" -ne 0 ]; then
             echo "FAIL: compare.h should have 0 unproved goals."
             echo "      Found ${UNPROVED_COUNT} unproved goals — this is a regression."
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_compare_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_compare_output.txt || true
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -764,6 +832,7 @@ jobs:
         with:
           name: wp-proof-compare
           path: wp_compare_output.txt
+          retention-days: 90
   frama-c-ptr:
     needs: build
     runs-on: ubuntu-latest
@@ -815,6 +884,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_ptr_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_ptr_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_ptr_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_ptr_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_ptr_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=10
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -825,6 +896,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in ptr.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_ptr_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_ptr_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_ptr_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -842,7 +932,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-006) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_ptr_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_ptr_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -866,9 +956,13 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_ptr_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: WP discharged all goals automatically except the 10"
           echo "      documented unproved goals in VERIFY-006."
@@ -879,6 +973,7 @@ jobs:
         with:
           name: wp-proof-ptr
           path: wp_ptr_output.txt
+          retention-days: 90
   frama-c-slice:
     needs: build
     runs-on: ubuntu-latest
@@ -935,6 +1030,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_slice_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_slice_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_slice_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_slice_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_slice_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=15
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -945,6 +1042,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in slice.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_slice_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_slice_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_slice_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -963,7 +1079,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-007) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_slice_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_slice_output.txt || true
             exit 1
           fi
           MCDC002_GOALS=(
@@ -1017,9 +1133,13 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_slice_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: slice.h verified — 379/394 proved, 15 documented"
           echo "      residuals all observed (VERIFY-007), MCDC-002"
@@ -1031,6 +1151,7 @@ jobs:
         with:
           name: wp-proof-slice
           path: wp_slice_output.txt
+          retention-days: 90
   frama-c-memory:
     needs: build
     runs-on: ubuntu-latest
@@ -1085,6 +1206,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_memory_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_memory_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_memory_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_memory_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_memory_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=43
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -1095,6 +1218,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in memory.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_memory_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_memory_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_memory_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -1113,7 +1255,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-008) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_memory_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_memory_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -1177,9 +1319,13 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_memory_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: memory.h verified — 2823/2866 proved, 43 documented"
           echo "      residuals all observed (VERIFY-008): 23 inherited"
@@ -1193,6 +1339,7 @@ jobs:
         with:
           name: wp-proof-memory
           path: wp_memory_output.txt
+          retention-days: 90
   frama-c-arena:
     needs: build
     runs-on: ubuntu-latest
@@ -1202,8 +1349,9 @@ jobs:
       - name: "WP: core/arena.h"
         # arena.h — Typed+Cast. Expected: 3430 / 3521 proved, exactly 91
         # unproved (VERIFY-009): 43 inherited (memory.h's full surface) +
-        # 46 own (ptr_span call-sites 8, fits/does_not_fit arithmetic 26,
-        # zero/try wrappers 10, free_bytes helpers 2). Any deviation is a
+        # 48 own (ptr_span call-sites 8, fits/does_not_fit arithmetic 26,
+        # zero/try wrappers 10, free_bytes helpers 4 — the mutable pair
+        # plus the two API-001 const twins). Any deviation is a
         # regression. (MCDC-003 has no closure check here — the affected
         # functions legitimately carry residuals; see the coverage job.)
         # (2026-07-16 retrofit): Failed gated at zero and excluded from the
@@ -1247,6 +1395,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_arena_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_arena_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_arena_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_arena_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_arena_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=91
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -1257,6 +1407,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in arena.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_arena_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_arena_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_arena_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -1275,7 +1444,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-009) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_arena_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_arena_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -1387,13 +1556,17 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_arena_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: arena.h verified — 3430/3521 proved, 91 documented"
           echo "      residuals all observed (VERIFY-009): 43 inherited +"
-          echo "      46 arena.h-own. Composable verification claim holds:"
+          echo "      48 arena.h-own. Composable verification claim holds:"
           echo "      zero new substrate residuals introduced."
           echo "==============================================="
       - name: Upload WP proof output (arena.h)
@@ -1402,6 +1575,7 @@ jobs:
         with:
           name: wp-proof-arena
           path: wp_arena_output.txt
+          retention-days: 90
   frama-c-pool:
     needs: build
     runs-on: ubuntu-latest
@@ -1414,7 +1588,7 @@ jobs:
         # two-hop transitive) + 28 own across cats 2a/2b/2c/2d. Any
         # deviation is a regression.
         # (2026-07-16 retrofit): roll-call COMPLETED from a 33-name sample
-        # to the full 113-name set — the inherited 89 is arena.h's pinned
+        # to the full 119-name set — the inherited 89 is arena.h's pinned
         # list verbatim (VERIFY-010: byte-identical). Count + full roll-call
         # + unique names = set equality; the sampled form could pass a swap
         # inside the unsampled inherited names. Also: Failed gated at zero
@@ -1460,6 +1634,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_pool_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_pool_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_pool_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_pool_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_pool_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=119
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -1470,6 +1646,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in pool.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_pool_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_pool_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_pool_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -1488,7 +1683,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-010) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_pool_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_pool_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -1628,9 +1823,13 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_pool_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: pool.h verified — 3884/4003 proved, 119 documented"
           echo "      residuals all observed by name (VERIFY-010): 89"
@@ -1645,6 +1844,7 @@ jobs:
         with:
           name: wp-proof-pool
           path: wp_pool_output.txt
+          retention-days: 90
   # -------------------------------------------------------------------------
   # region.h — ENFORCED, 120s / -wp-split, in its own isolated job.
   #
@@ -1681,7 +1881,7 @@ jobs:
         # goals that VERIFY-012 closed upstream simply left the inherited
         # surface (126 -> 112), the 23 region-own goals are unchanged.
         # (2026-07-16 retrofit): roll-call COMPLETED from a 37-name sample
-        # to the full 112-name set (inherited 89 = arena.h's pinned list
+        # to the full 114-name set (inherited 89 = arena.h's pinned list
         # verbatim, VERIFY-011). Failed gated at zero and excluded from the
         # pooled count; Proved-line pin hardened. NOTE: sanity-diff CHECKS
         # against the latest wp-proof-region artifact before first push.
@@ -1724,6 +1924,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_region_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_region_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_region_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_region_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_region_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=114
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -1734,6 +1936,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in region.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_region_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_region_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_region_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -1752,7 +1973,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-011) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_region_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_region_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -1887,9 +2108,13 @@ jobs:
           CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_region_output.txt || true)
           echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
           if [ "${CVC5_INVOKED}" -eq 0 ]; then
-            echo "WARNING: CVC5 does not appear in WP output."
-            echo "         The triple-prover setup may have degraded to"
-            echo "         dual-prover. Check the prover configuration step."
+            echo "FAIL: CVC5 does not appear in WP output. The triple-prover"
+            echo "      configuration has degraded to dual-prover, so the"
+            echo "      'triple-prover-resistant' evidence standard that every"
+            echo "      class-(a) deviation rests on is not met by this run."
+            echo "      Fix the prover configuration step; do not ratchet pins"
+            echo "      measured under a degraded prover set."
+            exit 1
           fi
           echo "PASS: region.h verified — 3578/3692 proved, 114 documented"
           echo "      residuals all observed by name (VERIFY-011): 89"
@@ -1904,6 +2129,7 @@ jobs:
         with:
           name: wp-proof-region
           path: wp_region_output.txt
+          retention-days: 90
   
   
 
@@ -1965,9 +2191,14 @@ jobs:
   #   ENFORCEMENT SHAPE — deliberately different from every other WP job.
   #   The others pin their own numbers. This one pins EQUALITY WITH THE
   #   64-BIT SET: the gate is that the symmetric difference is empty. There
-  #   is no second copy of the residual list to drift out of step, which is
-  #   the failure mode this project has already been bitten by (Commit 9b
-  #   ratcheted the gating scalars and left six jobs printing stale numbers).
+  #   is no INDEPENDENT source of truth to drift out of step: the gate is
+  #   set equality, not a second pin. NOTE, HOWEVER, that this job does
+  #   embed a BASELINE_64 heredoc listing the 91 names, so a second COPY of
+  #   the list does exist in-file and must be ratcheted with arena's. The
+  #   advisory awk cross-check below detects divergence but does not gate
+  #   it. That is the failure mode this project has already been bitten by
+  #   (Commit 9b ratcheted the gating scalars and left six jobs printing
+  #   stale numbers), so treat the cross-check warning as actionable.
   #
   #   COUPLING — READ BEFORE RATCHETING ARENA. When arena's 64-bit pin moves,
   #   this job's embedded baseline list and EXPECTED_PROVED must move in the
@@ -2094,6 +2325,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_arena32_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_arena32_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_arena32_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_arena32_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_arena32_output.txt || true)
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
           echo "  Failed:   ${FAILED_COUNT}   <-- any Failed here is a REAL finding"
@@ -2105,6 +2338,25 @@ jobs:
             echo "  This is the outcome that justifies the job. Tier 1 promises"
             echo "  32-bit; classify these before anything else:"
             grep -E "^\[wp\] \[Failed\]" wp_arena32_output.txt
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_arena32_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_arena32_output.txt
+            exit 1
           fi
 
           # ---- payload: diff this run's residuals against the 64-bit set ----
@@ -2264,6 +2516,25 @@ jobs:
             echo "      promises. Classify in VERIFY-009 before anything else."
             FAILURES=$((FAILURES + 1))
           fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_arena32_output.txt
+            FAILURES=$((FAILURES + 1))
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_arena32_output.txt
+            FAILURES=$((FAILURES + 1))
+          fi
 
           # Gate C — pinned goal surface, must move with the 64-bit pin.
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -2305,6 +2576,7 @@ jobs:
             wp_arena32_output.txt
             res32.txt
             res64.txt
+          retention-days: 90
 
   # -------------------------------------------------------------------------
   # semantics/error.h — ENFORCED. First header of the semantics/ layer.
@@ -2374,6 +2646,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_error_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_error_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_error_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_error_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_error_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=0
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -2384,6 +2658,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED —"
             echo "      a contract in error.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_error_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_error_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_error_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -2402,7 +2695,7 @@ jobs:
             echo "      docs/deviations.md before this wrapper is updated."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_error_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_error_output.txt || true
             exit 1
           fi
           echo "PASS: error.h fully verified — all goals proved automatically,"
@@ -2414,6 +2707,7 @@ jobs:
         with:
           name: wp-proof-error
           path: wp_error_output.txt
+          retention-days: 90
   # -------------------------------------------------------------------------
   # semantics/option — ENFORCED. First Shape-B macro-module driver.
   #
@@ -2513,6 +2807,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_option_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_option_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_option_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_option_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_option_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=34
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -2523,6 +2819,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in option_verify.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_option_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_option_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_option_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -2541,7 +2856,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-014) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_option_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_option_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -2600,6 +2915,7 @@ jobs:
         with:
           name: wp-proof-option
           path: wp_option_output.txt
+          retention-days: 90
   
   
   # -------------------------------------------------------------------------
@@ -2693,6 +3009,8 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_result_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_result_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_result_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_result_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_result_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           EXPECTED_UNPROVED=30
           echo "  Timeouts: ${TIMEOUT_COUNT}"
@@ -2703,6 +3021,25 @@ jobs:
             echo "FAIL: ${FAILED_COUNT} goal(s) FAILED (not timeout/unknown) —"
             echo "      a contract in result_verify.h is falsified:"
             grep -E "^\[wp\] \[Failed\]" wp_result_output.txt
+            exit 1
+          fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_result_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_result_output.txt
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
@@ -2721,7 +3058,7 @@ jobs:
             echo "      docs/deviations.md (VERIFY-015) for the full list."
             echo ""
             echo "Observed unproved goals:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_result_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_result_output.txt || true
             exit 1
           fi
           CHECKS=(
@@ -2787,6 +3124,7 @@ jobs:
         with:
           name: wp-proof-result
           path: wp_result_output.txt
+          retention-days: 90
   
   
   # -------------------------------------------------------------------------
@@ -2807,11 +3145,11 @@ jobs:
   #
   # ENFORCED (promoted from report-only after 3 runs; option/result house
   # style, exact-match). Baseline: CI #1202 (Commit 16/16b ratchet; orig. CI #1152) — 5231/5429 proved,
-  # 193 Timeout + 3 Unknown + 0 Failed = 196 unproved, classified in
+  # 198 unproved, 0 Failed, classified in
   # docs/verification.md and docs/deviations.md VERIFY-018 (incl.
   # Correction note 2026-07-16) and the driver header:
-  #   inherited 121 — byte-identical to the substrate's pinned lists: the
-  #     89-goal core arm equals arena.h's CHECKS verbatim (both units run
+  #   inherited 123 — byte-identical to the substrate's pinned lists: the
+  #     91-goal core arm equals arena.h's CHECKS verbatim (both units run
   #     Typed+Cast — no prefix map applies; -wp-split fragment indices and
   #     the three Unknown sub-verdicts reproduced on the same goals), and
   #     the 32-goal option arm equals option's roll-call modulo the
@@ -2831,9 +3169,9 @@ jobs:
   #                definition — forward-flag for deque's shift loops)
   #              + (d) 5 element-transfer ensures (mem_copy/mem_move are
   #                frame-only) + (h) 22 Typed+Cast int<->char bridging
-  #   (The CI baseline label was originally recorded as 143 inherited +
-  #    53 own; the 2026-07-16 Correction note reclassified to 121 + 75
-  #    with the SAME 196 names — no gate or count changed.)
+  #   (The CI baseline label was originally recorded as 145 inherited +
+  #    53 own; the 2026-07-16 Correction note reclassified to 123 + 75
+  #    with the SAME 198 names — no gate or count changed.)
   # Gates: pinned Proved line, 0 Failed ever, exact count, by-name roll-call
   # (= set equality). ANY change to the residual set, either direction,
   # fails CI; the fix is the acknowledged ratchet — update the pinned
@@ -2919,7 +3257,9 @@ jobs:
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_vec_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_vec_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_vec_output.txt || true)
-          UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT + FAILED_COUNT))
+          INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_vec_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_vec_output.txt || true)
+          UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
           echo "  Failed:   ${FAILED_COUNT}"
@@ -2932,6 +3272,25 @@ jobs:
             grep -E "^\[wp\] \[Failed\]" wp_vec_output.txt
             exit 1
           fi
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      FALSIFIED with a counter-example. Invalid is WP's"
+            echo "      refutation verdict; Failed is a prover error. This"
+            echo "      is categorically different from a residual and can"
+            echo "      never be pinned:"
+            grep -E "^\\[wp\\] \\[Invalid\\]" wp_vec_output.txt
+            exit 1
+          fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+            echo "      Stepout is a non-proved verdict this project has"
+            echo "      never observed. It is deliberately NOT pooled into"
+            echo "      the residual count, because the residual set is"
+            echo "      defined as Timeout u Unknown. If this fires, decide"
+            echo "      whether to pool it and update the definition first:"
+            grep -E "^\\[wp\\] \\[Stepout\\]" wp_vec_output.txt
+            exit 1
+          fi
           # Gate 2 — exact count.
           if [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
             echo "FAIL: unproved count ${UNPROVED_COUNT} != ${EXPECTED_UNPROVED}."
@@ -2940,7 +3299,7 @@ jobs:
             echo "      newly proved — ratchet CHECKS, EXPECTED_UNPROVED and"
             echo "      the pinned Proved line down in the same PR. Diff"
             echo "      against CHECKS below:"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_vec_output.txt || true
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_vec_output.txt || true
             exit 1
           fi
           # Gate 3 — by-name roll-call: every classified residual must be
@@ -3171,6 +3530,7 @@ jobs:
         with:
           name: wp-proof-vec
           path: wp_vec_output.txt
+          retention-days: 90
   
   
   # -------------------------------------------------------------------------
@@ -3306,6 +3666,8 @@ jobs:
             TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_borrow_output.txt || true)
             UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_borrow_output.txt || true)
             FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_borrow_output.txt || true)
+            INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_borrow_output.txt || true)
+            STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_borrow_output.txt || true)
             UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
             echo "  Timeouts: ${TIMEOUT_COUNT}"
             echo "  Unknown:  ${UNKNOWN_COUNT}"
@@ -3314,6 +3676,25 @@ jobs:
             if [ "${FAILED_COUNT}" -ne 0 ]; then
               note_fail "FAIL: ${FAILED_COUNT} goal(s) FAILED — a contract in borrow.h is falsified:"
               grep -E "^\[wp\] \[Failed\]" wp_borrow_output.txt || true
+            fi
+            if [ "${INVALID_COUNT}" -ne 0 ]; then
+              echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+              echo "      FALSIFIED with a counter-example. Invalid is WP's"
+              echo "      refutation verdict; Failed is a prover error. This"
+              echo "      is categorically different from a residual and can"
+              echo "      never be pinned:"
+              grep -E "^\\[wp\\] \\[Invalid\\]" wp_borrow_output.txt
+              exit 1
+            fi
+            if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+              echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+              echo "      Stepout is a non-proved verdict this project has"
+              echo "      never observed. It is deliberately NOT pooled into"
+              echo "      the residual count, because the residual set is"
+              echo "      defined as Timeout u Unknown. If this fires, decide"
+              echo "      whether to pool it and update the definition first:"
+              grep -E "^\\[wp\\] \\[Stepout\\]" wp_borrow_output.txt
+              exit 1
             fi
             if [ -n "${EXPECTED_UNPROVED}" ] && \
                [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
@@ -3327,7 +3708,7 @@ jobs:
             fi
             echo ""
             echo "  --- All unproved goals (name-stability record) ---"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_borrow_output.txt || \
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_borrow_output.txt || \
               echo "  (none)"
             echo ""
             echo "  --- Inherited roll-call: 17 expected re-emissions ---"
@@ -3384,7 +3765,7 @@ jobs:
             fi
             echo ""
             echo "  --- MCDC-008 cross-stream goal ---"
-            if grep -qE "\[(Timeout|Unknown|Failed)\].*dead_by_invariant" wp_borrow_output.txt; then
+            if grep -qE "\[(Timeout|Unknown|Failed|Invalid|Stepout)\].*dead_by_invariant" wp_borrow_output.txt; then
               note_fail "FAIL: dead_by_invariant UNPROVED — one-NULL guard not discharged."
               echo "      This regresses the MCDC-008 cross-stream closure. Investigate"
               echo "      the cbytes_invariant preconditions on borrowed_bytes_eq."
@@ -3421,6 +3802,7 @@ jobs:
         with:
           name: wp-proof-borrow
           path: wp_borrow_output.txt
+          retention-days: 90
   # -------------------------------------------------------------------------
   # semantics/diag.h — ENFORCED. Fifth verified semantics/ module, third
   # verified in place (after error.h and borrow.h).
@@ -3543,6 +3925,8 @@ jobs:
             TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_diag_output.txt || true)
             UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_diag_output.txt || true)
             FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_diag_output.txt || true)
+            INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_diag_output.txt || true)
+            STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_diag_output.txt || true)
             UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
             echo "  Timeouts: ${TIMEOUT_COUNT}"
             echo "  Unknown:  ${UNKNOWN_COUNT}   (0-1 — the diag_init memset goal oscillates Timeout/Unknown)"
@@ -3551,6 +3935,25 @@ jobs:
             if [ "${FAILED_COUNT}" -ne 0 ]; then
               note_fail "FAIL: ${FAILED_COUNT} goal(s) FAILED — a contract in diag.h is falsified:"
               grep -E "^\[wp\] \[Failed\]" wp_diag_output.txt || true
+            fi
+            if [ "${INVALID_COUNT}" -ne 0 ]; then
+              echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+              echo "      FALSIFIED with a counter-example. Invalid is WP's"
+              echo "      refutation verdict; Failed is a prover error. This"
+              echo "      is categorically different from a residual and can"
+              echo "      never be pinned:"
+              grep -E "^\\[wp\\] \\[Invalid\\]" wp_diag_output.txt
+              exit 1
+            fi
+            if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+              echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit."
+              echo "      Stepout is a non-proved verdict this project has"
+              echo "      never observed. It is deliberately NOT pooled into"
+              echo "      the residual count, because the residual set is"
+              echo "      defined as Timeout u Unknown. If this fires, decide"
+              echo "      whether to pool it and update the definition first:"
+              grep -E "^\\[wp\\] \\[Stepout\\]" wp_diag_output.txt
+              exit 1
             fi
             if [ -n "${EXPECTED_UNPROVED}" ] && \
                [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
@@ -3570,7 +3973,7 @@ jobs:
             fi
             echo ""
             echo "  --- All unproved goals (name-stability record) ---"
-            grep -E "^\[wp\] \[(Timeout|Unknown|Failed)\]" wp_diag_output.txt || \
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_diag_output.txt || \
               echo "  (none)"
             echo ""
             echo "  --- Inherited roll-call: 2 expected re-emissions ---"
@@ -3637,7 +4040,7 @@ jobs:
             # WP prints only UNPROVED goals by name; a proved goal never
             # appears in the output. Absence from the unproved list (given
             # the summary exists) IS the proof — borrow.h inverted form.
-            if grep -qE "\[(Timeout|Unknown|Failed)\].*dead_by_invariant_clamp" wp_diag_output.txt; then
+            if grep -qE "\[(Timeout|Unknown|Failed|Invalid|Stepout)\].*dead_by_invariant_clamp" wp_diag_output.txt; then
               note_fail "FAIL: dead_by_invariant_clamp UNPROVED — overflow clamp not discharged."
               echo "      This regresses the MCDC-009 cross-stream closure."
               echo "      Investigate the diag_invariant precondition on"
@@ -3689,6 +4092,7 @@ jobs:
         with:
           name: wp-proof-diag
           path: wp_diag_output.txt
+          retention-days: 90
   
   # -------------------------------------------------------------------------
   # 6. MC/DC coverage — GCC 14 -fcondition-coverage (Linux only)
@@ -4151,6 +4555,7 @@ jobs:
           path: |
             coverage_html/
             build/mcdc_per_file.txt
+          retention-days: 90
       - name: Print branch coverage summary
         run: |
           echo "==============================================="
@@ -4850,6 +5255,7 @@ jobs:
             misra_report.txt
             misra_toolchain.txt
           
+          retention-days: 90
   # -------------------------------------------------------------------------
   # 8. Lifetime-debug build — all platforms, Release + Debug
   #
@@ -5154,4 +5560,5 @@ jobs:
         with:
           name: compcert-logs
           path: ccomp-out/*.log
+          retention-days: 90
           if-no-files-found: ignore

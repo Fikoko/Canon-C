@@ -252,8 +252,12 @@
 /* Real, unmodified module headers. vec_defn.h pulls vec_mangle.h and
  * vec_impl.h (which pulls types/limits/contract/checked/memory/arena/
  * ownership + result + error, and emits the guarded CANON_RESULT(bool,
- * Error) instantiation — those result__Bool_Error goals are INHERITED,
- * attributed to the result module in the split). option_##type must exist
+ * Error) instantiation — those result__Bool_Error goals were originally
+ * labelled INHERITED here, but VERIFY-018's Correction note (2026-07-16)
+ * reclassified them as a FRESH INSTANTIATION: result's home unit verifies
+ * the family at (int, VErr), so (bool, Error) is a new verification subject
+ * and its 22 goals are subject-side. The CI roll-call pins the same names
+ * either way. option_##type must exist
  * before the vec functions, so option is instantiated here too — its goals
  * are likewise inherited (proved under the option driver's own run). */
 /* ── Driver composition: option ────────────────────────────────────────────
@@ -274,7 +278,9 @@
  * its own file-scope emission (same guard convention, one instantiation).
  * The remaining result functions (combinators) are emitted uncontracted;
  * their fn-pointer/termination cluster re-emits with the same goal names
- * as run 1 and stays classified INHERITED (result class (b) analog). */
+ * as run 1. Class (b) analog of result's own dispatch residuals, but
+ * SUBJECT-side under VERIFY-018's Correction note — the family is
+ * instantiated at a type pair result's home unit never verified. */
 #include "semantics/error.h"
 #include "semantics/result/result_defn.h"
 
