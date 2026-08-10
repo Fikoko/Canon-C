@@ -2096,9 +2096,10 @@ by construction under the contract that the supplied callback is a valid
 function that terminates and does not repoint the option. WP has no ACSL
 mechanism to encode that callback contract, so the obligations remain
 residual. The functional shape is exercised exhaustively by
-`test/semantics/option_test.c` and by the cover TU (MCDC-006); ASan +
-UBSan across all 16 CI configs verify absence of UB on every combinator
-path.
+`test/semantics/option_test.c` and by the cover TU (MCDC-006) across all
+16 CI configs, with ASan + UBSan on the Linux and macOS debug builds
+(CMakeLists.txt enables sanitizers only for Debug, and skips ASan under
+MSVC), verifying absence of UB on every combinator path.
 
 Every non-combinator function proved fully: `some`, `none`, `is_some`,
 `is_none`, `get`, `unwrap`, `unwrap_or`, `replace`, `take`, and
@@ -2250,9 +2251,10 @@ construction under the contract that the supplied callback is a valid
 function that terminates and does not repoint the result. WP has no ACSL
 mechanism to encode that callback contract, so the obligations remain
 residual. The functional shape is exercised exhaustively by
-`test/semantics/result_test.c` and by the cover TU (MCDC-007); ASan +
-UBSan across all 16 CI configs verify absence of UB on every combinator
-path.
+`test/semantics/result_test.c` and by the cover TU (MCDC-007) across all
+16 CI configs, with ASan + UBSan on the Linux and macOS debug builds
+(CMakeLists.txt enables sanitizers only for Debug, and skips ASan under
+MSVC), verifying absence of UB on every combinator path.
 
 Every non-dispatching function proved fully: `ok`, `err`, `is_ok`,
 `is_err`, `get_ok`, `get_err`, `unwrap_or`, `unwrap`, `unwrap_err`,

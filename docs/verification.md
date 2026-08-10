@@ -10,11 +10,16 @@ Combined verification status across all annotated headers:
 
 | Metric               | Value                                                                          |
 |----------------------|--------------------------------------------------------------------------------|
-| **Headers verified** | 14 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h) |
-| **Functions**        | 273 annotated and verified (240 in-place + 33 generated via the option and result drivers) |
-| **Total obligations**| 24747 (per-header own goals; CI WP runs include substrate)                     |
-| **Proved automatic** | 24255 (98.01%)                                                                 |
-| **Unproved**         | 492 (all documented; see per-header sections)                                  |
+| **Headers verified** | 15 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h, vec) |
+| **Functions**        | 315 annotated and verified |
+| **Total obligations**| 30599 (summed over the 15 verification units; substrate goals are re-emitted in each downstream unit, so this counts goal-instances, not distinct obligations) |
+| **Proved automatic** | 29899 (97.71%)                                                                 |
+| **Unproved**         | 700 (all documented; see per-header sections)                                  |
+
+*Corrected 2026-08-10.* This card previously read 14 / 273 / 24747 / 24255 /
+492 — the state before vec was verified (24747 = 30599's predecessor 30127
+minus vec's 5380; 492 = 688 minus vec's 196). Figures above are the enforced
+CI pins at HEAD, and match the master table in `docs/traceability.md`.
 
 The slice.h baseline (367 / 390) carries a higher residual fraction
 than the four primitives headers because it is the first Canon-C header
@@ -93,11 +98,12 @@ ptr_elem, so it has no per-allocation alignment-pad arithmetic and arena.h's
 26-goal cat 2b arithmetic-chain residual class does not recur in pool.h's own
 surface. See VERIFY-010 in `docs/deviations.md` for the full classification.
 
-A note on totals: the 24747 obligation count is the row-sum of
+A note on totals: the 30599 obligation count is the row-sum of
 each header's own WP-relevant goals — checked.h's 1755, bits.h's
-761, compare.h's 208, ptr.h's 1739, slice.h's 390, memory.h's 2862,
-arena.h's 3472, pool.h's 3902, region.h's 3643, error.h's 65,
-option's 223, result's 215, borrow.h's 2452, and diag.h's 3060 (each
+757, compare.h's 208, ptr.h's 1953, slice.h's 394, memory.h's 2866,
+arena.h's 3521, pool.h's 4003, region.h's 3692, error.h's 65,
+option's 223, result's 215, borrow.h's 2458, diag.h's 3060 and vec's
+5429 (each
 counted in full because each header was
 verified atop its full substrate, with no separate substrate-free
 measurement available for downstream headers). The CI WP steps for
@@ -177,6 +183,13 @@ workaround. The verified code is the executed code.
   proving that no memory other than `*result` is modified.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -275,7 +288,7 @@ Expected output: `Proved goals: 1753 / 1755` with exactly 2 timeouts.
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | debb202 (Canon-C CI #795)                       |
 | **Functions**          | 18 of 18 annotated                             |
-| **Proof obligations**  | 746 / 761 discharged automatically (98.03%)     |
+| **Proof obligations**  | 742 / 757 discharged automatically (98.02%)     |
 | **Timeouts**           | 15 (all WP model limitations, see below)        |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
@@ -300,6 +313,13 @@ Expected output: `Proved goals: 1753 / 1755` with exactly 2 timeouts.
 - **Side-effect bounding**: Every function specifies `assigns \nothing;`.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Prover         | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -352,7 +372,7 @@ frama-c -wp -wp-rte \
   core/primitives/bits.h
 ```
 
-Expected output: `Proved goals: 746 / 761` with 15 unproved goals.
+Expected output: `Proved goals: 742 / 757` with 15 unproved goals.
 
 ---
 
@@ -395,6 +415,13 @@ Expected output: `Proved goals: 746 / 761` with 15 unproved goals.
   typed pointer dereferences. `Typed+Cast` resolves this cleanly.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Prover         | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -525,6 +552,13 @@ unproved list.
 
 ### Prover breakdown
 
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
+
 | Prover         | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
 | Qed (internal) | 1563             | 1ms–10ms          |
@@ -653,7 +687,7 @@ checked.h's div/mod goals — see Baseline note above.)
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | 1e0d0fe (Canon-C CI #821)                       |
 | **Functions**          | 22 of 22 non-macro functions annotated          |
-| **Proof obligations**  | 375 / 390 discharged automatically (96.15%)     |
+| **Proof obligations**  | 379 / 394 discharged automatically (96.19%)     |
 | **Timeouts**           | 15 (all documented under VERIFY-007)            |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
@@ -730,6 +764,13 @@ see the semantics/option section below and VERIFY-014.)
   concern.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -899,7 +940,7 @@ frama-c -wp -wp-rte \
   core/slice.h
 ```
 
-Expected output: `Proved goals: 375 / 390` with 15 timeouts.
+Expected output: `Proved goals: 379 / 394` with 15 timeouts.
 
 ---
 
@@ -912,7 +953,7 @@ Expected output: `Proved goals: 375 / 390` with 15 timeouts.
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | b3e668b (Canon-C CI #841)                       |
 | **Functions**          | 27 of 27 non-macro functions annotated          |
-| **Proof obligations**  | 2819 / 2862 discharged automatically (98.50%)   |
+| **Proof obligations**  | 2823 / 2866 discharged automatically (98.50%)   |
 | **Timeouts**           | 43 (all documented under VERIFY-008)            |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
@@ -1008,6 +1049,13 @@ type (i32) plus the dedicated overflow-test cases in
   and read-only operations.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -1227,8 +1275,8 @@ frama-c -wp -wp-rte \
   core/memory.h
 ```
 
-Expected output: `Proved goals: 2819 / 2862` with 43 unproved goals
-(40 timeouts + 3 unknown).
+Expected output: `Proved goals: 2823 / 2866` with 43 unproved goals.
+(The Timeout/Unknown split varies run to run; only the union is pinned.)
 
 ---
 
@@ -1241,12 +1289,12 @@ Expected output: `Proved goals: 2819 / 2862` with 43 unproved goals
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | f53bddb (Canon-C CI #962)                       |
 | **Functions**          | 22 of 22 non-macro functions annotated          |
-| **Proof obligations**  | 3383 / 3472 discharged automatically (97.44%)   |
+| **Proof obligations**  | 3430 / 3521 discharged automatically (97.42%)   |
 | **Timeouts**           | 89 (all documented under VERIFY-009)            |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-model Typed+Cast -wp-split -wp-timeout 120` |
-| **CI enforcement**     | Yes — 3387/3476 with 89 named goals expected    |
+| **CI enforcement**     | Yes — 3430/3521 with 91 named goals expected    |
 | **MC/DC coverage**     | 89.4% (59/66 condition outcomes — see MCDC-003, 2026-07-30 note) |
 | **Line coverage**      | 100% (97/97)                                    |
 | **CI artifact**        | `wp-proof-arena` (full per-goal breakdown)      |
@@ -1347,6 +1395,13 @@ functions carry the 46 own residuals across cats 2a/2b/2c/2d.
   itself partially unproved.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -1538,10 +1593,11 @@ frama-c -wp -wp-rte \
   core/arena.h
 ```
 
-Expected output: `Proved goals: 3383 / 3472` with 89 unproved goals
-(83 timeouts + 6 unknown). The 43 inherited goals are byte-identical
+Expected output: `Proved goals: 3430 / 3521` with 91 unproved goals.
+(The Timeout/Unknown split varies run to run; only the union is pinned.)
+The 43 inherited goals are byte-identical
 to memory.h's full residual surface (see VERIFY-009 inherited
-residuals table); the 46 own goals split across cats 2a (8) / 2b (26)
+residuals table); the 48 own goals split across cats 2a (8) / 2b (26)
 / 2c (10) / 2d (2).
 
 ---
@@ -1555,12 +1611,12 @@ residuals table); the 46 own goals split across cats 2a (8) / 2b (26)
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | b2644ba (Canon-C CI #972)                       |
 | **Functions**          | 19 of 19 non-macro functions annotated          |
-| **Proof obligations**  | 3789 / 3902 discharged automatically (97.10%)   |
+| **Proof obligations**  | 3884 / 4003 discharged automatically (97.03%)   |
 | **Timeouts**           | 113 (all documented under VERIFY-010)           |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-model Typed+Cast -wp-split -wp-timeout 120` |
-| **CI enforcement**     | Yes — 3793/3906 with 113 named goals expected   |
+| **CI enforcement**     | Yes — 3884/4003 with 119 named goals expected   |
 | **MC/DC coverage**     | 87.2% (68/78 condition outcomes — see MCDC-004, 2026-07-30 note) |
 | **Line coverage**      | 100% (74/74)                                    |
 | **CI artifact**        | `wp-proof-pool` (full per-goal breakdown)       |
@@ -1650,6 +1706,13 @@ remaining 9 (`pool_init`, `pool_alloc`, `pool_alloc_zero`, `pool_get`,
   partially unproved.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -1813,10 +1876,11 @@ frama-c -wp -wp-rte \
   core/pool.h
 ```
 
-Expected output: `Proved goals: 3789 / 3902` with 113 unproved goals (110
-timeouts + 3 unknown). pool.h is the first header whose WP run processes a
+Expected output: `Proved goals: 3884 / 4003` with 119 unproved goals.
+(The Timeout/Unknown split varies run to run; only the union is pinned.)
+pool.h is the first header whose WP run processes a
 two-hop transitive include (pool.h → arena.h → memory.h → ptr/slice/checked/
-contract); the 3902 reflects the full translation unit. The 89 inherited
+contract); the 4003 reflects the full translation unit. The 91 inherited
 goals are byte-identical to arena.h's full residual surface (see VERIFY-010's
 inherited-residuals table); the 24 own goals split across cats 2a (5) / 2b (6)
 / 2c (5) / 2d (8).
@@ -1831,12 +1895,12 @@ inherited-residuals table); the 24 own goals split across cats 2a (5) / 2b (6)
 |------------------------|-------------------------------------------------|
 | **Status**             | Verified (with documented timeouts)             |
 | **Baseline commit**    | c9172fc (Canon-C CI #992)                       |
-| **Proof obligations**  | 3531 / 3643 discharged automatically (96.92%)   |
+| **Proof obligations**  | 3578 / 3692 discharged automatically (96.91%)   |
 | **Unproved**           | 112 (all documented under VERIFY-011)           |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-model Typed+Cast -wp-split -wp-timeout 120` |
-| **CI enforcement**     | Yes — 3535/3647 with 112 named goals expected   |
+| **CI enforcement**     | Yes — 3578/3692 with 114 named goals expected   |
 | **MC/DC coverage**     | 95.5% (21/22 condition outcomes — see MCDC-005) |
 | **Line coverage**      | 100% (45/45)                                    |
 | **CI artifact**        | `wp-proof-region` (full per-goal breakdown)     |
@@ -1844,7 +1908,7 @@ inherited-residuals table); the 24 own goals split across cats 2a (5) / 2b (6)
 ### Enforcement status
 
 region.h's WP run is **enforced** (as of CI #1022): the `frama-c-region`
-CI step fails the build on any deviation from 3535/3647 proved or 112
+CI step fails the build on any deviation from 3578/3692 proved or 114
 unproved, and additionally roll-calls all 23 own goals plus a
 representative inherited sample by name. It was promoted from report-only
 once the residual set proved name-stable across the VERIFY-012
@@ -1909,6 +1973,13 @@ plus the 3 assertion functions). The remaining 5 (`region_begin`,
 
 ### Prover breakdown
 
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
+
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
 | Terminating    | 80               | (structural)      |
@@ -1971,9 +2042,10 @@ frama-c -wp -wp-rte \
   core/region.h
 ```
 
-Expected output: `Proved goals: 3531 / 3643` with 112 unproved goals
-(107 timeouts + 5 unknown). region.h's WP run processes a two-hop
-transitive include (region.h → arena.h → memory.h → ...); the 89
+Expected output: `Proved goals: 3578 / 3692` with 114 unproved goals.
+(The Timeout/Unknown split varies run to run; only the union is pinned.)
+region.h's WP run processes a two-hop
+transitive include (region.h → arena.h → memory.h → ...); the 91
 inherited goals are byte-identical to arena.h's full residual surface;
 the 23 own goals split across category 1 (19) / category 2 (4).
 
@@ -2049,6 +2121,13 @@ boundary documented in VERIFY-007 category 2 (`str_from_cstr`'s omitted
 residuals while still proving the property callers depend on.
 
 ### Prover breakdown
+
+*Prover attribution below is a snapshot of the CI #1154 run and is not
+ratcheted: it moves run to run even when the residual set does not
+(VERIFY-009-W records Alt-Ergo 325 -> 347 and Z3 29 -> 12 across three
+runs with an identical 91-name set). The pinned quantities are the
+proved-goal line and the residual set, given above.*
+
 
 | Category       | Goals discharged | Typical time      |
 |----------------|------------------|--------------------|
@@ -2496,7 +2575,7 @@ hypothesis — not failures).
 | **Status**             | Verified (with documented residuals) — in place |
 | **Baseline commit**    | 262a503 (Canon-C CI #1110); report-only first at 383bf9f (CI #1109); enforced as of #1111 |
 | **Functions**          | 24 of 24 non-macro functions annotated and proved |
-| **Proof obligations**  | 2433 / 2452 discharged automatically (99.23%)   |
+| **Proof obligations**  | 2439 / 2458 discharged automatically (99.23%)   |
 | **Unproved**           | 19 (17 inherited + 2 own; all documented under VERIFY-016) |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
@@ -2650,7 +2729,7 @@ frama-c -wp -wp-rte \
   semantics/borrow.h
 ```
 
-Expected output: `Proved goals: 2433 / 2452` with the 19 documented
+Expected output: `Proved goals: 2439 / 2458` with the 19 documented
 unproved goals (VERIFY-016).
 
 
@@ -2853,12 +2932,12 @@ unproved goals (VERIFY-017).
 | **Status**             | Verified (with documented residuals) — driver   |
 | **Baseline commit**    | 96dd41d (Canon-C CI #1152, run 3); report-only chronology 1eeb58c (CI #1150, run 1) → 8a3bb1e (CI #1151, run 2); enforced as of e663e2c (CI #1154) |
 | **Functions**          | 37 generated `vec_int_*` functions contracted and proved |
-| **Proof obligations**  | 5184 / 5380 discharged automatically (96.36%)   |
+| **Proof obligations**  | 5231 / 5429 discharged automatically (96.35%)   |
 | **Unproved**           | 196 (121 inherited + 75 subject-side: 53 own + 22 fresh result(Bool, Error) instantiation; VERIFY-018 incl. Correction note 2026-07-16; 0 Failed) |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-split -wp-timeout 120 -wp-model Typed+Cast` |
-| **CI enforcement**     | Yes — pinned `5184 / 5380` + zero-Failed + exact count 196 + by-name roll-call (set equality) |
+| **CI enforcement**     | Yes — pinned `5231 / 5429` + zero-Failed + exact count 198 + by-name roll-call (set equality) |
 | **MC/DC coverage**     | 98.10% (155/158 condition outcomes — see MCDC-010) |
 | **CI artifact**        | `wp-proof-vec` (full per-goal breakdown)        |
 
@@ -3024,7 +3103,7 @@ frama-c \
   vmacros/vdrivers/vec_verify.h
 ```
 
-Expected output: `Proved goals: 5184 / 5380` with the 196 documented
+Expected output: `Proved goals: 5231 / 5429` with the 198 documented
 unproved goals (VERIFY-018), 0 Failed. Wall time ~2h50m
 (timeout-dominated; see VERIFY-018's runtime record).
 
@@ -3102,9 +3181,9 @@ the complete installation and registration procedure.
 |--------------|------------------|-----------|------------------------------------------------------------------------|
 | slice.h      | ✅ Verified       | 379/394   | 15 documented timeouts (VERIFY-007/-012); MCDC-002 closed              |
 | memory.h     | ✅ Verified       | 2823/2866 | 43 documented timeouts (VERIFY-008/-012); 23 inherited + 20 own        |
-| arena.h      | ✅ Verified       | 3387/3476 | 89 documented timeouts (VERIFY-009/-012); 43 inherited + 46 own; MCDC-003 |
-| pool.h       | ✅ Verified       | 3793/3906 | 113 documented timeouts (VERIFY-010/-012); 89 inherited + 24 own; MCDC-004 |
-| region.h     | ✅ Verified       | 3535/3647 | 112 documented timeouts (VERIFY-011/-012); 89 inherited + 23 own; MCDC-005 |
+| arena.h      | ✅ Verified       | 3430/3521 | 91 documented timeouts (VERIFY-009/-012); 43 inherited + 48 own; MCDC-003 |
+| pool.h       | ✅ Verified       | 3884/4003 | 119 documented timeouts (VERIFY-010/-012); 91 inherited + 28 own; MCDC-004 |
+| region.h     | ✅ Verified       | 3578/3692 | 114 documented timeouts (VERIFY-011/-012); 91 inherited + 23 own; MCDC-005 |
 | scope.h      | N/A              |           | Macro-only header; DEFER expands at call sites, no static inline functions to verify. scope_test.c locks the exit-method table to regression tests. |
 | ownership.h  | N/A              |           | Annotation macros expand to T (no behavior); DEFINE_OWNED(T)/DEFINE_BORROWED(T) generate verifiable functions per instantiation but follow the DEFINE_SLICE(T) disposition (VERIFY-007 macro-verification rationale). ownership_test.c covers Widget and Complex instantiations. |
 
@@ -3153,7 +3232,7 @@ discipline) recorded for deque.
 
 | Header       | Status           | Proved    | Notes                                                                  |
 |--------------|------------------|-----------|------------------------------------------------------------------------|
-| vec (driver) | ✅ Verified  | 5188/5384 | Third driver-verified Shape-B module, first data/-layer module, first driver on Typed+Cast (VERIFY-018, enforced CI #1154; baseline CI #1152; report-only #1150–#1151): 37 generated functions via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3); 121 inherited byte-identically (largest TU to date; 89 core = arena.h's set verbatim, 32 option mod prefix) + 75 subject-side (53 own across 4 categories incl. the new macro-body-loop class (g) forward-flagged for deque, + 22 fresh result(Bool, Error) instantiation — VERIFY-018 Correction note 2026-07-16); zero own fn-pointer-dispatch goals; MCDC-010 (155/158 ceiling, U1/U2 WP-corroborated infeasible + U3 heap-environmental; third attribution variant); facade views measured but not yet WP-driven (follow-up); `_range`/`_fmt` extensions deferred |
+| vec (driver) | ✅ Verified  | 5231/5429 | Third driver-verified Shape-B module, first data/-layer module, first driver on Typed+Cast (VERIFY-018, enforced CI #1154; baseline CI #1152; report-only #1150–#1151): 37 generated functions via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3); 123 inherited byte-identically (largest TU to date; 91 core = arena.h's set verbatim, 32 option mod prefix) + 75 subject-side (53 own across 4 categories incl. the new macro-body-loop class (g) forward-flagged for deque, + 22 fresh result(Bool, Error) instantiation — VERIFY-018 Correction note 2026-07-16); zero own fn-pointer-dispatch goals; MCDC-010 (155/158 ceiling, U1/U2 WP-corroborated infeasible + U3 heap-environmental; third attribution variant); facade views measured but not yet WP-driven (follow-up); `_range`/`_fmt` extensions deferred |
 | deque        | Planned next     |           | Split patch lands before the driver is drafted (VERIFY-018 F3 checklist); shift loops pre-classified into class (g); CANON_RESULT fingerprint already spotted in deque_impl.h coverage data |
 | hashmap      | Planned          |           | Shape A (confirmed) — in-place surface via `hashmap_impl.h`, no cover TU needed |
 
