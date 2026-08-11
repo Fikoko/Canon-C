@@ -32,6 +32,17 @@
  * - Linkage is caller-controlled: static inline, static, or extern
  * - For header-only use, pass `static inline`
  * - For separate compilation, pass empty linkage + use deque_decl.h
+ * - Do NOT instantiate the same type twice in one translation unit: the
+ *   struct typedef is emitted by a macro expansion (no include guard is
+ *   possible inside a macro) and repeated typedefs are a constraint
+ *   violation in C99 (C11 permits identical redefinition, but Canon-C
+ *   targets C99). One DEFINE_DEQUE (or DEFINE_DEQUE_STRUCTS) per type
+ *   per TU.
+ * - DEFINE_DEQUE == DEFINE_DEQUE_STRUCTS + DEFINE_DEQUE_FUNCTIONS. The
+ *   split exists so verification drivers can interpose ACSL-contracted
+ *   prototypes between the type definition and the function bodies
+ *   (same pattern as vec's DEFINE_VEC_STRUCTS / _FUNCTIONS and option's
+ *   DEFINE_OPTION_STRUCT / _FUNCTIONS).
  *
  * Portability:
  * ────────────────────────────────────────────────────────────────────────────
@@ -141,14 +152,35 @@
  *       CANON_OPTION(voidptr)
  *       DEFINE_DEQUE(static inline, voidptr)
  */
-#define DEFINE_DEQUE(linkage, type) \
-\
+/**
+ * @brief Emits ONLY the struct typedef and lifetime helper for a typed deque
+ *
+ * First half of DEFINE_DEQUE. Use directly when something must sit between
+ * the type definition and the function definitions — the WP verification
+ * drivers use this to interpose ACSL-contracted prototypes (which need the
+ * type to exist) ahead of the macro-generated bodies emitted by
+ * DEFINE_DEQUE_FUNCTIONS.
+ *
+ * @param type Element type (must be a valid C identifier)
+ */
+#define DEFINE_DEQUE_STRUCTS(type) \
 IMPL_DEQUE_STRUCT( \
     MANGLE_DEQUE_TYPE(type), \
     MANGLE_DEQUE_STRUCT_TAG(type), \
     MANGLE_DEQUE_LIFETIME_OPEN(type), \
     type \
-) \
+)
+
+/**
+ * @brief Emits ONLY the function definitions for a typed deque
+ *
+ * Second half of DEFINE_DEQUE. Requires a prior DEFINE_DEQUE_STRUCTS(type)
+ * (or equivalent) in the same translation unit.
+ *
+ * @param linkage C linkage specifier: `static inline`, `static`, or empty
+ * @param type    Element type (must match the DEFINE_DEQUE_STRUCTS call)
+ */
+#define DEFINE_DEQUE_FUNCTIONS(linkage, type) \
 \
 IMPL_DEQUE_INIT(linkage,  MANGLE_DEQUE_TYPE(type), MANGLE_DEQUE_INIT(type),  MANGLE_DEQUE_LIFETIME_OPEN(type), type) \
 IMPL_DEQUE_EMPTY(linkage, MANGLE_DEQUE_TYPE(type), MANGLE_DEQUE_EMPTY(type), MANGLE_DEQUE_LIFETIME_OPEN(type)) \
@@ -182,5 +214,11 @@ IMPL_DEQUE_PEEK_BACK_OPTION(linkage,  MANGLE_DEQUE_TYPE(type), MANGLE_DEQUE_PEEK
 \
 IMPL_DEQUE_CLEAR(linkage, MANGLE_DEQUE_TYPE(type), MANGLE_DEQUE_CLEAR(type)) \
 IMPL_DEQUE_SWAP(linkage,  MANGLE_DEQUE_TYPE(type), MANGLE_DEQUE_SWAP(type))
+
+/* DEFINE_DEQUE delegates to the two halves — expansion is byte-identical to
+ * the pre-split monolithic macro, so existing callers are unaffected. */
+#define DEFINE_DEQUE(linkage, type) \
+DEFINE_DEQUE_STRUCTS(type) \
+DEFINE_DEQUE_FUNCTIONS(linkage, type)
 
 #endif /* CANON_DATA_DEQUE_DEFN_H */
