@@ -23,16 +23,20 @@ on:
 #                     arena.h under -machdep gcc_x86_32 and gates SET
 #                     EQUALITY with the 64-bit residuals (VERIFY-009-W),
 #                     plus one per macro-module driver
-#                     (frama-c-option, -result, -vec), which run over a
-#                     driver in vmacros/vdrivers/ rather than a header
-#                     directly (Shape-B modules). All run in parallel and
-#                     share the composite setup action at
-#                     .github/actions/framac-setup. All SIXTEEN are ENFORCED
-#                     (hard proved/unproved baselines); region and vec run
-#                     in their own isolated jobs (long runs, ~1h40m and
-#                     ~2h50m, but enforced like the rest). Additional
-#                     headers are added as a new job each as they are
-#                     annotated; macro-module drivers likewise.
+#                     (frama-c-option, -result, -vec, -deque), which run
+#                     over a driver in vmacros/vdrivers/ rather than a
+#                     header directly (Shape-B modules). All run in parallel
+#                     and share the composite setup action at
+#                     .github/actions/framac-setup. SIXTEEN of the seventeen
+#                     are ENFORCED (hard proved/unproved baselines); region
+#                     and vec run in their own isolated jobs (long runs,
+#                     ~1h40m and ~2h50m, but enforced like the rest).
+#                     frama-c-deque is the ONE exception: REPORT-ONLY, and
+#                     deliberately so until the three-run pinning discipline
+#                     completes (VERIFY-019). Do not read its green as an
+#                     enforced result. Additional headers are added as a new
+#                     job each as they are annotated; macro-module drivers
+#                     likewise.
 #   coverage        — Linux only, MC/DC coverage via GCC 14 -fcondition-coverage
 #                     Uses -DCANON_CHECKED_FORCE_FALLBACK and
 #                     -DCANON_BITS_FORCE_FALLBACK so the fallback paths
@@ -3524,6 +3528,326 @@ jobs:
           retention-days: 90
   
   
+
+  # -------------------------------------------------------------------------
+  # data/deque via vmacros/vdrivers/deque_verify.h — REPORT-ONLY (VERIFY-019)
+  #
+  # Fourth Shape-B macro-module driver, second data/-layer module. THE ONLY
+  # NON-ENFORCED WP JOB IN THIS WORKFLOW, deliberately, until the three-run
+  # pinning discipline completes: run 1 establishes the surface, run 2 must
+  # reproduce it name-identically, run 3 becomes the baseline and only then
+  # does ENFORCE flip to 1. Do not pin from a single run — vec's run 1 (362
+  # unproved) and run 3 (196) differ by more than half again, and the point
+  # of the discipline is that the first number is not the answer.
+  #
+  # MODEL: Typed, NOT vec's Typed+Cast. This is deliberate and must not be
+  # "harmonised" with the vec job for consistency's sake. deque's own impl
+  # contains zero casts and its include closure is types/limits/contract/
+  # ownership + error + option + result — no memory.h, ptr.h, slice.h,
+  # arena.h or checked.h, i.e. none of the cast-originating headers. Two
+  # things ride on it:
+  #   1. The option arm should re-emit with NO prefix transform (vec needed
+  #      typed_ -> typed_cast_ to diff its option edge).
+  #   2. It makes this run the separating experiment for VERIFY-018 F4 — the
+  #      get_ok/get_err rte_mem_access pair on the fresh result(Bool, Error)
+  #      instance, the only two goals in the dataset with no pinned class.
+  #      vec ran that same instance under Typed+Cast.
+  #
+  # PRE-REGISTERED PREDICTIONS (deque_verify.h banner, ARMs A-D). Counts are
+  # derived from the frozen roll-calls in this same file, not estimated:
+  #   ARM C  contract handler pair ....................  2
+  #   ARM A  option_int_*, INHERITANCE .................  32
+  #          (option's job pins 34 = these 32 + the shared handler pair;
+  #           the pair is counted once here, under ARM C)
+  #   ARM B  result_Bool_Error_*, FRESH INSTANTIATION ..  30
+  #          result's home unit residual is 30 = 2 handler + 28 own. vec's
+  #          instance showed 22 = 20 profile-matching + 2 get_* − the 8
+  #          home `assigns` goals its lighter contracts never emitted. THIS
+  #          driver attaches the FULL home contract set (the instantiation-
+  #          identity rule's first option, where vec took the second), so
+  #          those 8 SHOULD come back: 20 + 8 + 2 = 30. Their absence means
+  #          the retyping dropped a clause.
+  #   ARM D  deque_int_* own residuals .................  0
+  #          No allocation (vec's class (e)), no mem_copy/mem_move (class
+  #          (d) — deque moves single elements by assignment), no
+  #          fn-pointer parameters (class (f)/OWN-003), no Typed+Cast
+  #          bridging (class (h)), and NO LOOPS AT ALL, so class (g) has
+  #          nothing to attach to. The roadmap forward-flagged "deque's
+  #          shift loops" into (g); a ring shifts nothing and deque_impl.h
+  #          contains exactly one `while`, the do/while(0) contract idiom.
+  #          That pre-classification is withdrawn.
+  #   core substrate arm ..............................  0
+  #          vec inherited 89 byte-identically from arena.h. deque's
+  #          closure excludes every header those goals come from. This is
+  #          the first module whose inherited surface is SMALLER than its
+  #          predecessor's — composability tested in the other direction.
+  #   ----------------------------------------------------------------
+  #   TOTAL PREDICTED UNPROVED ........................  64
+  #
+  # RUNTIME: expect well under the vec job's ~2h50m. vec's wall clock was
+  # timeout-dominated (193 x 120s), mostly the 89-goal core arm plus 24
+  # fill-loop goals, neither of which exists here. timeout-minutes is 240
+  # anyway for the first runs — measure before tightening. If this job
+  # approaches vec's, ARM D is wrong somewhere and runtime is the first
+  # symptom.
+  # -------------------------------------------------------------------------
+  frama-c-deque:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/framac-setup
+      - name: "WP: vmacros/vdrivers/deque_verify.h (VERIFY-019, report-only)"
+        run: |
+          eval $(opam env --switch=frama-c)
+          ENFORCE=0
+          # Deliberately empty until run 3. The gates comparing against them
+          # are skipped while empty; the roll-calls still run and still
+          # print, because their output IS the run-1 deliverable.
+          EXPECTED_UNPROVED=""
+          EXPECTED_PROVED=""
+          # Pre-registered arm counts (see banner). Printed against observed
+          # in every run; they do not gate until ENFORCE=1.
+          PREDICT_HANDLER=2
+          PREDICT_OPTION=32
+          PREDICT_RESULT=30
+          PREDICT_OWN=0
+          PREDICT_TOTAL=64
+          FAILURES=0
+          note_fail() {
+            echo "$1"
+            FAILURES=$((FAILURES + 1))
+          }
+          set +e
+          frama-c -wp -wp-rte \
+            -wp-model Typed \
+            -wp-prover alt-ergo,z3,cvc5 \
+            -wp-timeout 120 \
+            -wp-split \
+            -cpp-extra-args=" \
+              -I core/primitives \
+              -I core \
+              -I semantics \
+              -I data \
+              -I . \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            vmacros/vdrivers/deque_verify.h 2>&1 | tee wp_deque_output.txt
+          WP_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo ""
+          echo "==============================================="
+          echo "  WP (deque_verify.h) exit status: ${WP_EXIT}"
+          if [ "${ENFORCE}" -eq 1 ]; then
+            echo "  MODE: ENFORCED"
+          else
+            echo "  MODE: report-only (ENFORCE=${ENFORCE}) — VERIFY-019 run 1/3."
+            echo "        Nothing here is pinned. Transcribe, re-run, then pin."
+          fi
+          echo "  model=Typed provers=alt-ergo,z3,cvc5 timeout=120 split=on"
+          echo "  config=-DCANON_NO_REQUIRE -DNDEBUG (CANON_LIFETIME off)"
+          echo "==============================================="
+          PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_deque_output.txt || true)
+          echo "  ${PROVED_LINE}"
+          if [ -z "${PROVED_LINE}" ]; then
+            note_fail "FAIL: WP did not produce a verification summary."
+            echo "      frama-c aborted before running WP, likely due to an"
+            echo "      ACSL syntax error in deque_verify.h or an include"
+            echo "      resolution failure. Check the WP output above for"
+            echo "      [kernel:annot-error] or [kernel] User Error messages."
+            echo ""
+            echo "First diagnostic lines from WP output:"
+            grep -E "^\[(kernel|wp)" wp_deque_output.txt | head -20 || true
+          else
+            TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_deque_output.txt || true)
+            UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_deque_output.txt || true)
+            FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_deque_output.txt || true)
+            INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_deque_output.txt || true)
+            STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_deque_output.txt || true)
+            UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
+            echo "  Timeouts: ${TIMEOUT_COUNT}"
+            echo "  Unknown:  ${UNKNOWN_COUNT}"
+            echo "  Failed:   ${FAILED_COUNT}"
+            echo "  Total unproved (T+U): ${UNPROVED_COUNT} (predicted ${PREDICT_TOTAL})"
+            # Failed / Invalid / Stepout are NOT residual verdicts and are
+            # gated even in report-only: a Failed goal means a contract in
+            # deque_verify.h is falsified, which is a drafting bug to fix,
+            # not a number to write down. House rule, gate 1.
+            if [ "${FAILED_COUNT}" -ne 0 ]; then
+              note_fail "FAIL: ${FAILED_COUNT} goal(s) FAILED — a contract in deque_verify.h is falsified:"
+              grep -E "^\[wp\] \[Failed\]" wp_deque_output.txt || true
+            fi
+            if [ "${INVALID_COUNT}" -ne 0 ]; then
+              note_fail "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is FALSIFIED with a counter-example. Invalid is WP's refutation verdict; Failed is a prover error. Neither can ever be pinned:"
+              grep -E "^\\[wp\\] \\[Invalid\\]" wp_deque_output.txt || true
+            fi
+            if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+              note_fail "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit — a verdict this project has never observed. It is deliberately NOT pooled into the residual count (residual = Timeout u Unknown); decide whether to pool it and update the definition before pinning anything:"
+              grep -E "^\\[wp\\] \\[Stepout\\]" wp_deque_output.txt || true
+            fi
+            if [ -n "${EXPECTED_UNPROVED}" ] && \
+               [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
+              note_fail "FAIL: unproved count ${UNPROVED_COUNT} != pinned ${EXPECTED_UNPROVED}."
+            fi
+            PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
+            echo "  Proved: ${PROVED_COUNT}"
+            if [ -n "${EXPECTED_PROVED}" ] && \
+               [ "${PROVED_COUNT}" != "${EXPECTED_PROVED}" ]; then
+              note_fail "FAIL: proved count ${PROVED_COUNT} != pinned ${EXPECTED_PROVED}."
+            fi
+            echo ""
+            echo "  --- All unproved goals (name-stability record) ---"
+            echo "  This list IS the run-1 deliverable. Run 2 must reproduce"
+            echo "  it name-identically before run 3 pins anything."
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_deque_output.txt || \
+              echo "  (none)"
+
+            # ── ARM C: contract handler pair ──────────────────────────────
+            # Definition-presence inheritance only: deque has ZERO direct
+            # CANON_INVOKE_HANDLER_ calls (the clean-audit shape, like vec
+            # and result), so no deque function reaches the handler. The
+            # goals appear because the handler is DEFINED in the TU.
+            echo ""
+            echo "  --- ARM C: contract handler ---"
+            HANDLER_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*contract_default_handler" wp_deque_output.txt || true)
+            echo "  observed ${HANDLER_SEEN} / predicted ${PREDICT_HANDLER}"
+
+            # ── ARM A: option arm, INHERITANCE ────────────────────────────
+            echo ""
+            echo "  --- ARM A: option arm (INHERITANCE) ---"
+            OPTION_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*typed_option_int_" wp_deque_output.txt || true)
+            OPTION_CAST=$(grep -cE "\[(Timeout|Unknown)\].*typed_cast_option_int_" wp_deque_output.txt || true)
+            echo "  typed_option_int_*      observed ${OPTION_SEEN} / predicted ${PREDICT_OPTION}"
+            echo "  typed_cast_option_int_* observed ${OPTION_CAST} / predicted 0"
+            if [ "${OPTION_CAST}" -ne 0 ]; then
+              note_fail "FAIL: Typed+Cast-prefixed option goals under -wp-model Typed — this job's model claim is wrong, and the F4 experiment below is void."
+            fi
+
+            # ── ARM B: result(Bool, Error) arm, FRESH INSTANTIATION ───────
+            echo ""
+            echo "  --- ARM B: result(Bool, Error) arm (FRESH) ---"
+            RESULT_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*result_Bool_Error_" wp_deque_output.txt || true)
+            RESULT_ASSIGNS=$(grep -cE "\[(Timeout|Unknown)\].*result_Bool_Error_.*assigns" wp_deque_output.txt || true)
+            echo "  result_Bool_Error_*  observed ${RESULT_SEEN} / predicted ${PREDICT_RESULT}"
+            echo "  of which assigns:    observed ${RESULT_ASSIGNS} / predicted 8"
+            echo "  vec's reduced surface emitted ZERO assigns goals here. This"
+            echo "  driver attaches result's full home contract set, so 8 is the"
+            echo "  PREDICTED outcome, not a regression. Zero would mean the"
+            echo "  int->bool / VErr->Error retyping dropped a clause."
+
+            # ── VERIFY-018 F4 separating experiment ───────────────────────
+            echo ""
+            echo "  --- F4 separating experiment (Typed vs vec's Typed+Cast) ---"
+            F4_OK=$(grep -cE "\[(Timeout|Unknown)\].*result_Bool_Error_get_ok_assert_rte_mem_access" wp_deque_output.txt || true)
+            F4_ERR=$(grep -cE "\[(Timeout|Unknown)\].*result_Bool_Error_get_err_assert_rte_mem_access" wp_deque_output.txt || true)
+            F4_TOTAL=$((F4_OK + F4_ERR))
+            echo "  get_ok  rte_mem_access unproved: ${F4_OK}"
+            echo "  get_err rte_mem_access unproved: ${F4_ERR}"
+            if [ "${F4_TOTAL}" -eq 2 ]; then
+              echo "  F4 VERDICT: pair PRESENT under Typed."
+              echo "    => NOT a Typed+Cast model artefact. Attribute to the"
+              echo "       union-extraction type/contract surface."
+            elif [ "${F4_TOTAL}" -eq 0 ]; then
+              echo "  F4 VERDICT: pair ABSENT under Typed."
+              echo "    => model-emission effect attributable to Typed+Cast."
+            else
+              echo "  F4 VERDICT: SPLIT (${F4_TOTAL}/2) — one of the pair only."
+              echo "    => neither hypothesis as stated. Do NOT close F4;"
+              echo "       investigate which of the two differs and why."
+            fi
+            echo "  Record the verdict in VERIFY-019 and close F4 in"
+            echo "  VERIFY-018 — but only after run 2 reproduces it. A"
+            echo "  one-run F4 answer is exactly the mistake the three-run"
+            echo "  discipline exists to prevent."
+
+            # ── ARM D: deque's own surface, predicted ZERO ────────────────
+            echo ""
+            echo "  --- ARM D: deque's own residuals ---"
+            OWN_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*deque_int_" wp_deque_output.txt || true)
+            echo "  deque_int_*  observed ${OWN_SEEN} / predicted ${PREDICT_OWN}"
+            if [ "${OWN_SEEN}" -ne 0 ]; then
+              echo "  ARM D REFUTED. Named at-risk candidates, in order:"
+              echo "    (i)   the four *_option wrappers (cross-driver composition)"
+              echo "    (ii)  modular division goals (size <= capacity threading"
+              echo "          through the early-return guards)"
+              echo "    (iii) swap's whole-struct copy (field-wise ensures)"
+              echo "  Goals:"
+              grep -E "\[(Timeout|Unknown)\].*deque_int_" wp_deque_output.txt || true
+              echo "  This is a prediction miss to CLASSIFY in VERIFY-019, not"
+              echo "  a build failure — report-only mode is exactly for this."
+            fi
+            # Loop goals should not exist at all: deque has no loops. Their
+            # appearance means a body is not what the source reads as, and
+            # would also refute the cover TU's Shape-B attribution.
+            LOOP_GOALS=$(grep -cE "\[(Timeout|Unknown)\].*deque_int_.*loop" wp_deque_output.txt || true)
+            if [ "${LOOP_GOALS}" -ne 0 ]; then
+              note_fail "FAIL: ${LOOP_GOALS} loop goal(s) on deque functions — deque_impl.h contains no loops. Something is not what it appears:"
+              grep -E "\[(Timeout|Unknown)\].*deque_int_.*loop" wp_deque_output.txt || true
+            fi
+
+            # ── Accounting ────────────────────────────────────────────────
+            # The four arms are disjoint by construction: the goal-name
+            # prefixes cannot overlap (typed_option_int_ is not a substring
+            # of typed_cast_option_int_, etc), so the sum is a partition,
+            # not an over-count.
+            echo ""
+            echo "  --- Accounting ---"
+            ACCOUNTED=$((HANDLER_SEEN + OPTION_SEEN + RESULT_SEEN + OWN_SEEN))
+            printf '  %-22s %4s %4s\n' "arm" "obs" "pred"
+            printf '  %-22s %4d %4d\n' "ARM C handler"  "${HANDLER_SEEN}" "${PREDICT_HANDLER}"
+            printf '  %-22s %4d %4d\n' "ARM A option"   "${OPTION_SEEN}"  "${PREDICT_OPTION}"
+            printf '  %-22s %4d %4d\n' "ARM B result"   "${RESULT_SEEN}"  "${PREDICT_RESULT}"
+            printf '  %-22s %4d %4d\n' "ARM D own"      "${OWN_SEEN}"     "${PREDICT_OWN}"
+            printf '  %-22s %4d %4d\n' "TOTAL"          "${UNPROVED_COUNT}" "${PREDICT_TOTAL}"
+            echo "  accounted:   ${ACCOUNTED} of ${UNPROVED_COUNT}"
+            echo "  UNACCOUNTED: $((UNPROVED_COUNT - ACCOUNTED)) (predicted 0)"
+            if [ "$((UNPROVED_COUNT - ACCOUNTED))" -ne 0 ]; then
+              echo "  Unaccounted goals are a residual class nobody predicted."
+              echo "  Name them in VERIFY-019 BEFORE run 2 — the point of the"
+              echo "  second run is to test a written-down prediction, and a"
+              echo "  prediction written after seeing run 2 tests nothing."
+              echo "  Candidates most likely hiding here: a core-substrate"
+              echo "  goal (would refute the closure claim outright) or an"
+              echo "  option/result goal under an unexpected prefix."
+            fi
+
+            # Prover-environment note. House wording, per the ptr/slice/
+            # memory/arena/pool/region jobs: a zero here is NOT evidence of
+            # a degraded prover set. WP tries provers in sequence, so a TU
+            # whose goals Alt-Ergo or Z3 close (or which time out) never
+            # mentions cvc5 at all. Prover AVAILABILITY is hard-gated in
+            # .github/actions/framac-setup, which is what actually matters.
+            CVC5_INVOKED=$(grep -cE "CVC5|cvc5" wp_deque_output.txt || true)
+            echo ""
+            echo "  CVC5 mentions in WP output: ${CVC5_INVOKED}"
+          fi
+          echo ""
+          echo "==============================================="
+          if [ "${FAILURES}" -eq 0 ]; then
+            echo "REPORT-ONLY PASS: deque_verify.h analysed, no falsified"
+            echo "      contracts. Transcribe the goal list and the ARM A-D"
+            echo "      scorecard into VERIFY-019 (naming each arm CONFIRMED"
+            echo "      / REFUTED / ADJUSTED), then re-run UNCHANGED for the"
+            echo "      name-stability check. Do not edit the driver between"
+            echo "      runs 1 and 2 — that would restart the count."
+          else
+            echo "FAIL: ${FAILURES} check(s) missed — see FAIL lines above."
+            echo "      These are drafting or model errors, not residual"
+            echo "      counts; report-only does not suppress them, and none"
+            echo "      of them is a number to write down and accept."
+          fi
+          if [ "${ENFORCE}" -eq 1 ] && [ "${FAILURES}" -ne 0 ]; then
+            exit 1
+          fi
+          echo "==============================================="
+      - name: Upload WP proof output (deque_verify.h)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wp-proof-deque
+          path: wp_deque_output.txt
+          retention-days: 90
   # -------------------------------------------------------------------------
   # borrow.h — ENFORCED, 120s / -wp-split.
   #
@@ -4163,6 +4487,8 @@ jobs:
           ./option_cover
           ./result_cover
           ./vec_cover
+          ./deque_cover
+          ./deque_cover
       
       - name: Collect branch coverage data (lcov)
         run: |
@@ -4951,6 +5277,108 @@ jobs:
             grep -iE "vec" || echo "(no vec-owned condition rows found)"
       
       
+      - name: "Debug: Shape-B attribution check for deque (deque_test)"
+        # Per-module attribution confirmation (docs/vmacros.md checklist).
+        # THIS STEP, not the WP run, is what earns deque's "Shape B
+        # (confirmed)" upgrade in the status table — the WP run does not
+        # test attribution at all. Leave the table at "(provisional)" until
+        # this and the cover-TU step below have both reported.
+        #
+        # Expected: condition rows owned by deque_test.c, and deque_impl.h
+        # present with the result__Bool_Error fingerprint ONLY — functions
+        # and lines but ZERO conditions (the guarded CANON_RESULT(bool,
+        # Error) emission at deque_impl.h:132, the same shape vec_impl.h
+        # and fold_impl.h show).
+        #
+        # STOP SIGNAL: deque_impl.h owning CONDITION rows would mean a body
+        # is written out as real source lines, i.e. deque is NOT Shape B and
+        # the cover TU is unnecessary — the filter would be the fix instead.
+        # This is vec's Shape-A-drift tripwire. Report-only; never fails.
+        run: |
+          cd build
+          DEQUE_GCDA=$(find . -name "deque_test*.gcda" | head -1)
+          if [ -z "$DEQUE_GCDA" ]; then
+            echo "ERROR: could not locate deque_test gcda file"
+            find . -name "*.gcda" | head -20
+            exit 0   # report-only — do not fail the coverage job
+          fi
+          echo "Running gcov on: $DEQUE_GCDA"
+          gcov-14 --conditions "$DEQUE_GCDA" 2>/dev/null | \
+            grep -B 1 -A 3 -E "deque_(test|impl|defn|mangle)" | head -120
+          echo ""
+          echo "=== File ownership of deque-generated conditions ==="
+          gcov-14 --conditions "$DEQUE_GCDA" 2>&1 | \
+            awk '/^File /{f=$0} /Condition outcomes covered:/{print f "\t" $0}' | \
+            grep -iE "deque" || echo "(no deque-owned condition rows found)"
+
+      - name: "Debug: per-line MC/DC detail for deque (cover TU)"
+        # First measured MC/DC baseline for the deque module (MCDC-011).
+        # Report-only — never fails.
+        #
+        # PREDICTION TO CONFIRM, NOT ASSERT (written into deque_cover.c's
+        # header before this ever ran):
+        #   denominator  41 conditions / 82 outcomes
+        #                = 39 generated (78) + 2 scaffolding (4), counted
+        #                  statically off the preprocessed expansion under
+        #                  -DCANON_NO_REQUIRE -DNDEBUG. A different
+        #                  generated total means the flag pair is not what
+        #                  the cover TU assumes — check that require_msg
+        #                  really compiled out before chasing anything else.
+        #   uncoverable  ZERO. No justification rows. This is the strongest
+        #                prediction any cover TU here has made and it is
+        #                meant to be falsifiable at a glance: vec's three
+        #                (U1/U2 !checked_mul guard-redundancy, U3 heap-OOM
+        #                environmental) ALL came from allocation, and deque
+        #                allocates nothing — caller-owned buffer, no
+        #                alloc/free family, checked.h not even in the
+        #                include closure.
+        #
+        # DISPOSITION IF AN OUTCOME COMES BACK UNCOVERED: do NOT open a
+        # justification row. The argument above says a driving input exists,
+        # so find it and extend deque_cover.c's main(). Only a genuine
+        # infeasibility argument may turn one of these into a justified row,
+        # and it would be a new finding worth writing up rather than a
+        # bookkeeping entry.
+        #
+        # DELIBERATELY NOT EXERCISED, so absent from the denominator: the
+        # NULL legs of peek_front / peek_back / peek_*_option / swap / both
+        # unchecked pushes. Under -DCANON_NO_REQUIRE their require_msg
+        # guards are ((void)0) and those calls are UB — see F1 in
+        # deque_verify.h, the peek_*/pop_* NULL-guard asymmetry.
+        #
+        # NOTE: deque is Shape B; conditions attribute to deque_cover.c
+        # itself (direct DEFINE_DEQUE instantiation — vec_cover's
+        # convention, not result_cover's driver-include one).
+        run: |
+          cd build
+          DEQUE_GCDA=$(find . -name "deque_cover*.gcda" | head -1)
+          if [ -z "$DEQUE_GCDA" ]; then
+            echo "ERROR: could not locate deque_cover gcda file"
+            find . -name "*.gcda" | head -20
+            exit 0   # report-only — do not fail the coverage job
+          fi
+          echo "Running gcov on: $DEQUE_GCDA"
+          gcov-14 --conditions --all-blocks "$DEQUE_GCDA" 2>&1 | \
+            grep -A 400 "deque_cover.c" | head -600
+          echo ""
+          echo "=== Looking for the generated .gcov file for deque_cover.c ==="
+          find . -name "deque_cover.c.gcov" -exec echo "Found: {}" \;
+          DEQUE_GCOV=$(find . -name "deque_cover.c.gcov" | head -1)
+          if [ -n "$DEQUE_GCOV" ]; then
+            echo ""
+            echo "=== Uncovered condition outcomes (expected: NONE) ==="
+            grep -n -B 6 "not covered" "$DEQUE_GCOV" | head -80 || \
+              echo "  (none — MCDC-011 prediction of 100% confirmed)"
+            echo ""
+            echo "=== Full contents of $DEQUE_GCOV ==="
+            cat "$DEQUE_GCOV"
+          else
+            echo "No deque_cover.c.gcov file generated — trying alternative approach"
+            for d in $(find . -type d -name "*.dir"); do
+              ls "$d"/*deque_cover* 2>/dev/null || true
+            done
+          fi
+
       - name: "Debug: per-line MC/DC detail for vec (cover TU)"
         # First measured MC/DC baseline for the vec module: 155/158 (98.1%),
         # exactly 3 condition outcomes missed as of CI #1147 (cc1fa2b).
