@@ -637,8 +637,22 @@ if(ENABLE_COVERAGE_TUS)
     # size arithmetic through checked_add/checked_mul, and the fallback
     # path is the one WP verified (MCDC-010 measures what VERIFY-018 proved).
     target_compile_definitions(vec_cover PRIVATE CANON_NO_REQUIRE NDEBUG)
- 
-    message(STATUS "Canon-C: coverage cover-TUs enabled (option_cover, result_cover, vec_cover)")
+
+    add_executable(deque_cover vmacros/coverage/deque_cover.c)
+    target_include_directories(deque_cover PRIVATE
+        ${CMAKE_SOURCE_DIR}/core/primitives
+        ${CMAKE_SOURCE_DIR}/core
+        ${CMAKE_SOURCE_DIR}/semantics
+        ${CMAKE_SOURCE_DIR}/data
+        ${CMAKE_SOURCE_DIR})
+    # Match the WP run's flags exactly (deque_verify.h uses both) — same
+    # rationale as the three cover TUs above. Unlike vec_cover, the global
+    # CANON_CHECKED_FORCE_FALLBACK is irrelevant here: deque does no size
+    # arithmetic through checked.h and does not pull it into its closure at
+    # all (the same fact that makes MCDC-011 predict zero justification
+    # rows — vec's U1/U2 were both !checked_mul legs).
+    target_compile_definitions(deque_cover PRIVATE CANON_NO_REQUIRE NDEBUG)
+
+    message(STATUS "Canon-C: coverage cover-TUs enabled (option_cover, result_cover, vec_cover, deque_cover)")
  
 endif()
-
