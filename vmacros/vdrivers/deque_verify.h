@@ -105,13 +105,17 @@
  *   ARM A — option_int: **INHERITANCE**.
  *     option_verify.h instantiates option at `int`, which is exactly the
  *     type parameter deque_int needs. Re-including it imports the verified
- *     instance. PREDICTION: option's documented residual set (VERIFY-014)
- *     propagates byte-identically, `-wp-split` fragment indices included.
- *     Sharper than vec's edge: vec ran Typed+Cast and so diffed 34/34 only
- *     *modulo* the typed_ -> typed_cast_ prefix rename. deque runs Typed,
- *     the same model as option's home unit, so the names should match with
- *     NO prefix transform at all. A prefix difference here means the model
- *     flag is not what this banner claims.
+ *     instance. PREDICTION: **32 goals**, propagating byte-identically,
+ *     `-wp-split` fragment indices included. Note 32, not 34: option's own
+ *     job pins 34 = these 32 option_int_* goals PLUS the shared contract
+ *     handler pair, and the pair is counted once here, under ARM C. vec's
+ *     roll-call shows the same split (32 typed_cast_option_int_* entries
+ *     alongside 2 handler entries).
+ *     Sharper than vec's edge: vec ran Typed+Cast and so diffed its option
+ *     arm only *modulo* the typed_ -> typed_cast_ prefix rename. deque runs
+ *     Typed, the same model as option's home unit, so the names should
+ *     match with NO prefix transform at all. A prefix difference here means
+ *     the model flag is not what this banner claims.
  *
  *   ARM B — result__Bool_Error: **FRESH INSTANTIATION**.
  *     result_verify.h's home unit verifies the family at (int, VErr);
@@ -121,9 +125,13 @@
  *     second (reduced surface, recorded). All 17 home contracts are
  *     transcribed below, retyped int->bool / VErr->Error, shapes otherwise
  *     verbatim. Consequences, all falsifiable:
- *       B1. The 8 `assigns` goals vec's lighter contracts never emitted
- *           SHOULD be present here. Their absence would mean the retyping
- *           dropped a clause.
+ *       B1. PREDICTION: **30 goals**, arithmetic rather than estimate.
+ *           result's home unit residual is 30 = 2 handler + 28 own. vec's
+ *           instance showed 22 = 20 profile-matching + 2 get_* MINUS the 8
+ *           home `assigns` goals its lighter contracts never emitted. This
+ *           driver attaches those clauses, so they should come back:
+ *           20 + 8 + 2 = 30. Zero assigns goals would mean the
+ *           int->bool / VErr->Error retyping dropped a clause.
  *       B2. The family profile should reproduce at clause-family
  *           granularity as it did for vec (20/20 there).
  *       B3. The 2 union get_* mem-access goals — the only two goals in the
@@ -174,6 +182,15 @@
  *     early-return guards proves harder for WP than the argument above
  *     suggests; (iii) swap's whole-struct copy, if field-wise ensures do
  *     not compose.
+ *
+ *   TOTAL PREDICTED UNPROVED: **64** = 2 (ARM C) + 32 (ARM A) + 30
+ *     (ARM B) + 0 (ARM D) + 0 core substrate. The core-arm zero is its own
+ *     claim: vec inherited 89 goals byte-identically from arena.h, and
+ *     deque's closure contains none of the headers they come from. This is
+ *     the first module whose inherited surface is SMALLER than its
+ *     predecessor's — composability tested in the opposite direction from
+ *     every prior confirmation, which have all been "propagates downward
+ *     without amplification".
  *
  *   RUNTIME PREDICTION: well under vec's ~2h50m. vec's wall clock was
  *   timeout-dominated (193 x 120s) and the bulk of that was the 89-goal
