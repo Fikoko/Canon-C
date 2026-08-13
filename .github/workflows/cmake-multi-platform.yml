@@ -3612,8 +3612,16 @@ jobs:
           PREDICT_HANDLER=2
           PREDICT_OPTION=32
           PREDICT_RESULT=30
-          PREDICT_OWN=0
-          PREDICT_TOTAL=64
+          # RUN-2 VALUES. Run 1 (CI #1231) observed ARM D = 9 against a
+          # predicted 0. Four of the nine were a missing default `assigns`
+          # on the pop_*/peek_* callees (my drafting error, now fixed the
+          # vec_int_pop way); five are the swap ensures cluster, which vec
+          # pins too and which deque shows is not cast-model-specific.
+          # So: 5 expected, all swap, and the four wrapper goals must NOT
+          # return — if they do, the framing problem is deeper than a
+          # missing clause and the fix was wrong.
+          PREDICT_OWN=5
+          PREDICT_TOTAL=67
           FAILURES=0
           note_fail() {
             echo "$1"
@@ -3744,38 +3752,70 @@ jobs:
             F4_TOTAL=$((F4_OK + F4_ERR))
             echo "  get_ok  rte_mem_access unproved: ${F4_OK}"
             echo "  get_err rte_mem_access unproved: ${F4_ERR}"
+            echo "  ** CONFOUNDED — these verdicts overclaim. Run 1 (CI #1231)"
+            echo "     printed 'model-emission effect' on the strength of an"
+            echo "     experiment with TWO variables moved, not one: vec ran"
+            echo "     Typed+Cast with a REDUCED result contract surface, this"
+            echo "     driver runs Typed with the FULL home set, which adds"
+            echo "     'requires \\valid(out)' to get_ok/get_err. Either could"
+            echo "     explain the pair's absence. The control that isolates"
+            echo "     the model is this same driver, contracts untouched,"
+            echo "     under -wp-model Typed+Cast. Until it has run, treat the"
+            echo "     lines below as an OBSERVATION, not a verdict, and record"
+            echo "     F4 in VERIFY-019 as OPEN with a named confound. **"
             if [ "${F4_TOTAL}" -eq 2 ]; then
-              echo "  F4 VERDICT: pair PRESENT under Typed."
-              echo "    => NOT a Typed+Cast model artefact. Attribute to the"
-              echo "       union-extraction type/contract surface."
+              echo "  F4 OBSERVATION: pair PRESENT under Typed."
+              echo "    => consistent with a type/contract-surface effect."
             elif [ "${F4_TOTAL}" -eq 0 ]; then
-              echo "  F4 VERDICT: pair ABSENT under Typed."
-              echo "    => model-emission effect attributable to Typed+Cast."
+              echo "  F4 OBSERVATION: pair ABSENT under Typed."
+              echo "    => consistent with EITHER a Typed+Cast model effect OR"
+              echo "       the added requires discharging the union read."
             else
-              echo "  F4 VERDICT: SPLIT (${F4_TOTAL}/2) — one of the pair only."
+              echo "  F4 OBSERVATION: SPLIT (${F4_TOTAL}/2) — one of the pair only."
               echo "    => neither hypothesis as stated. Do NOT close F4;"
               echo "       investigate which of the two differs and why."
             fi
-            echo "  Record the verdict in VERIFY-019 and close F4 in"
-            echo "  VERIFY-018 — but only after run 2 reproduces it. A"
+            echo "  Do NOT close F4 from this job. Run the Typed+Cast"
+            echo "  control first, then require run 2 to reproduce it. A"
             echo "  one-run F4 answer is exactly the mistake the three-run"
-            echo "  discipline exists to prevent."
+            echo "  discipline exists to prevent, and a confounded one is"
+            echo "  worse than none."
 
             # ── ARM D: deque's own surface, predicted ZERO ────────────────
             echo ""
             echo "  --- ARM D: deque's own residuals ---"
             OWN_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*deque_int_" wp_deque_output.txt || true)
             echo "  deque_int_*  observed ${OWN_SEEN} / predicted ${PREDICT_OWN}"
-            if [ "${OWN_SEEN}" -ne 0 ]; then
-              echo "  ARM D REFUTED. Named at-risk candidates, in order:"
-              echo "    (i)   the four *_option wrappers (cross-driver composition)"
-              echo "    (ii)  modular division goals (size <= capacity threading"
-              echo "          through the early-return guards)"
-              echo "    (iii) swap's whole-struct copy (field-wise ensures)"
-              echo "  Goals:"
-              grep -E "\[(Timeout|Unknown)\].*deque_int_" wp_deque_output.txt || true
-              echo "  This is a prediction miss to CLASSIFY in VERIFY-019, not"
-              echo "  a build failure — report-only mode is exactly for this."
+            WRAPPER_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*deque_int_(pop|peek)_(front|back)_option" wp_deque_output.txt || true)
+            SWAP_SEEN=$(grep -cE "\[(Timeout|Unknown)\].*deque_int_swap_" wp_deque_output.txt || true)
+            OTHER_OWN=$((OWN_SEEN - WRAPPER_SEEN - SWAP_SEEN))
+            echo "    of which swap cluster:    ${SWAP_SEEN} (expected 5)"
+            echo "    of which *_option frame:  ${WRAPPER_SEEN} (expected 0 after the run-1 fix)"
+            echo "    of which anything else:   ${OTHER_OWN} (expected 0)"
+            if [ "${WRAPPER_SEEN}" -ne 0 ]; then
+              echo "  The four *_option assigns goals RETURNED. The run-1 fix"
+              echo "  (default assigns on the pop_*/peek_* callees, vec_int_pop"
+              echo "  shape) is therefore NOT the explanation, and the framing"
+              echo "  problem is deeper than a missing clause. Do not re-fix by"
+              echo "  guessing — classify in VERIFY-019 first:"
+              grep -E "\[(Timeout|Unknown)\].*deque_int_(pop|peek)_(front|back)_option" wp_deque_output.txt || true
+            fi
+            if [ "${OTHER_OWN}" -ne 0 ]; then
+              echo "  Own residuals outside BOTH known clusters — this is the"
+              echo "  genuinely new one. Candidate (ii), the modular division"
+              echo "  goals, did NOT fire in run 1, so its appearance now would"
+              echo "  mean the size <= capacity threading has been weakened:"
+              grep -E "\[(Timeout|Unknown)\].*deque_int_" wp_deque_output.txt \
+                | grep -vE "deque_int_swap_|deque_int_(pop|peek)_(front|back)_option" || true
+            fi
+            if [ "${OWN_SEEN}" -ne "${PREDICT_OWN}" ]; then
+              echo "  ARM D count differs from the revised prediction. This is a"
+              echo "  prediction miss to CLASSIFY in VERIFY-019, not a build"
+              echo "  failure — report-only mode is exactly for this."
+            else
+              echo "  ARM D matches the revised prediction: the swap cluster"
+              echo "  only, which vec pins too (typed_cast_vec_int_swap_ensures)"
+              echo "  and which deque shows is not cast-model-specific."
             fi
             # Loop goals should not exist at all: deque has no loops. Their
             # appearance means a body is not what the source reads as, and
