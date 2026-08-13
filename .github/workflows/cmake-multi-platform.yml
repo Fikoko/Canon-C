@@ -3611,7 +3611,18 @@ jobs:
           # in every run; they do not gate until ENFORCE=1.
           PREDICT_HANDLER=2
           PREDICT_OPTION=32
-          PREDICT_RESULT=30
+          # 28, NOT 30. The pre-run-1 arithmetic was 20 (family profile) + 8
+          # (home assigns clauses this driver attaches and vec's reduced
+          # surface omitted) + 2 (the F4 get_ok/get_err pair) = 30. Runs
+          # #1231 and #1234 both observed the F4 pair ABSENT under Typed, so
+          # the arm is 20 + 8 = 28. This value was left stale at 30 for
+          # #1234 while PREDICT_TOTAL was correctly updated to 67 — two
+          # equal and opposite errors, so TOTAL read 67/67 by cancellation
+          # rather than by being right. Corrected here, and the self-check
+          # below now makes that class of drift impossible to repeat.
+          # If the Typed+Cast control brings the pair back, ARM B under
+          # THAT model is 30 and this line does not change.
+          PREDICT_RESULT=28
           # RUN-2 VALUES. Run 1 (CI #1231) observed ARM D = 9 against a
           # predicted 0. Four of the nine were a missing default `assigns`
           # on the pop_*/peek_* callees (my drafting error, now fixed the
@@ -3622,6 +3633,19 @@ jobs:
           # missing clause and the fix was wrong.
           PREDICT_OWN=5
           PREDICT_TOTAL=67
+          # Self-check: the arms partition the residual set, so their
+          # predictions must sum to the total prediction. #1234 shipped with
+          # a sum of 69 against a total of 67 and nobody noticed, because the
+          # observed total matched anyway. An internally inconsistent
+          # prediction cannot be confirmed OR refuted by a run — it is not a
+          # prediction. This fires before WP is even invoked.
+          PREDICT_SUM=$((PREDICT_HANDLER + PREDICT_OPTION + PREDICT_RESULT + PREDICT_OWN))
+          if [ "${PREDICT_SUM}" -ne "${PREDICT_TOTAL}" ]; then
+            echo "FAIL: prediction bookkeeping is inconsistent —"
+            echo "      arms sum to ${PREDICT_SUM} but PREDICT_TOTAL is ${PREDICT_TOTAL}."
+            echo "      Reconcile before reading anything below as evidence."
+            exit 1
+          fi
           FAILURES=0
           note_fail() {
             echo "$1"
