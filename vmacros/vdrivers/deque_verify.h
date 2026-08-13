@@ -17,7 +17,14 @@
  * ============================================================================
  * WP verification driver for the deque macro module.
  *
- * Shape: **B (provisional)** — the status table's classification, kept as-is.
+ * Shape: **B — CONFIRMED at CI #1234**, on the coverage stream's evidence,
+ * not this one. deque_impl.h reported "No conditions" under both
+ * deque_test.c and deque_cover.c, so the Shape-A-drift tripwire did not
+ * fire. The paragraph below is retained because its reasoning still governs:
+ * the WP run does not test attribution and must never be cited for the
+ * shape claim.
+ *
+ * (Originally: **B (provisional)** — the status table's classification.)
  * Structurally the call is not in doubt: every deque function body exists
  * only inside an IMPL_DEQUE_* macro and comes into being at the
  * instantiation site, which is the Shape-B definition. But "confirmed" is a
