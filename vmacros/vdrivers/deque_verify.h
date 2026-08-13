@@ -138,10 +138,29 @@
  *           whole 30,127-goal dataset not pinned to a documented class
  *           (VERIFY-018 F4, attribution open) — should re-appear.
  *
- *   **F4 SEPARATING EXPERIMENT (free, no extra invocation).** vec ran this
- *   same fresh (bool, Error) instance under Typed+Cast; deque runs it under
- *   Typed, with the full contract set attached. Diff the get_ok/get_err
- *   rte_mem_access pair across the two runs:
+ *   **F4 SEPARATING EXPERIMENT — CONFOUNDED AS DESIGNED. READ THIS BEFORE
+ *   CITING RUN 1.** The intent was: vec ran this same fresh (bool, Error)
+ *   instance under Typed+Cast, deque runs it under Typed, so diffing the
+ *   get_ok/get_err pair isolates the memory model. That is NOT what the two
+ *   runs differ by. ARM B's choice — attach the FULL home contract set —
+ *   added `requires \valid(out)` to get_ok/get_err, which vec's reduced
+ *   surface never had. TWO variables moved between the runs: the model AND
+ *   the precondition. Run 1 observed the pair ABSENT, which is consistent
+ *   with either cause, so it does not close F4.
+ *
+ *   The control is one local invocation: re-run THIS driver, contracts
+ *   untouched, under `-wp-model Typed+Cast`.
+ *     - pair REAPPEARS  => model-emission effect. F4 closes as the run-1
+ *       banner claimed, and the claim becomes sound.
+ *     - pair STAYS ABSENT => the added `requires \valid(out)` discharges
+ *       the union read. F4 closes the other way, and vec's own pair becomes
+ *       a contract-surface artefact its driver could have removed.
+ *   Until that control runs, VERIFY-019 records F4 as OPEN with a candidate
+ *   answer and a named confound. The CI job's F4 verdict lines print a
+ *   conclusion the experiment has not yet earned; do not transcribe them.
+ *
+ *   (Original framing, retained for the record — valid only once the
+ *   control above has isolated the model:)
  *       - pair PRESENT here  => not a Typed+Cast artefact; it is a
  *         type/contract-surface effect of the union extraction shape.
  *       - pair ABSENT here   => model-emission effect, attributable to
@@ -182,6 +201,31 @@
  *     early-return guards proves harder for WP than the argument above
  *     suggests; (iii) swap's whole-struct copy, if field-wise ensures do
  *     not compose.
+ *
+ *     RUN-1 RESULT: **REFUTED, 9 observed against 0 predicted** — but the
+ *     9 split cleanly along the pre-registered candidates, and NEITHER
+ *     cluster is a property of deque:
+ *       (i)   FIRED, 4 goals — and they were MY drafting error, not a
+ *             module residual. pop_front/pop_back/peek_front/peek_back
+ *             carried no default `assigns`, so WP framed their CALL SITES
+ *             with the union of the behavior footprints ("No default
+ *             assigns clause, using complete behaviors assigns", printed 4
+ *             times — once per callee). The wrappers' none-branch could
+ *             not then discharge `assigns \nothing`. Fixed for run 2 by
+ *             adopting vec_int_pop / vec_int_pop_option's shape verbatim:
+ *             default assigns at contract top, none-branch inheriting it.
+ *             vec has no pop_option assigns residual under that shape.
+ *       (ii)  DID NOT FIRE — zero division-by-zero, zero unsigned-wrap,
+ *             `remaining`'s canary proved. The `size <= capacity` argument
+ *             carried the whole ring, which is the load-bearing claim of
+ *             this module and the one worth having tested.
+ *       (iii) FIRED, 5 goals — an inherited class, not a new one. See the
+ *             swap contract's note below: vec pins the same residual and
+ *             deque widens its classification beyond the cast model.
+ *     REVISED PREDICTION FOR RUN 2: **0 own residuals excluding the swap
+ *     cluster**, i.e. ARM D = 5, all five swap ensures. If the four
+ *     wrapper goals return, the vec-shaped fix is not the explanation and
+ *     the framing problem is deeper than a missing default clause.
  *
  *   TOTAL PREDICTED UNPROVED: **64** = 2 (ARM C) + 32 (ARM A) + 30
  *     (ARM B) + 0 (ARM D) + 0 core substrate. The core-arm zero is its own
@@ -763,9 +807,17 @@ static inline void deque_int_push_back_unchecked(deque_int* d, int item);
    pop_front's `% d->capacity` is well-defined because the empty behavior's
    guard forces size > 0, which under size <= capacity forces capacity > 0. */
 
+/* RUN-1 FIX (VERIFY-019): the default `assigns` below is load-bearing and
+ * was missing in run 1. Without it WP reported "No default assigns clause,
+ * using complete behaviors assigns" and framed CALL SITES with the union of
+ * the behavior footprints, which the *_option wrappers' none-branch
+ * `assigns \nothing` could not then discharge — 4 of the 9 ARM D residuals.
+ * vec_int_pop carries exactly this shape (vec_verify.h) and vec has no
+ * pop_option assigns residual; this is the known-good pattern, not a guess. */
 /*@ requires d == \null || (deque_int_mut(d) && deque_int_ring(d));
     requires out == \null || \valid(out);
     requires d == \null || out == \null || \separated(d, out);
+    assigns *out, d->head, d->size;
 
     behavior unusable:
       assumes d == \null || out == \null || d->buffer == \null;
@@ -800,6 +852,7 @@ static inline result__Bool_Error deque_int_pop_front(deque_int* d, int* out);
 /*@ requires d == \null || (deque_int_mut(d) && deque_int_ring(d));
     requires out == \null || \valid(out);
     requires d == \null || out == \null || \separated(d, out);
+    assigns *out, d->tail, d->size;
 
     behavior unusable:
       assumes d == \null || out == \null || d->buffer == \null;
@@ -839,9 +892,10 @@ static inline result__Bool_Error deque_int_pop_back(deque_int* d, int* out);
 
 /*@ requires d == \null || (deque_int_mut(d) && deque_int_ring(d));
 
+    assigns d->head, d->size;
+
     behavior none:
       assumes d == \null || d->buffer == \null || d->size == 0;
-      assigns \nothing;
       ensures \result.has_value == \false;
 
     behavior some:
@@ -860,9 +914,10 @@ static inline option_int deque_int_pop_front_option(deque_int* d);
 
 /*@ requires d == \null || (deque_int_mut(d) && deque_int_ring(d));
 
+    assigns d->tail, d->size;
+
     behavior none:
       assumes d == \null || d->buffer == \null || d->size == 0;
-      assigns \nothing;
       ensures \result.has_value == \false;
 
     behavior some:
@@ -888,6 +943,7 @@ static inline option_int deque_int_pop_back_option(deque_int* d);
     requires deque_int_ring(d);
     requires \valid(out);
     requires \separated(d, out);
+    assigns *out;
 
     behavior empty:
       assumes d->size == 0;
@@ -911,6 +967,7 @@ static inline bool deque_int_peek_front(const deque_int* d, int* out);
     requires deque_int_ring(d);
     requires \valid(out);
     requires \separated(d, out);
+    assigns *out;
 
     behavior empty:
       assumes d->size == 0;
@@ -988,7 +1045,29 @@ static inline void deque_int_clear(deque_int* d);
 
 /* swap's two require_msg guards vanish; \separated is required because the
  * body is a three-assignment struct exchange through a temporary, which is
- * only an exchange when a and b do not alias. ARM D at-risk candidate (iii). */
+ * only an exchange when a and b do not alias. ARM D at-risk candidate (iii).
+ *
+ * RUN-1 RESULT (VERIFY-019): candidate (iii) FIRED — ensures 6-10 unproved,
+ * ensures 1-5 proved. DELIBERATELY NOT "FIXED", for two reasons.
+ *
+ * (a) It is not a new residual class. vec carries the same one, pinned in
+ *     its enforced roll-call as `typed_cast_vec_int_swap_ensures` and
+ *     classified in vec_verify.h as "whole-struct copies under the cast
+ *     model". deque reproduces it under plain Typed, which WIDENS that
+ *     classification: it is not cast-model-specific. Reclassify in
+ *     VERIFY-018 accordingly rather than treating deque's as novel.
+ *
+ * (b) The split is INFORMATIVE and combining the clauses would destroy the
+ *     information. vec states the exchange as 2 combined ensures and gets 1
+ *     residual, which says nothing about which half fails. These 10
+ *     field-wise clauses localise it precisely: the a-side (a receives b)
+ *     proves; the b-side (b receives \old(a), routed through the local
+ *     temporary) does not. The obstacle is therefore preservation of `tmp`
+ *     across the SECOND struct write, not the struct copy itself. Rewriting
+ *     to vec's shape would drop the residual count 5 -> 1 and look like
+ *     progress while deleting the only evidence that says where to look.
+ *
+ * Disposition: expected residual for ARM D, recorded, not suppressed. */
 /*@ requires \valid(a) && \valid(b);
     requires \separated(a, b);
     requires deque_int_mut(a) && deque_int_mut(b);
