@@ -98,6 +98,21 @@
  * 41/82 and the 100% prediction remains testable on run 2 unchanged.
  * REVISED PREDICTION FOR RUN 2: 82/82.
  *
+ * ── RUN-2 RESULT (CI #1234): 82/82, 100.00%. CONFIRMED. ───────────────────
+ * Denominator exactly as pre-counted (41 conditions / 82 outcomes), zero
+ * justification rows, zero uncoverable conditions. The original prediction
+ * therefore stands as written: deque allocates nothing, so it has none of
+ * the allocation-derived uncoverables that give vec its three. Run 1's three
+ * misses were this file's bookkeeping, not deque's, and saying so before
+ * looking was the point.
+ *
+ * MCDC-011 is closeable on this evidence, together with the attribution
+ * check in the coverage job: deque_impl.h reported "No conditions" under
+ * BOTH deque_test.c and deque_cover.c, so the Shape-A-drift tripwire did not
+ * fire and deque is Shape B **confirmed** — update the status table from
+ * "(provisional)". Note this is the coverage stream's evidence alone; the WP
+ * run neither tests nor supports the shape claim. 
+ *
  * ── PREDICTED CONDITION COUNT (also write-down-before) ─────────────────────
  * **39 generated conditions / 78 outcomes**, plus 2 scaffolding conditions
  * (4 outcomes) in this TU's own fill and wrap-around loops.
