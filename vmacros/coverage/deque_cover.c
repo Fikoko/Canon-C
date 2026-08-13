@@ -78,6 +78,26 @@
  * argument above says one exists. Only a genuine infeasibility argument
  * should ever turn this into a justified row.
  *
+ * ── RUN-1 RESULT (CI #1231): 79/82, three outcomes uncovered ───────────────
+ * The prediction of 100% was WRONG on the measurement and RIGHT on the
+ * disposition: all three misses were state-tracking errors in THIS FILE, not
+ * properties of deque, and every one was fixed by finding the driving input
+ * exactly as the paragraph above prescribes. Zero justification rows added.
+ *   1-2. peek_back / pop_back `tail == 0` FALSE leg. Every tail==0 evaluation
+ *        in the original file was TRUE. With capacity 4 and tail at 3, the
+ *        push_back at the "tail 0 -> 1" comment wraps tail straight back to
+ *        0, so the two lines that claimed to drive the FALSE leg drove the
+ *        TRUE leg a second time. Fixed in the b3 block, where the state is
+ *        controlled: push through the BACK to move tail off zero first.
+ *        The stale comments are corrected rather than deleted, because the
+ *        wrong claim is the interesting part.
+ *   3.   `while (!deque_int_is_full(&d))` guard TRUE outcome. d was already
+ *        4/4 at that point, so the loop body never ran. Fixed with one
+ *        pop_front ahead of the loop.
+ * None of the three fixes adds a condition site, so the denominator stays at
+ * 41/82 and the 100% prediction remains testable on run 2 unchanged.
+ * REVISED PREDICTION FOR RUN 2: 82/82.
+ *
  * ── PREDICTED CONDITION COUNT (also write-down-before) ─────────────────────
  * **39 generated conditions / 78 outcomes**, plus 2 scaffolding conditions
  * (4 outcomes) in this TU's own fill and wrap-around loops.
@@ -167,9 +187,14 @@ int main(void)
     r = deque_int_push_back(&e, 1);      (void)r;  /* !buffer TRUE          */
     r = deque_int_push_back(&d, 20);     (void)r;  /* ok — tail 0 -> 1      */
 
-    /* ── pop_back / peek_back with tail==0 FALSE ───────────────────────── */
-    g_sink = (int)deque_int_peek_back(&d, &out);   /* size>0, tail!=0 FALSE */
-    r = deque_int_pop_back(&d, &out);    (void)r;  /* tail==0 FALSE         */
+    /* ── pop_back / peek_back again ────────────────────────────────────────
+       RUN-1 CORRECTION: these two lines previously claimed to drive the
+       tail==0 FALSE leg. They do not. With capacity 4 and tail at 3, the
+       push_back above wraps tail back to 0, so every tail==0 evaluation in
+       this function is TRUE. The FALSE leg is driven in the b3 block below,
+       on a deque whose state is controlled for exactly that purpose. */
+    g_sink = (int)deque_int_peek_back(&d, &out);
+    r = deque_int_pop_back(&d, &out);    (void)r;
 
     /* ── try_push family ───────────────────────────────────────────────── */
     g_sink = (int)deque_int_try_push_front(NULL, 1);  /* !d TRUE            */
@@ -181,7 +206,11 @@ int main(void)
     g_sink = (int)deque_int_try_push_back(&d, 40);    /* ok                 */
 
     /* ── fill to capacity, then the size>=capacity TRUE legs ───────────────
-       Scaffolding condition #1. */
+       Scaffolding condition #1.
+       RUN-1 CORRECTION: d was already at 4/4 here, so the loop body never
+       executed and the guard's TRUE outcome went uncovered. One pop_front
+       makes room so the loop is entered at least once. */
+    r = deque_int_pop_front(&d, &out);   (void)r;  /* make room: 4/4 -> 3/4 */
     while (!deque_int_is_full(&d)) { (void)deque_int_try_push_back(&d, 0); }
     observe(&d);                                   /* is_full TRUE leg      */
     r = deque_int_push_front(&d, 99);    (void)r;  /* size>=cap TRUE        */
@@ -245,6 +274,15 @@ int main(void)
         (void)deque_int_try_push_front(&t, 7);         /* head 0 -> 2, tail 0 */
         g_sink = (int)deque_int_peek_back(&t, &out);   /* tail==0 TRUE      */
         g_sink = (int)option_int_is_some(deque_int_peek_back_option(&t));
+
+        /* RUN-1 CORRECTION: advance tail off zero, then re-drive both
+           ring-index ternaries on their FALSE leg. Pushing through the BACK
+           is what moves tail; nothing earlier in this TU left tail non-zero
+           at a point where peek_back / pop_back were called. */
+        (void)deque_int_try_push_back(&t, 8);          /* tail 0 -> 1       */
+        g_sink = (int)deque_int_peek_back(&t, &out);   /* tail==0 FALSE     */
+        r = deque_int_pop_back(&t, &out);   (void)r;   /* tail==0 FALSE     */
+        r = deque_int_pop_back(&t, &out);   (void)r;   /* tail==0 TRUE      */
     }
 
     /* ── unchecked pushes (preconditions satisfied; NULL legs are UB) ──────
