@@ -19,7 +19,8 @@
  *
  * Shape: **B — CONFIRMED at CI #1234, re-confirmed #1237/#1238.** THIS FILE
  * is what earned the upgrade: the attribution check is the evidence, not the
- * WP run, which does not test attribution at all. Expected fingerprint, per vec's precedent:
+ * WP run, which does not test attribution at all. Expected fingerprint, per
+ * vec's precedent:
  *   - deque_test.c owns all test-measured outcomes;
  *   - deque_impl.h shows FUNCTIONS BUT NO CONDITIONS (the Shape-A-drift
  *     tripwire — conditions appearing there would mean a body got written
