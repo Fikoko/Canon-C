@@ -17,9 +17,9 @@
  * ============================================================================
  * MC/DC cover translation unit for the deque macro module.
  *
- * Shape: **B (provisional)** — see the note in deque_verify.h. THIS FILE is
- * what earns the upgrade to "confirmed": the attribution check below is the
- * evidence, not the WP run. Expected fingerprint, per vec's precedent:
+ * Shape: **B — CONFIRMED at CI #1234, re-confirmed #1237/#1238.** THIS FILE
+ * is what earned the upgrade: the attribution check is the evidence, not the
+ * WP run, which does not test attribution at all. Expected fingerprint, per vec's precedent:
  *   - deque_test.c owns all test-measured outcomes;
  *   - deque_impl.h shows FUNCTIONS BUT NO CONDITIONS (the Shape-A-drift
  *     tripwire — conditions appearing there would mean a body got written
