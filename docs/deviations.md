@@ -2958,15 +2958,58 @@ frozen CI #1154):
   split plus the corrected one-instantiation-per-TU rule shipped in
   `vec_defn.h` before the driver was drafted — the split-patch-first
   ordering is now the standing checklist item for deque.
-- **F4 (open)**: attribute the fresh instantiation's
-  `get_ok`/`get_err` `rte_mem_access` pair. Separating experiment:
-  a standalone driver instantiating result(Bool, Error) with
-  result_verify.h's full contract set, run once under Typed and once
-  under Typed+Cast (two local WP invocations, no CI change). The
-  outcome classifies the pair as a model-emission effect vs. a
-  type/contract-surface effect — currently the only two goals in the
-  30,127-goal dataset whose cause is not pinned to a documented
+- **F4 (CLOSED 2026-08-15 — contract-surface effect)**: attribute the
+  fresh instantiation's `get_ok`/`get_err` `rte_mem_access` pair.
+  These were, until this closure, the only two goals in the
+  30,127-goal dataset whose cause was not pinned to a documented
   class.
+
+  *The experiment as first run was confounded, and that is part of the
+  record.* deque's driver (VERIFY-019) instantiates the same fresh
+  (Bool, Error) pair and observed the goals ABSENT, and the run-1 CI
+  log printed "model-emission effect attributable to Typed+Cast" on
+  that basis. The inference did not hold: **two** variables differ
+  between vec's run and deque's, not one — vec runs Typed+Cast with a
+  REDUCED result contract surface, deque runs Typed with the FULL
+  home contract set, which adds `requires \valid(out)` to
+  `get_ok`/`get_err`. Either could explain the absence. The verdict
+  was downgraded to an OBSERVATION in the deque job and F4 left open
+  with the confound named.
+
+  *The control that isolates the model.* `.github/workflows/f4-control.yml`
+  (`workflow_dispatch` only, gates nothing) runs
+  `vmacros/vdrivers/deque_verify.h` **unmodified** — contracts held
+  fixed — under `-wp-model Typed+Cast`, moving only the model. It
+  carries arena-32's positive control: if no `typed_cast_`-prefixed
+  goals appear the flag was inert and a null reading would be
+  meaningless, so the job refuses a verdict in that case.
+
+  | run | model | positive control | `get_ok`/`get_err` pair |
+  |-----|-------|------------------|--------------------------|
+  | #1234/#1237/#1238/#1239/#1240 | Typed | n/a | ABSENT |
+  | f4-control #1 (2026-08-15) | Typed+Cast | 67 cast / 0 plain — established | ABSENT |
+  | f4-control #2 (2026-08-15) | Typed+Cast | 67 cast / 0 plain — established | ABSENT |
+
+  **The memory model is ELIMINATED.** With contracts byte-identical
+  across models and the instrument verified to have changed, the pair
+  is not a Typed+Cast emission artifact. The surviving explanation is
+  the contract surface: the full home set's `requires \valid(out)`
+  discharges the union read that vec's lighter contracts leave open.
+
+  Stated precisely, this is **elimination, not demonstration**. The
+  confirming test is adding `requires \valid(out)` to
+  `vec_verify.h`'s `get_ok`/`get_err` and observing the pair vanish —
+  but that is the FIX, not a control, and it moves this record's
+  enforced baseline from 198 to an expected 196. It is therefore
+  queued as its own ratchet arc (report-only → name-stable →
+  pinned), **not** bundled into the commit that records this closure.
+  A goal flipping to Proved is a red run carrying good news; ratchet
+  down, never widen.
+
+  What the closure changes about the pair's status: it was never a
+  property of `result(Bool, Error)`, and never a WP union-model
+  artifact. It is a precondition vec's driver could have stated and
+  did not — **removable**, not residual.
 
 ### Prediction scorecard (honest record)
 
@@ -3092,6 +3135,274 @@ argument is computed rather than a plain member read. No new CATEGORY of
 residual appeared; the categories in the tables above absorb them
 unchanged, and every pre-existing residual is still present by name
 (roll-calls extended, not replaced). Zero Failed goals.
+
+## VERIFY-019: Zero Core-Substrate Inheritance and a Memory-Model-Invariant Proof (deque, fourth driver-verified module, second data/-layer module)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | VERIFY-019 |
+| **Date**       | 2026-08-15 |
+| **Baseline commit** | Canon-C CI #1234 (run 1, surface established) → #1237 (run 2, set-identical) → enforced at CI #1238; re-confirmed #1239, #1240. Superseded pre-fix measurement: CI #1231 |
+| **Scope**      | data/deque/ via `vmacros/vdrivers/deque_verify.h` — 1668 obligations, 67 unproved (2 inherited handler + 32 option arm + 28 fresh result(Bool, Error) instantiation + 5 deque-own) |
+| **Category**   | Formal verification completeness |
+| **Enforcement**| Enforced (pinned Proved line + zero Failed/Invalid/Stepout + exact count + by-name roll-call over all 67) as of CI #1238 |
+
+**Description**: 67 of 1668 proof obligations (4.02%) on the deque
+driver are not discharged by the triple-prover configuration
+(Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1) at a 120-second timeout with
+`-wp-split`, and **0 are Failed, Invalid or Stepout** — no contract is
+falsified. deque is the **fourth driver-verified module** (after
+option, result and vec) and the **second data/-layer module**.
+
+Two results distinguish this entry from its predecessors, and neither
+is about deque's own code being hard to prove:
+
+1. **The inherited surface is SMALLER than its predecessor's** — the
+   first time in the arc. Every prior composability confirmation
+   showed residuals propagating downward without amplification; deque
+   tests the converse and finds **zero core-substrate inheritance**.
+2. **The proof is memory-model invariant** — identical under Typed and
+   Typed+Cast. Recorded separately as VERIFY-019-M below, because it
+   is a claim about the verification method rather than about deque.
+
+### Model: Typed, not Typed+Cast
+
+`deque_impl.h` contains zero casts and its include closure is
+types/limits/contract/ownership + error + option + result — none of
+the cast-originating headers (no memory.h, ptr.h, slice.h, arena.h,
+checked.h). deque is therefore the first data/-layer driver on plain
+**Typed**, where vec was the first on Typed+Cast. The flag is
+load-bearing for VERIFY-018 F4 and is called out in the job banner.
+
+### Residual decomposition (67)
+
+| Arm | Goals | Classification |
+|-----|-------|----------------|
+| contract.h handler | 2 | Inherited, definition-presence only. deque has **zero** direct `CANON_INVOKE_HANDLER_` calls (grep-confirmed), the clean-audit shape shared with vec and result. The VERIFY-006 cat-4 pair. |
+| option_int_* | 32 | **Inheritance.** `option_verify.h` instantiates option at `int` — exactly deque's type parameter — so the verified instance is imported. These 32 are option's own roll-call (VERIFY-014) MINUS the 2 handler goals counted once above under ARM C. |
+| result_Bool_Error_* | 28 | **Fresh instantiation** (the (Bool, Error) pair is not VERIFY-015's home (int, VErr)). 20 family-profile + 8 `assigns` goals. |
+| deque_int_swap_ensures_6..10 | 5 | deque-own; the swap cluster. See below. |
+| core substrate | **0** | See below. |
+
+### Zero core-substrate inheritance — composability tested in the other direction
+
+vec inherited **91** core goals byte-identically from arena.h's roll-call.
+deque inherits **none**, because its closure contains none of the
+headers those goals come from. Every previous confirmation
+(VERIFY-008/-009/-010/-011/-016/-017) established that a downstream
+module re-emits its substrate's residuals without adding to them.
+deque establishes the complementary half: **a module does not inherit
+what it does not include**, and the inherited surface can therefore
+shrink as the arc proceeds. Predicted as ARM D's companion claim
+before the first run and confirmed on every run since.
+
+### The result(Bool, Error) arm: 28, and why not 30
+
+The pre-registered arithmetic was 20 (family profile) + 8 (home
+`assigns` clauses this driver attaches and vec's reduced surface
+omitted) + 2 (the F4 `get_ok`/`get_err` pair) = 30. The observed value
+is **28**: the F4 pair is absent under this driver's contract surface.
+Per the instantiation-identity rule (`docs/vmacros.md`), this driver
+takes the rule's FIRST option — attach the family's full home contract
+set — where vec took the second (reduced surface, recorded). The 8
+`assigns` goals returning is the *predicted* outcome of that choice,
+not a regression; their absence would have meant the
+int→bool / VErr→Error retyping had dropped a clause.
+
+### The swap cluster (5) — an inherited class, widened
+
+`deque_int_swap`'s ten field-wise `ensures` split cleanly: the five
+a-side clauses (a receives b) prove; the five b-side clauses (b
+receives `\old(a)` through the local temporary) do not. The obstacle
+is therefore **preservation of `tmp` across the second struct write**,
+not the struct copy itself.
+
+This is **not a new residual class**. vec pins the same one as
+`typed_cast_vec_int_swap_ensures` and VERIFY-018 classifies it as
+"whole-struct copies under the cast model". deque reproduces it under
+plain Typed **and** under Typed+Cast (VERIFY-019-M), so the
+cast-model qualifier comes off: the class is memory-model independent
+and VERIFY-018's wording should be read as widened accordingly.
+
+The clause split is deliberately retained rather than collapsed to
+vec's two combined `ensures`. Combining would drop the residual count
+5 → 1 and look like progress while deleting the only evidence that
+localises the failure to one direction of the exchange.
+
+### Prediction scorecard (honest record)
+
+Predictions were written into the driver header **before the first
+run**, per the instantiation-identity rule's pre-registration
+requirement.
+
+| Prediction | Outcome |
+|------------|---------|
+| ARM C handler pair = 2 | **CONFIRMED** |
+| ARM A option arm = 32, inheritance, **no** `typed_cast_` prefix | **CONFIRMED** (0 cast-prefixed observed) |
+| ARM B result arm, fresh, full home contract set, 8 `assigns` present | **CONFIRMED** on classification and on the 8; count ADJUSTED 30 → 28 (the F4 pair) |
+| ARM D deque-own = **0** | **REFUTED at run 0** (9 observed), then diagnosed — see below |
+| core substrate = 0 | **CONFIRMED** |
+| Class (g) macro-body-loop applies to deque | **WITHDRAWN before the run** — see below |
+| Runtime well under vec's ~2h50m | **CONFIRMED** (~52 min) |
+
+**Class (g) withdrawn.** VERIFY-018 forward-flagged "deque's shift
+loops" into the macro-body-loop class. deque is a ring buffer: it
+shifts nothing, and `deque_impl.h` contains exactly one `while` — the
+`do {...} while (0)` of the contract idiom. The pre-classification was
+carried over from vec's `insert`/`remove` memmove and does not apply.
+Withdrawn in the driver banner before the first run rather than
+quietly omitted, and the enforced job carries a gate that fails if any
+loop goal ever appears on a deque function.
+
+**ARM D refuted, then diagnosed.** Run 0 (CI #1231) observed 9 own
+residuals against a predicted 0. They split along the at-risk
+candidates named in advance:
+
+- **4 goals — the driver's error, not the module's.** WP printed "No
+  default assigns clause, using complete behaviors assigns" four
+  times, once per *called* function. `pop_front`, `pop_back`,
+  `peek_front` and `peek_back` carried `assigns` only inside their
+  behaviors, so WP framed their CALL SITES with the union of the
+  behavior footprints, which the `*_option` wrappers' none-branch
+  `assigns \nothing` could not discharge. Fixed by adopting
+  `vec_int_pop` / `vec_int_pop_option`'s shape verbatim — default
+  `assigns` at contract top, none-branch inheriting it. vec has no
+  pop_option assigns residual under that shape. The four goals have
+  not returned in any run since, and the enforced job reports the
+  `*_option` frame count separately so a return would be visible
+  rather than absorbed.
+- **5 goals — the swap cluster**, as above.
+- **0 goals — the modular-arithmetic candidate did not fire.** No
+  division-by-zero, no unsigned wrap; `deque_int_remaining`'s
+  unguarded `capacity - size` (the canary) proved. This is the
+  load-bearing claim of the module and the one worth having tested:
+  the ring's `% capacity` sites are safe by `size <= capacity`
+  threading through the early-return guards, with no runtime guard on
+  capacity anywhere.
+
+So ARM D's revised statement after diagnosis — **5, the swap cluster
+only** — has held on every run from #1234 onward, and the driver's
+prediction of zero was right about deque and wrong about the driver.
+
+**A bookkeeping error, recorded.** The commit that set the revised
+ARM D prediction updated `PREDICT_TOTAL` to 67 (correctly subtracting
+the absent F4 pair) but left `PREDICT_RESULT` at its pre-run value of
+30. The arms summed to 69 against a total of 67 — two equal and
+opposite errors — so CI #1234's "TOTAL 67/67" matched by cancellation
+rather than by being right. An internally inconsistent prediction can
+be neither confirmed nor refuted; it is not a prediction. Corrected at
+CI #1237, and the job now computes the arm sum and **exits before
+invoking WP** if it does not equal the total.
+
+### Findings for back-propagation
+
+- **F1 (deque, open — doc patch owed)**: `pop_front`/`pop_back` test
+  `!d || !out || !d->buffer` at RUNTIME and stay NULL-safe in every
+  configuration. `peek_front`/`peek_back` guard the same arguments
+  with `require_msg`, so under `-DCANON_NO_REQUIRE` they become raw
+  dereferences while their same-named `pop_` siblings do not. Both
+  families are the "safe" variants by name — the unchecked variants
+  are separately spelled `*_unchecked`. The driver's `requires`
+  clauses carry the obligation, so this is not a soundness problem
+  for the proof, but the shipped doc comment does not flag the
+  asymmetry. Comment-only; no code change proposed. The cover TU
+  deliberately does not exercise the peek NULL legs (MCDC-011).
+- **F2 (deque, open — doc patch owed)**: a NULL deque answers true to
+  both `is_empty` and `is_full`. Defensible as fail-closed on both
+  sides, and the driver's contracts state it explicitly rather than
+  smoothing it over, but it deserves a sentence in the module doc.
+- **F3 (deque, cosmetic)**: `int out = {0};` in the four `*_option`
+  wrappers — brace-initialising a scalar is legal C99 but reads as a
+  struct initialiser. Recorded only so the pre-run read is complete.
+- **F4 (VERIFY-018) — CLOSED by this module's driver.** See
+  VERIFY-018 F4. deque supplied both the confounded first observation
+  and, via `f4-control.yml`, the control that resolved it.
+
+### Cross-references
+
+- Inherited families: VERIFY-006 cat 4 (handler pair), VERIFY-014
+  (option arm, 32 goals), VERIFY-015 (result family profile for the
+  fresh instantiation).
+- Memory-model invariance: **VERIFY-019-M** below.
+- Swap class: VERIFY-018 (`vec_int_swap_ensures`), widened here.
+- MC/DC: **MCDC-011** (82/82, 100%; first cover TU with zero
+  justification rows; Shape B confirmed).
+- Split patch and the one-instantiation-per-TU rule:
+  `docs/vmacros.md`; VERIFY-018 F3's checklist item, executed here at
+  CI #1225 with byte-identical expansion verified across four
+  linkage/type combinations before the driver was drafted.
+- Per-goal CI artifact: `wp-proof-deque`.
+- Wrapper: `.github/workflows/cmake-multi-platform.yml`, step
+  "WP: vmacros/vdrivers/deque_verify.h (VERIFY-019, report-only)"
+  (step name retained from the report-only arc; MODE now prints
+  ENFORCED).
+
+---
+
+## VERIFY-019-M: Memory-Model Invariance of the deque Proof (Typed vs Typed+Cast)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | VERIFY-019-M |
+| **Date**       | 2026-08-15 |
+| **Baseline commit** | Typed: CI #1234/#1237/#1238/#1239/#1240 (enforced). Typed+Cast: `f4-control.yml` runs #1 and #2, both 2026-08-15 |
+| **Scope**      | data/deque/ via `vmacros/vdrivers/deque_verify.h`, unmodified, under both WP memory models |
+| **Category**   | Formal verification methodology |
+| **Enforcement**| Not gated. The Typed side is enforced by the deque job; the Typed+Cast side is a manually dispatched control (`f4-control.yml`) |
+
+**Description**: the deque driver proves **identically** under WP's
+`Typed` and `Typed+Cast` memory models. This was not the question the
+control was run to answer — it fell out of the F4 experiment — but it
+is a stronger and more portable result than the F4 closure itself.
+
+| run | model | proved | Qed | Alt-Ergo | CVC5 | Z3 | solver Σ | terminating | unreachable | T+U |
+|-----|-------|--------|-----|----------|------|----|----------|-------------|-------------|-----|
+| #1234 | Typed | 1601/1668 | 1239 | 230 | 27 | 20 | 277 | 38 | 47 | 67 |
+| #1237 | Typed | 1601/1668 | 1239 | 235 | 24 | 18 | 277 | 38 | 47 | 67 |
+| #1238 | Typed | 1601/1668 | 1239 | 228 | 30 | 19 | 277 | 38 | 47 | 67 |
+| #1239 | Typed | 1601/1668 | 1239 | 235 | 25 | 17 | 277 | 38 | 47 | 67 |
+| #1240 | Typed | 1601/1668 | 1239 | 233 | 20 | 24 | 277 | 38 | 47 | 67 |
+| ctl #1 | Typed+Cast | 1601/1668 | 1239 | 244 | 16 | 17 | 277 | 38 | 47 | 67 |
+| ctl #2 | Typed+Cast | 1601/1668 | 1239 | 230 | 27 | 20 | 277 | 38 | 47 | 67 |
+
+Seven runs, two models, **one distinct tuple**. The 67 residual names
+are set-identical across models modulo the `typed_` → `typed_cast_`
+prefix (machine-diffed, zero symmetric difference, both controls).
+
+**The instrument is known to have changed.** Per arena-32's rule, a
+null result is evidence only when the flag demonstrably took effect:
+both control runs report 67 `typed_cast_`-prefixed unproved goals and
+0 plain `typed_`, and the job refuses to print a verdict otherwise.
+
+**The invariant is sharper than "the numbers are stable."** What holds
+across all seven runs is the whole decomposition: goal surface (1668),
+Qed-discharged (1239), solver-discharged (277), terminating (38),
+unreachable (47), residual (67). What moves is only *which* solver
+reaches a goal first — Alt-Ergo 228–244, CVC5 16–30, Z3 17–24. So:
+**which goals need a solver at all is invariant; which solver gets
+them is scheduling.** That is the cleanest available justification for
+the house rule that pools Timeout with Unknown — the partition is
+noise, the union is the property. It joins arena-32's width-axis
+result (same 91 residuals at 32-bit and 64-bit) as the second
+invariance of this shape, on a different axis.
+
+**Scope of the claim.** This is one TU. It says deque's proof does not
+depend on the memory model; it does not say memory models never
+matter — vec's Typed+Cast requirement is real and originates in
+`void*` boundaries deque does not have. What deque shows is that when
+a module's own code needs no casts, the model is not silently doing
+work for it.
+
+### Cross-references
+
+- F4 closure this control produced: VERIFY-018 F4.
+- Width-axis analogue: VERIFY-009-W / the `frama-c-arena-32` job.
+- Swap-class widening this run enabled: VERIFY-019.
+- Control workflow: `.github/workflows/f4-control.yml`
+  (`workflow_dispatch` only; gates nothing).
+- Artifact: `wp-f4-control-typedcast`.
+
+---
 
 ## MCDC-001: Coverage Flags Methodology
 
@@ -4623,6 +4934,126 @@ exclusion, not a regression.
   require/ensure surface contributes no outcomes).
 - Per-line gcov dump and attribution check: CI steps in
   `.github/workflows/cmake-multi-platform.yml` (coverage job).
+
+---
+
+## MCDC-011: A Clean Cover TU — Zero Uncoverable Conditions, Zero Justification Rows (deque)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | MCDC-011 |
+| **Date**       | 2026-08-15 |
+| **Baseline commit** | Canon-C CI #1234 (100% first reached); re-confirmed #1237, #1238, #1239, #1240. Superseded pre-fix measurement: CI #1231 (79/82) |
+| **Scope**      | data/deque/ via `vmacros/coverage/deque_cover.c` — 82 of 82 condition outcomes exercised |
+| **Category**   | Coverage measurement methodology |
+
+**Description**: all **82 of 82** condition outcomes measured on the
+deque cover TU are exercisable, giving **100.00%** with **zero
+justification rows**. deque is the **fourth Shape-B cover TU** (after
+option MCDC-006, result MCDC-007 and vec MCDC-010) and the first
+*large* one to close clean: result_cover reached 100% over 6 outcomes,
+deque does it over 82.
+
+### The prediction, written down before the first run
+
+The cover TU's header stated, before any measurement:
+
+> **NONE. Predicted 100%, zero justification rows.**
+
+with the reasoning recorded alongside it: vec's three uncoverables
+(MCDC-010) were U1/U2 `!checked_mul` guard-redundancy-infeasible and
+U3 `!buf` heap-environmental — **all three arising from allocation**.
+deque allocates nothing. The buffer is caller-owned, there is no
+alloc/free family, and checked.h is not in the include closure. Every
+remaining condition is a NULL test, a size/capacity comparison, or a
+ring-index ternary.
+
+The header also fixed the **disposition in advance**: if a condition
+came back uncovered, the response was *not* to open a justification
+row but to find the driving input, because the argument above asserts
+one exists. Only a genuine infeasibility argument could turn one into
+a justified row.
+
+### The denominator, also pre-counted
+
+**39 generated conditions / 78 outcomes**, plus 2 scaffolding
+conditions (4 outcomes) in the TU's own fill and wrap-around loops =
+**41 conditions / 82 outcomes**. These were counted statically off the
+preprocessed expansion under the exact measured flag pair
+(`-DCANON_NO_REQUIRE -DNDEBUG`), per function, not estimated. The
+measured denominator matched on the first run and every run since.
+
+The flag pair matters more here than in most modules: `init`, `swap`
+and both `*_unchecked` pushes contribute **1** condition between them
+under `-DCANON_NO_REQUIRE`, against 10 `require_msg` guards with the
+flag absent. A different generated total would mean `require_msg` had
+not compiled out, and the header says so.
+
+### Run 0 (CI #1231): 79/82 — wrong on the measurement, right on the disposition
+
+Three outcomes came back uncovered. All three were **state-tracking
+errors in the cover TU**, not properties of deque, and each was closed
+by finding the driving input exactly as the pre-registered disposition
+prescribed. **Zero justification rows were added.**
+
+| # | Site | Cause | Fix |
+|---|------|-------|-----|
+| 1–2 | `peek_back` / `pop_back` `tail == 0` FALSE leg | Every `tail == 0` evaluation in the file was TRUE. With capacity 4 and tail at 3, the `push_back` commented "tail 0 → 1" wraps tail straight back to 0, so the two lines claiming to drive the FALSE leg drove TRUE a second time. | Driven in the `b3` block, where the state is controlled: push through the BACK to move tail off zero first. |
+| 3 | `while (!deque_int_is_full(&d))` guard TRUE outcome | `d` was already 4/4 at that point, so the loop body never executed. | One `pop_front` ahead of the loop. |
+
+None of the three fixes adds a condition site, so the denominator
+stayed at 41/82 and the 100% prediction remained testable unchanged.
+The stale comments were **corrected in place rather than deleted** —
+the wrong claim is the interesting part of the record.
+
+### Deliberate exclusions (not gaps)
+
+Under `-DCANON_NO_REQUIRE` the `require_msg` guards on
+`peek_front`/`peek_back`, `swap` and both `*_unchecked` pushes compile
+to `((void)0)`, so calling those functions with NULL is undefined
+behaviour — see VERIFY-019 F1 for the peek/pop asymmetry. The cover TU
+therefore does **not** exercise the NULL legs of `peek_front`,
+`peek_back`, `peek_*_option`, `swap`, or the unchecked pushes. Those
+conditions do not exist under the measured flags, so they are absent
+from the denominator rather than missing from the numerator. The TU
+runs clean under ASan+UBSan, which is the check that confirms the
+discipline held.
+
+A second deliberate difference from `vec_cover.c`: vec calls
+`vec_int_init(NULL, 0)` as a legal spec'd input. deque's `init`
+requires `buffer != NULL` and `capacity > 0`, so the analogous call
+would violate its (compiled-out) precondition. The buffer==NULL /
+capacity==0 state is reached the spec'd way instead, via
+`deque_int_empty()`.
+
+### Shape B — confirmed
+
+The coverage job's attribution check reports `deque_impl.h` with
+**functions and lines but "No conditions"** under *both*
+`deque_test.c` and `deque_cover.c`. The Shape-A-drift tripwire (vec's
+precedent: conditions appearing in `_impl.h` would mean a body was
+written out as real source lines) did not fire on any run. deque's
+generated conditions attribute to `deque_cover.c` itself — vec's third
+attribution variant, direct instantiation.
+
+**This is the coverage stream's evidence alone.** The WP run neither
+tests nor supports the shape claim, and the driver header says so
+explicitly to prevent the upgrade being cited from the wrong stream.
+`docs/vmacros.md`'s status tables move from "B (provisional)" to
+"B (confirmed)" on this basis.
+
+### Cross-references
+
+- Predecessor ceiling entry and the allocation-derived uncoverables
+  this entry contrasts with: MCDC-010 (vec, 155/158).
+- Clean-audit predecessors: MCDC-007 (result, 28/28).
+- Coverage methodology and the `-DCANON_NO_REQUIRE` measured surface:
+  MCDC-001.
+- WP-side record for the same module: VERIFY-019; the peek/pop
+  NULL-guard asymmetry is VERIFY-019 F1.
+- Cover TU: `vmacros/coverage/deque_cover.c`; CMake target
+  `deque_cover` under `-DENABLE_COVERAGE_TUS=ON`; invoked directly by
+  the coverage job (never an `add_test`, never globbed).
 
 ---
 

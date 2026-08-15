@@ -49,6 +49,31 @@ name: F4 separating control (manual)
 # once before writing the conclusion into VERIFY-018 — the same discipline the
 # deque baseline went through, and the discipline whose absence produced the
 # confounded verdict in the first place.
+#
+# ── OUTCOME (2026-08-15): F4 CLOSED — CONTRACT-SURFACE EFFECT ──────────────
+# Run twice, unchanged. Both runs: positive control established (67
+# typed_cast_ prefixed unproved goals, 0 plain typed_), and the
+# get_ok/get_err pair ABSENT — as it is under Typed. With the contracts held
+# byte-identical across models and the instrument verified to have changed,
+# the MEMORY MODEL IS ELIMINATED. The surviving explanation is the contract
+# surface: the full home set's `requires \valid(out)` discharges the union
+# read that vec's lighter contracts leave open. Recorded in VERIFY-018 F4.
+#
+# This is elimination, not demonstration. The confirming test is the FIX —
+# adding that clause to vec_verify.h and observing the pair vanish — which
+# moves VERIFY-018's enforced baseline from 198 to an expected 196 and is
+# therefore queued as its own ratchet arc.
+#
+# THE JOB IS RETAINED, not deleted, for three reasons:
+#   1. It is the reproducible evidence behind a closed finding; a closure
+#      whose experiment cannot be re-run is an assertion.
+#   2. Both runs also established VERIFY-019-M (deque's proof is identical
+#      under both memory models — same 1601/1668, same Qed/solver/
+#      terminating/unreachable partition, 67 names set-identical modulo the
+#      prefix). Re-running is how that claim stays checkable.
+#   3. If the deque job's F4 lines ever show the pair REAPPEARING under
+#      Typed, this is the control to run before concluding anything.
+# It stays workflow_dispatch-only and continues to gate nothing.
 # ---------------------------------------------------------------------------
 
 on:

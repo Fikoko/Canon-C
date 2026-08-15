@@ -3110,6 +3110,143 @@ unproved goals (VERIFY-018), 0 Failed. Wall time ~2h50m
 
 ---
 
+## data/deque (driver)
+
+### Summary
+
+| Property               | Value                                          |
+|------------------------|-------------------------------------------------|
+| **Status**             | Verified (with documented residuals) — driver   |
+| **Baseline commit**    | Canon-C CI #1234 (run 1) → #1237 (run 2, set-identical); enforced as of CI #1238; re-confirmed #1239, #1240. Superseded pre-fix measurement: CI #1231 |
+| **Functions**          | 24 generated `deque_int_*` functions contracted and proved |
+| **Proof obligations**  | 1601 / 1668 discharged automatically (95.99%)   |
+| **Unproved**           | 67 (2 inherited handler + 32 option arm + 28 fresh result(Bool, Error) + 5 deque-own; VERIFY-019; **0 Failed, 0 Invalid, 0 Stepout**) |
+| **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
+| **Frama-C version**    | 29.0 (Copper)                                   |
+| **WP flags**           | `-wp -wp-rte -wp-split -wp-timeout 120 -wp-model Typed` |
+| **CI enforcement**     | Yes — pinned `1601 / 1668` + zero Failed/Invalid/Stepout + exact count 67 + by-name roll-call over all 67 (set equality) |
+| **MC/DC coverage**     | 100.00% (82/82 condition outcomes — see MCDC-011) |
+| **CI artifact**        | `wp-proof-deque` (full per-goal breakdown)      |
+| **Job runtime**        | ~52 min (vs vec's ~2h50m; deque is not the workflow's long pole) |
+
+deque is the **fourth driver-verified Shape-B module** (after option,
+result and vec) and the **second data/-layer module**. WP runs over
+`vmacros/vdrivers/deque_verify.h`, which instantiates the real shipped
+macros at `int` via the `DEFINE_DEQUE_STRUCTS` /
+`DEFINE_DEQUE_FUNCTIONS` split — VERIFY-018 finding F3's standing
+checklist item, executed at CI #1225 with the expansion verified
+byte-identical to the pre-split monolithic macro across four
+linkage/type combinations *before* the driver was drafted.
+
+### Model: Typed, not Typed+Cast
+
+Unlike vec — the first driver on `Typed+Cast`, which crosses `void*`
+boundaries through `mem_alloc` and `mem_copy`/`mem_move` — deque's own
+implementation contains **zero casts**, and its include closure is
+types/limits/contract/ownership + error + option + result. None of the
+cast-originating headers (memory.h, ptr.h, slice.h, arena.h,
+checked.h) appear. deque is therefore the first data/-layer driver on
+plain **Typed**. The flag is load-bearing and the job banner says so:
+it is what made the VERIFY-018 F4 control possible.
+
+### The load-bearing fact: `size <= capacity`
+
+deque is a **ring**, not a shifting buffer. Every index update is
+modular — `(tail + 1) % capacity`, `(head + 1) % capacity`, and the
+two `(x == 0) ? capacity - 1 : x - 1` decrements. Two obligations
+follow, and **both are discharged by the invariant rather than by any
+runtime guard**:
+
+1. **Division by zero.** `% d->capacity` is UB at capacity == 0, and
+   no body tests capacity directly. push_*'s `size >= capacity` and
+   pop_*'s `size == 0` early returns make the modulus unreachable at
+   capacity == 0 *only* under `size <= capacity`, which at capacity 0
+   forces size 0 and trips both guards.
+2. **Unsigned wrap.** `deque_int_remaining`'s `capacity - size` is
+   computed unguarded on the non-NULL leg — the module's canary, and
+   the structural analogue of vec's `fill()`.
+
+Both proved on every run. The driver carries the ring relation
+`tail == (head + size) % capacity` as a **separate** predicate from
+the validity view, so that a functional-correctness failure could
+never be mistaken for a failure to prove absence of RTE. (The relation
+is guarded by `capacity > 0`, since at capacity 0 it would itself
+divide by zero.)
+
+### Residual goals (67)
+
+| Arm | Goals | Nature |
+|-----|-------|--------|
+| contract.h handler pair | 2 | Inherited, definition-presence only — deque has zero direct `CANON_INVOKE_HANDLER_` calls |
+| `typed_option_int_*` | 32 | Inheritance: `option_verify.h`'s verified instance at `int`, re-included. Zero `typed_cast_` prefixed — same model as option's home unit, so no prefix transform applies |
+| `typed_result_Bool_Error_*` | 28 | Fresh instantiation, full home contract set attached (20 family profile + 8 `assigns`) |
+| `typed_deque_int_swap_ensures_6..10` | 5 | deque-own: the swap cluster, an inherited class widened beyond Typed+Cast |
+| **core substrate** | **0** | deque's closure contains none of the headers vec inherited its 91 core goals from |
+
+### Zero core-substrate inheritance
+
+vec inherited 91 core goals byte-identically from arena.h's roll-call.
+deque inherits none. Every prior composability confirmation showed
+residuals propagating *downward* without amplification; deque
+establishes the complementary half — **a module does not inherit what
+it does not include** — and is the first module in the arc whose
+inherited surface is smaller than its predecessor's. Predicted before
+the first run and confirmed on all five enforced runs.
+
+### Memory-model invariance
+
+The driver proves identically under `Typed` and `Typed+Cast`: same
+1601/1668, same Qed/solver/terminating/unreachable partition, same 67
+residual names modulo the `typed_` → `typed_cast_` prefix, across
+seven runs (five Typed, two Typed+Cast controls with the positive
+control established). Recorded as **VERIFY-019-M**; it is the
+model-axis analogue of arena-32's width-axis result.
+
+### Stability
+
+Five enforced-configuration runs report one distinct decomposition:
+proved 1601/1668, Qed 1239, solver-discharged 277, terminating 38,
+unreachable 47, residual 67. Solver *attribution* moved across that
+span (Alt-Ergo 228–244, CVC5 16–30, Z3 17–24) and the
+Timeout/Unknown split oscillated on `swap_ensures_10`, while the
+67-name set did not move. **Which goals need a solver at all is
+invariant; which solver reaches them first is scheduling** — the
+clearest justification available for the house rule that pools Timeout
+with Unknown.
+
+### MCDC-011 cross-reference
+
+`vmacros/coverage/deque_cover.c` measures **82/82 (100.00%)** with
+zero justification rows and confirms Shape B by attribution
+(`deque_impl.h`: functions and lines, "No conditions", under both
+TUs). See MCDC-011.
+
+### Preprocessing flags
+
+`-DCANON_NO_REQUIRE -DNDEBUG`, `CANON_LIFETIME` off (OWN-001 §7).
+Under this configuration `init`'s four guards, both `*_unchecked`
+triples, `swap`'s pair **and `peek_front`/`peek_back`'s d/out guards**
+all compile away, so the driver's `requires` clauses are load-bearing.
+deque has no `ensure_msg` sites at all. The peek/pop NULL-guard
+asymmetry this exposes is VERIFY-019 F1.
+
+### Reproduction
+
+```
+frama-c -wp -wp-rte \
+  -wp-model Typed \
+  -wp-prover alt-ergo,z3,cvc5 \
+  -wp-timeout 120 \
+  -wp-split \
+  -cpp-extra-args=" -I core/primitives -I core -I semantics -I data -I . \
+                    -DCANON_NO_REQUIRE -DNDEBUG" \
+  vmacros/vdrivers/deque_verify.h
+```
+
+The `Typed+Cast` control is the same command with the model changed;
+it is wired as `.github/workflows/f4-control.yml`
+(`workflow_dispatch` only, gates nothing).
+
 ## Triple-prover rationale
 
 Canon-C's verification baseline uses three SMT provers in sequence:
@@ -3233,7 +3370,7 @@ discipline) recorded for deque.
 | Header       | Status           | Proved    | Notes                                                                  |
 |--------------|------------------|-----------|------------------------------------------------------------------------|
 | vec (driver) | ✅ Verified  | 5231/5429 | Third driver-verified Shape-B module, first data/-layer module, first driver on Typed+Cast (VERIFY-018, enforced CI #1154; baseline CI #1152; report-only #1150–#1151): 37 generated functions via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3); 123 inherited byte-identically (largest TU to date; 91 core = arena.h's set verbatim, 32 option mod prefix) + 75 subject-side (53 own across 4 categories incl. the new macro-body-loop class (g) forward-flagged for deque, + 22 fresh result(Bool, Error) instantiation — VERIFY-018 Correction note 2026-07-16); zero own fn-pointer-dispatch goals; MCDC-010 (155/158 ceiling, U1/U2 WP-corroborated infeasible + U3 heap-environmental; third attribution variant); facade views measured but not yet WP-driven (follow-up); `_range`/`_fmt` extensions deferred |
-| deque        | Planned next     |           | Split patch lands before the driver is drafted (VERIFY-018 F3 checklist); shift loops pre-classified into class (g); CANON_RESULT fingerprint already spotted in deque_impl.h coverage data |
+| deque (driver) | ✅ Verified  | 1601/1668 | Fourth driver-verified Shape-B module, second data/-layer module, first data/-layer driver on plain **Typed** (VERIFY-019, enforced CI #1238; baseline #1234; name-stable #1237; re-confirmed #1239–#1240): 24 generated functions via the DEFINE_DEQUE_STRUCTS/FUNCTIONS split (VERIFY-018 F3's checklist item, landed CI #1225 with byte-identical expansion verified first); **zero core-substrate inheritance** — the first module whose inherited surface is SMALLER than its predecessor's, composability tested in the converse direction; 2 handler + 32 option (inheritance) + 28 fresh result(Bool, Error) + 5 own (swap cluster only); class (g) macro-body-loop **withdrawn** before the run (a ring shifts nothing); **memory-model invariant** (VERIFY-019-M); closed VERIFY-018 F4; MCDC-011 (82/82, 100%, zero justification rows) |
 | hashmap      | Planned          |           | Shape A (confirmed) — in-place surface via `hashmap_impl.h`, no cover TU needed |
 
 ### algo/ (longer term)
