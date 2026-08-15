@@ -1,0 +1,181 @@
+name: F4 separating control (manual)
+
+# ---------------------------------------------------------------------------
+# VERIFY-018 F4 — the separating control, run ON DEMAND ONLY.
+#
+# WHY THIS IS A SEPARATE FILE, MANUALLY TRIGGERED:
+#   - workflow_dispatch only. It must never run on push. It is an experiment,
+#     not a gate, and it must not add ~50 minutes to every master run.
+#   - Separate file so it cannot perturb the main workflow's job graph, its
+#     wall clock, or any of the seventeen enforced WP jobs.
+#   - It asserts NOTHING about deque's baseline. deque's pins live in
+#     cmake-multi-platform.yml's frama-c-deque job and are untouched here.
+#
+# WHAT IT TESTS:
+#   Run 1 of frama-c-deque (CI #1231) observed the result(Bool, Error)
+#   get_ok/get_err rte_mem_access pair ABSENT and printed "model-emission
+#   effect attributable to Typed+Cast". That conclusion was NOT supported:
+#   two variables differ between vec's run and deque's, not one.
+#
+#     vec (VERIFY-018) : -wp-model Typed+Cast , REDUCED result contract surface
+#     deque (VERIFY-019): -wp-model Typed      , FULL home contract surface,
+#                                                which adds `requires \valid(out)`
+#                                                to get_ok / get_err
+#
+#   This job holds the CONTRACTS FIXED — it runs the very same
+#   vmacros/vdrivers/deque_verify.h, unmodified — and moves ONLY the memory
+#   model. That is the experiment F4 actually needs.
+#
+# WHY IT MUST RUN HERE AND NOT ON A DEVELOPER BOX:
+#   The comparison is only valid against the same toolchain the enforced runs
+#   used. ./.github/actions/framac-setup pins Frama-C plus Alt-Ergo 2.6.3,
+#   Z3 4.15.2 and CVC5 1.2.1. A different Frama-C or a different prover set
+#   would reintroduce the very confound this job exists to remove.
+#
+# HOW TO READ THE RESULT:
+#   pair REAPPEARS under Typed+Cast
+#       => the MODEL emitted it. F4 closes as a memory-model note in
+#          VERIFY-018, and run 1's verdict line was right by luck.
+#   pair STAYS ABSENT under Typed+Cast
+#       => the `requires \valid(out)` this driver added is what discharges the
+#          union read. F4 closes the other way — and vec's own pair becomes
+#          REMOVABLE by strengthening vec_verify.h the same way, which is a
+#          change to an ENFORCED baseline and must be ratcheted deliberately.
+#          This is the more consequential branch; do not skim past it.
+#   SPLIT (one of the two)
+#       => neither hypothesis as stated. Do not close F4.
+#
+# ONE RUN DOES NOT CLOSE F4. Whichever way it lands, re-run this job unchanged
+# once before writing the conclusion into VERIFY-018 — the same discipline the
+# deque baseline went through, and the discipline whose absence produced the
+# confounded verdict in the first place.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+
+jobs:
+  f4-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/framac-setup
+
+      - name: "F4 control: deque_verify.h under Typed+Cast (contracts unchanged)"
+        run: |
+          eval $(opam env --switch=frama-c)
+          FAILURES=0
+          note_fail() { echo "$1"; FAILURES=$((FAILURES + 1)); }
+
+          echo "==============================================="
+          echo "  VERIFY-018 F4 — SEPARATING CONTROL"
+          echo "  driver : vmacros/vdrivers/deque_verify.h (UNMODIFIED)"
+          echo "  model  : Typed+Cast   (the enforced deque job runs Typed)"
+          echo "  everything else identical to the enforced job."
+          echo "==============================================="
+
+          set +e
+          frama-c -wp -wp-rte \
+            -wp-model Typed+Cast \
+            -wp-prover alt-ergo,z3,cvc5 \
+            -wp-timeout 120 \
+            -wp-split \
+            -cpp-extra-args=" \
+              -I core/primitives \
+              -I core \
+              -I semantics \
+              -I data \
+              -I . \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            vmacros/vdrivers/deque_verify.h 2>&1 | tee wp_deque_castcontrol.txt
+          WP_EXIT=${PIPESTATUS[0]}
+          set -e
+
+          echo ""
+          echo "  WP exit status: ${WP_EXIT}"
+          PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_deque_castcontrol.txt || true)
+          if [ -z "${PROVED_LINE}" ]; then
+            note_fail "FAIL: WP produced no verification summary — the run did not complete, so there is nothing to compare."
+            grep -E "^\[(kernel|wp)" wp_deque_castcontrol.txt | head -20 || true
+            echo "==============================================="
+            exit 1
+          fi
+          echo "  ${PROVED_LINE}"
+
+          # ---- POSITIVE CONTROL -------------------------------------------
+          # arena-32's rule: a null result is evidence only when the
+          # instrument is known to have changed. If -wp-model did not take
+          # effect, every goal keeps the plain typed_ prefix and "the pair is
+          # absent" would be indistinguishable from "the flag was inert".
+          CAST_GOALS=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_" wp_deque_castcontrol.txt || true)
+          PLAIN_GOALS=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_[^c]" wp_deque_castcontrol.txt || true)
+          echo ""
+          echo "  --- positive control: did the model flag take effect? ---"
+          echo "  typed_cast_ prefixed unproved goals: ${CAST_GOALS}"
+          echo "  typed_ (non-cast) unproved goals:    ${PLAIN_GOALS}"
+          CONTROL_OK=1
+          if [ "${CAST_GOALS}" -eq 0 ]; then
+            CONTROL_OK=0
+            note_fail "FAIL: no typed_cast_ prefixed goals — -wp-model Typed+Cast did not take effect. Any 'pair absent' reading below is VOID: it would mean the flag was inert, not that the model is irrelevant."
+          else
+            echo "  CONTROL ESTABLISHED — the model genuinely changed."
+          fi
+
+          # ---- THE PAYLOAD -------------------------------------------------
+          OK=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_result_Bool_Error_get_ok_assert_rte_mem_access( |$)"  wp_deque_castcontrol.txt || true)
+          ERR=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_result_Bool_Error_get_err_assert_rte_mem_access( |$)" wp_deque_castcontrol.txt || true)
+          PAIR=$((OK + ERR))
+
+          echo ""
+          echo "  --- F4 payload ---"
+          echo "  get_ok  rte_mem_access unproved: ${OK}"
+          echo "  get_err rte_mem_access unproved: ${ERR}"
+          echo ""
+          if [ "${CONTROL_OK}" -ne 1 ]; then
+            echo "  NO VERDICT — the positive control failed. Fix that first."
+          elif [ "${PAIR}" -eq 2 ]; then
+            echo "  RESULT: pair PRESENT under Typed+Cast, ABSENT under Typed,"
+            echo "          with contracts IDENTICAL across both runs."
+            echo "       => MODEL-EMISSION EFFECT. F4 closes as a Typed+Cast"
+            echo "          note in VERIFY-018. vec's pair needs no action."
+          elif [ "${PAIR}" -eq 0 ]; then
+            echo "  RESULT: pair ABSENT under BOTH models, contracts identical."
+            echo "       => NOT the model. The full home contract set's"
+            echo "          'requires \\valid(out)' is what discharges the union"
+            echo "          read. F4 closes as a CONTRACT-SURFACE effect."
+            echo "       => CONSEQUENCE BEYOND deque: vec's own get_ok/get_err"
+            echo "          pair is then removable by strengthening"
+            echo "          vec_verify.h the same way. That would change an"
+            echo "          ENFORCED baseline (VERIFY-018, 198 residuals) and"
+            echo "          must go through the acknowledged ratchet, not a"
+            echo "          quiet edit."
+          else
+            echo "  RESULT: SPLIT (${PAIR}/2) — only one of the pair."
+            echo "       => neither hypothesis as stated. Do NOT close F4."
+            echo "          Identify which of the two differs and why."
+          fi
+
+          echo ""
+          echo "  --- full unproved list (for the record) ---"
+          grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_deque_castcontrol.txt || echo "  (none)"
+
+          echo ""
+          echo "==============================================="
+          echo "  REMINDER: one run does not close F4. Re-run this job"
+          echo "  unchanged and confirm the same verdict before writing it"
+          echo "  into VERIFY-018. A confounded answer is worse than none —"
+          echo "  that is how F4 got into this state."
+          echo "  This job gates NOTHING. deque's enforced baseline lives in"
+          echo "  cmake-multi-platform.yml and is untouched by this run."
+          echo "==============================================="
+          if [ "${FAILURES}" -ne 0 ]; then exit 1; fi
+
+      - name: Upload F4 control output
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wp-f4-control-typedcast
+          path: wp_deque_castcontrol.txt
+          retention-days: 90
