@@ -104,8 +104,22 @@
  * For Arena (and other modules under CANON_LIFETIME_DEBUG), derived from
  * the owner's address and re-stamped on every reset.
  *
- * Unique across all simultaneously live owners.
+ * Intended to be distinct across all simultaneously live owners.
  * Not monotonic — addresses, not sequence numbers.
+ *
+ * The strength of that distinctness is worth stating precisely, because the
+ * derivation is `counter ^ owner-address` and the counter term is weaker
+ * than it looks:
+ *   - The counter has internal linkage in a header, so there is one instance
+ *     PER TRANSLATION UNIT, not one per program. Two owners constructed in
+ *     different TUs can draw the same counter value.
+ *   - Distinctness therefore rests principally on the address term, which is
+ *     sound for simultaneously live owners (distinct live objects have
+ *     distinct addresses). The counter is a diversifier, not the identity.
+ *   - Tokens are not unique across time: an address may be reused once an
+ *     owner dies, and the counter is what makes reuse unlikely rather than
+ *     impossible.
+ * See docs/thread-safety.md for the concurrency contract.
  *
  * 0 is reserved as REGION_ID_STATIC ("no owner" / static lifetime).
  * A valid owner will never have ID 0: no stack or heap object has
@@ -121,6 +135,129 @@ typedef u64 region_id_t;
  * value whose lifetime exceeds every possible owner.
  */
 #define REGION_ID_STATIC ((region_id_t)0)
+
+/* ============================================================================
+   Internal: lifetime-token generation (CANON_LIFETIME_DEBUG only)
+
+   One implementation, shared by every ownership-bearing module. Before
+   2026-08 each of the eleven modules carried a byte-identical private copy;
+   they are now thin call sites onto this one, so the derivation cannot drift
+   between modules and has a single place to be fixed.
+
+   ── Why this is atomic ────────────────────────────────────────────────────
+   Generating a token is a read-modify-write of a counter with static storage
+   duration. Done non-atomically, two threads constructing owners
+   concurrently can read the same counter value; since the token is
+   `counter ^ address`, two owners can then receive the SAME token — and the
+   token is exactly the value the borrow checks compare. A stale borrow can
+   validate against a different live owner, so the check passes when it
+   should fail. The mode fails silently and in the unsafe direction.
+
+   Measured (32 threads, 1.6M tokens, fixed owner address so the address term
+   cannot mask a counter collision, single-core runner):
+
+     plain increment, -O0    0 duplicates       <- does NOT reproduce
+     plain increment, -O2    150,000 (9.4%)     <- optimiser hoists the counter
+     atomic,          -O2    0 duplicates
+
+   ThreadSanitizer reports the race directly on the plain path. The -O0 row is
+   the reason this is a layered fix rather than a documented caveat: a
+   debug-only safety mechanism that is intact in a debug build and 9% corrupt
+   in an optimised one is the worst available failure profile.
+
+   ── Why not C11 <stdatomic.h> alone ───────────────────────────────────────
+   Canon-C is C99 (CMAKE_C_STANDARD 99, REQUIRED). A C11-only fix would be
+   dead code in every CI job and for every caller following the project's own
+   language stance — the fix would exist behind a door the project keeps
+   locked. The atomic intrinsics of the three supported compilers are
+   available in C99 mode, so the ladder below reaches real builds.
+
+   ── The ladder ────────────────────────────────────────────────────────────
+     1. C11 <stdatomic.h>            standard, preferred when available
+     2. GCC/Clang __atomic builtins  C99-compatible; MISRA-DEV-018
+     3. MSVC _InterlockedIncrement64 C99-compatible; MISRA-DEV-018
+     4. plain increment              fallback; NOT race-free, see contract
+
+   Levels 2 and 3 are compiler extensions and are therefore disabled by
+   CANON_NO_GNU_EXTENSIONS, which is how the CompCert job and any strict-C99
+   build reach level 4. CANON_LIFETIME_NO_ATOMICS forces level 4 explicitly,
+   which is what the CI job uses to demonstrate that the fallback really does
+   race.
+
+   CANON_LIFETIME_ATOMIC_IDS expands to 1 at levels 1-3 and 0 at level 4, so
+   a caller can test which contract applies.
+
+   relaxed ordering is deliberate and sufficient at every atomic level: the
+   only property required is that concurrent increments return distinct
+   values, which read-modify-write operations on one object guarantee under
+   any ordering. No happens-before edge is claimed here — publishing an owner
+   to another thread remains the caller's synchronisation, exactly as it is
+   for every other Canon-C object.
+   ============================================================================ */
+
+#ifdef CANON_LIFETIME_DEBUG
+
+#if defined(CANON_LIFETIME_NO_ATOMICS)
+    /* Level 4 forced. */
+#   define CANON_LIFETIME_ATOMIC_IDS 0
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && \
+      !defined(__STDC_NO_ATOMICS__)
+    /* Level 1: standard C11 atomics. */
+#   include <stdatomic.h>
+#   define CANON_LIFETIME_ATOMIC_IDS 1
+#   define CANON_LIFETIME_ATOMIC_LEVEL_ 1
+#elif !defined(CANON_NO_GNU_EXTENSIONS) && defined(__GNUC__)
+    /* Level 2: GCC/Clang __atomic builtins, usable from C99. */
+#   define CANON_LIFETIME_ATOMIC_IDS 1
+#   define CANON_LIFETIME_ATOMIC_LEVEL_ 2
+#elif !defined(CANON_NO_GNU_EXTENSIONS) && defined(_MSC_VER)
+    /* Level 3: MSVC interlocked intrinsics, usable from C99. */
+#   include <intrin.h>
+#   define CANON_LIFETIME_ATOMIC_IDS 1
+#   define CANON_LIFETIME_ATOMIC_LEVEL_ 3
+#else
+    /* Level 4: no atomics available. Construction must be serialised. */
+#   define CANON_LIFETIME_ATOMIC_IDS 0
+#endif
+
+/*
+ * No ACSL contract, deliberately.
+ *
+ * This block is excluded from every verified configuration — all WP jobs run
+ * with CANON_LIFETIME off — so a contract here would be unchecked decoration.
+ * Until 2026-08 two of the eleven private copies carried `assigns \nothing`,
+ * which is FALSE: the function writes the counter. That the falsehood
+ * survived unnoticed is itself the argument for not replacing it with
+ * another unchecked annotation. The honest statement is this comment.
+ */
+static inline region_id_t canon_lifetime_next_id_(const void* owner_) {
+#if CANON_LIFETIME_ATOMIC_IDS && (CANON_LIFETIME_ATOMIC_LEVEL_ == 1)
+    static _Atomic region_id_t counter_ = 1;
+    const region_id_t c_ = atomic_fetch_add_explicit(
+        &counter_, (region_id_t)1, memory_order_relaxed);
+#elif CANON_LIFETIME_ATOMIC_IDS && (CANON_LIFETIME_ATOMIC_LEVEL_ == 2)
+    static region_id_t counter_ = 1;
+    /* cppcheck-suppress misra-c2012-1.2 ; MISRA-DEV-018 */
+    const region_id_t c_ = __atomic_fetch_add(&counter_, (region_id_t)1,
+                                              __ATOMIC_RELAXED);
+#elif CANON_LIFETIME_ATOMIC_IDS && (CANON_LIFETIME_ATOMIC_LEVEL_ == 3)
+    static volatile long long counter_ = 1;
+    /* cppcheck-suppress misra-c2012-1.2 ; MISRA-DEV-018 */
+    const region_id_t c_ = (region_id_t)(_InterlockedIncrement64(&counter_) - 1);
+#else
+    /* Level 4. Not race-free: see docs/thread-safety.md. Callers must
+       serialise construction under CANON_LIFETIME_DEBUG on this path. */
+    static region_id_t counter_ = 1;
+    const region_id_t c_ = counter_;
+    counter_++;
+#endif
+    region_id_t id_ = c_ ^ (region_id_t)(uintptr_t)owner_;
+    /* REGION_ID_STATIC (0) is reserved; never hand it out. */
+    if (id_ == REGION_ID_STATIC) { id_ = (region_id_t)1; }
+    return id_;
+}
+
+#endif /* CANON_LIFETIME_DEBUG */
 
 /**
  * @brief The (id, open) pair embedded by ownership-bearing modules

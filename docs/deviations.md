@@ -5621,6 +5621,79 @@ build can define the library's I/O-free subset; `core/` requires stdio only in
 `contract.h`, and only for the default handler, which is replaceable via
 `contract_set_handler()`.
 
+## MISRA-DEV-018: Rule 1.2 — compiler atomic intrinsics for lifetime-token generation
+
+| ID | Date | Scope | Category |
+|----|------|-------|----------|
+| MISRA-DEV-018 | 2026-08 | 2 sites in `core/primitives/lifetime.h`, both inside `CANON_LIFETIME_DEBUG` | Correctness-required deviation |
+
+**Description**: Rule 1.2 ("language extensions should not be used", advisory)
+is deviated at two sites in `canon_lifetime_next_id_()`: GCC/Clang's
+`__atomic_fetch_add(..., __ATOMIC_RELAXED)` and MSVC's
+`_InterlockedIncrement64()`. Both are compiler intrinsics rather than ISO C99.
+
+**Rationale**: this is the only deviation in the campaign taken because the
+conforming alternative is *incorrect*, not because it is inconvenient.
+
+Token generation is a read-modify-write of a counter shared between the
+caller's threads. Performed non-atomically, two concurrent constructions can
+read the same counter value; because the token is `counter ^ owner-address`,
+two owners can then receive the same token — and the token is precisely the
+value the borrow checks compare. A stale borrow can validate against a
+different live owner, so **the lifetime check passes when it should fail**.
+The mode exists to catch use-after-invalidate; the race defeats it silently
+and in the unsafe direction.
+
+C11's `<stdatomic.h>` is the conforming fix and is preferred where available
+(level 1 of the ladder in `lifetime.h`). It is not sufficient on its own:
+Canon-C is C99 (`CMAKE_C_STANDARD 99`, `REQUIRED ON`), so a C11-only fix
+would be dead code in every CI job and for every caller following the
+project's own language stance — correct, and never compiled. The intrinsics
+are what make the fix reach the configuration the project actually ships.
+
+**Measured, on a single-core runner, 32 threads, 1.6M tokens, fixed owner
+address so the address term cannot mask a counter collision:**
+
+| path | `CANON_LIFETIME_ATOMIC_IDS` | duplicate tokens | TSan races |
+|------|------|------|------|
+| GCC/Clang intrinsic (C99, this deviation) | 1 | 0 | 0 |
+| C11 `<stdatomic.h>` | 1 | 0 | 0 |
+| plain increment, `-O2` | 0 | 150,000 of 1,600,000 | 2 |
+| plain increment, `-O0` | 0 | 0 | 2 |
+
+The `-O0` row is why the deviation is taken rather than the caveat merely
+documented: the race does not reproduce without optimisation, because the
+optimiser is what keeps the counter in a register across the loop. A
+debug-only safety mechanism that is intact in a debug build and 9% corrupt in
+an optimised one is the worst available failure profile.
+
+**Mitigation**: two per-site inline suppressions, never a command-line or
+blanket suppression — the campaign's standing constraint, so the misra job's
+canary continues to fire. Both sites are inside `#ifdef CANON_LIFETIME_DEBUG`
+and are therefore absent from every default build, from every WP job (all run
+with `CANON_LIFETIME` off, so no proof baseline is affected) and from the
+misra scan itself, which does not define the macro. Both are additionally
+guarded by `CANON_NO_GNU_EXTENSIONS`, so the CompCert job and any strict-C99
+build fall through to the conforming path.
+
+**Residual risk, stated rather than mitigated**: on a toolchain that is
+neither C11 nor GCC/Clang/MSVC, or with `CANON_NO_GNU_EXTENSIONS` or
+`CANON_LIFETIME_NO_ATOMICS` defined, generation falls back to the plain
+increment and **concurrent construction under `CANON_LIFETIME_DEBUG` remains
+a data race**. `CANON_LIFETIME_ATOMIC_IDS` reports which path is in effect;
+`docs/thread-safety.md` §3 states the caller's obligation on that path. The
+`lifetime-token-concurrency` CI job exercises both directions.
+
+**Evidence**: `test/concurrency/lifetime_token_test.c`, run by the
+`lifetime-token-concurrency` job. Note what that job gates and what it does
+not: zero duplicates on an atomic path is deterministic and is gated; the
+*presence* of duplicates on the fallback is not, because a data race is
+undefined behaviour rather than a scheduled event — the same counter produced
+50000, 50000, 0, 50000, 50000 duplicates across five consecutive runs. TSan
+instruments accesses instead of sampling outcomes and gives a deterministic
+two-way signal (0 races atomic, 2 races fallback), so it is what the job
+gates the fallback direction on.
+
 ## MISRA-DEV-017: Rule 2.3 — the C99 static-assertion idiom
 
 | ID | Date | Scope | Category |

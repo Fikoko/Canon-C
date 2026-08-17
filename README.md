@@ -175,6 +175,11 @@ For current numbers, see:
   category, rationale, and mitigation.
 - **`docs/traceability.md`** — coverage record (lines, branches, MC/DC),
   per-header coverage results, and history of measurements.
+- **`docs/thread-safety.md`** — the concurrency contract. Canon-C is a
+  single-threaded library with exactly one global mutable object; this
+  states what a caller with threads of their own must do, and is explicit
+  that none of it is machine-checked — WP has no concurrency model, so no
+  gate in CI verifies any claim in it.
 - **`docs/misra-campaign.md`** — what the MISRA C:2012 advisory count means
   and what it does not. Read this one first if you are evaluating the
   evidence rather than looking up a specific finding: it explains why the

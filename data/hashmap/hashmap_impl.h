@@ -215,14 +215,11 @@ typedef struct {
 #ifdef CANON_LIFETIME_DEBUG
 #ifndef CANON_HM_LIFETIME_NEXT_ID_DEFINED
 #define CANON_HM_LIFETIME_NEXT_ID_DEFINED
+    /* Delegates to the single shared generator in
+     * core/primitives/lifetime.h — see docs/thread-safety.md for the
+     * concurrency contract on token generation. */
     static inline region_id_t _hm_lifetime_next_id_(void* mp) {
-        static region_id_t counter_ = 1;
-        const region_id_t c_ = counter_;
-        counter_++;
-        region_id_t id = (region_id_t)c_
-                       ^ (region_id_t)(uintptr_t)(mp);
-        if (id == REGION_ID_STATIC) { id = (region_id_t)1; }
-        return id;
+        return canon_lifetime_next_id_(mp);
     }
 #endif
 #endif

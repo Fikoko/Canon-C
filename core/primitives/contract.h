@@ -128,6 +128,8 @@
  * - Panic handler must be thread-safe if used in multithreaded context
  * - Default panic handler uses fprintf (not guaranteed thread-safe on all platforms)
  * - contract_set_handler() is NOT thread-safe — call once during init only
+ * - canon_contract_handler is the library's ONLY global mutable object;
+ *   the full contract is in docs/thread-safety.md
  *
  * Portability:
  * ────────────────────────────────────────────────────────────────────────────
