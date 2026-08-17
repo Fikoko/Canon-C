@@ -2996,15 +2996,41 @@ frozen CI #1154):
   the contract surface: the full home set's `requires \valid(out)`
   discharges the union read that vec's lighter contracts leave open.
 
-  Stated precisely, this is **elimination, not demonstration**. The
-  confirming test is adding `requires \valid(out)` to
-  `vec_verify.h`'s `get_ok`/`get_err` and observing the pair vanish —
-  but that is the FIX, not a control, and it moves this record's
-  enforced baseline from 198 to an expected 196. It is therefore
-  queued as its own ratchet arc (report-only → name-stable →
-  pinned), **not** bundled into the commit that records this closure.
-  A goal flipping to Proved is a red run carrying good news; ratchet
-  down, never widen.
+  Stated precisely, that was **elimination, not demonstration** — and
+  the demonstration has since been run.
+
+  **DEMONSTRATED 2026-08-17.** `vec_verify.h` contracted 3 of the 17
+  emitted `result__Bool_Error_*` functions; `get_ok` and `get_err` were
+  not among them, so nothing established that `out` was valid and
+  `-wp-rte`'s memory-access obligation for each union read had nothing
+  to discharge it. Contracting the two — shapes copied from
+  `deque_verify.h`, no clause invented — removed **exactly** those two
+  goals and nothing else.
+
+  | | before | after | delta |
+  |---|---|---|---|
+  | total goals | 5429 | 5467 | +38 |
+  | proved | 5231 | 5271 | +40 |
+  | unproved | 198 | **196** | **−2** |
+
+  The accounting closes with nothing unexplained: the two contracts add
+  38 goals of their own (each carries a `requires`, a default `assigns`,
+  two behaviors, and `complete`/`disjoint`), **all 38 prove**, and the
+  two F4 goals flip — hence +40 proved against +38 total. Zero Failed,
+  Invalid or Stepout, so neither new contract is falsified by the
+  implementation it describes. The remaining 196 are the previous 198
+  minus the pair, machine-diffed against the pinned roll-call.
+
+  So the pair was never a property of `result(Bool, Error)`, never a WP
+  union-model artifact, and not a memory-model emission: it was **a
+  precondition vec's driver could have stated and did not**. Removable,
+  not residual. The last two goals in the 30,127-goal dataset without a
+  pinned class are now pinned to a cause and eliminated by fixing it.
+
+  Ratcheted DOWN in one acknowledged commit — `EXPECTED_UNPROVED`
+  198→196, the proved-line pin `5231 / 5429`→`5271 / 5467`, and the two
+  `CHECKS` entries removed — per this job's standing rule that a goal
+  flipping to Proved is a red run carrying good news.
 
   What the closure changes about the pair's status: it was never a
   property of `result(Bool, Error)`, and never a WP union-model
