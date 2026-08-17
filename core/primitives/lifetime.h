@@ -220,6 +220,16 @@ typedef u64 region_id_t;
 #   define CANON_LIFETIME_ATOMIC_IDS 0
 #endif
 
+/* CANON_LIFETIME_ATOMIC_LEVEL_ must be defined on EVERY path, including the
+ * two that select level 4, because the selection below tests it in #if.
+ * Leaving it undefined there relies on C's rule that an unrecognised
+ * identifier in a controlling expression evaluates to 0 — which is legal and
+ * is exactly the fragility MISRA rule 20.9 prohibits. CI #<this run> found it
+ * as three 20.9 findings; the fix is to define it rather than suppress them. */
+#ifndef CANON_LIFETIME_ATOMIC_LEVEL_
+#   define CANON_LIFETIME_ATOMIC_LEVEL_ 4
+#endif
+
 /*
  * No ACSL contract, deliberately.
  *

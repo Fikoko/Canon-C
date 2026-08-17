@@ -5670,11 +5670,30 @@ an optimised one is the worst available failure profile.
 **Mitigation**: two per-site inline suppressions, never a command-line or
 blanket suppression — the campaign's standing constraint, so the misra job's
 canary continues to fire. Both sites are inside `#ifdef CANON_LIFETIME_DEBUG`
-and are therefore absent from every default build, from every WP job (all run
-with `CANON_LIFETIME` off, so no proof baseline is affected) and from the
-misra scan itself, which does not define the macro. Both are additionally
-guarded by `CANON_NO_GNU_EXTENSIONS`, so the CompCert job and any strict-C99
-build fall through to the conforming path.
+and are therefore absent from every default build and from every WP job (all
+run with `CANON_LIFETIME` off, so no proof baseline is affected). Both are
+additionally guarded by `CANON_NO_GNU_EXTENSIONS`, so the CompCert job and any
+strict-C99 build fall through to the conforming path.
+
+**Correction (same day this record was written).** The paragraph above
+originally also claimed the sites were absent "from the misra scan itself,
+which does not define the macro". **That was false**, and the first run
+disproved it: cppcheck enumerates preprocessor configurations rather than
+scanning a single one, and its log shows it checking
+`CANON_LIFETIME_DEBUG;CANON_NO_GNU_EXTENSIONS;__GNUC__` and neighbours
+explicitly. The block IS scanned. The prediction that the pinned advisory
+count would stay at 53 therefore failed — it read 56.
+
+The three extra findings were **not** the intrinsics: the rule 1.2
+suppressions worked as written. They were rule **20.9** at
+`lifetime.h:234/238/243`, on the ladder's own selection tests. On the two
+paths that select level 4, `CANON_LIFETIME_ATOMIC_LEVEL_` was never defined,
+so `#if CANON_LIFETIME_ATOMIC_IDS && (CANON_LIFETIME_ATOMIC_LEVEL_ == 1)`
+relied on C evaluating an unrecognised identifier as 0. Legal, and precisely
+the fragility 20.9 exists to catch. Fixed by defining the macro to 4 on those
+paths rather than suppressing the findings — a real defect the scan found,
+not noise, and the count returns to 53. Verified with `-Wundef` clean across
+all four configurations.
 
 **Residual risk, stated rather than mitigated**: on a toolchain that is
 neither C11 nor GCC/Clang/MSVC, or with `CANON_NO_GNU_EXTENSIONS` or
