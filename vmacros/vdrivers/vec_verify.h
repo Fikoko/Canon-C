@@ -280,7 +280,27 @@
  * their fn-pointer/termination cluster re-emits with the same goal names
  * as run 1. Class (b) analog of result's own dispatch residuals, but
  * SUBJECT-side under VERIFY-018's Correction note — the family is
- * instantiated at a type pair result's home unit never verified. */
+ * instantiated at a type pair result's home unit never verified.
+ *
+ * ── get_ok / get_err: added 2026-08, testing F4's closure ────────────────
+ * These two were previously among the uncontracted remainder, and that is
+ * exactly why VERIFY-018 F4 existed: -wp-rte emits a memory-access
+ * obligation for the union read in each, and with no contract nothing
+ * establishes that `out` is valid, so neither discharges. Those two goals
+ * were the only ones in the 30,127-goal dataset without a pinned class.
+ *
+ * VERIFY-019 closed F4 by ELIMINATION: deque instantiates the same
+ * (bool, Error) pair with the FULL home contract set, does not show the
+ * pair, and the f4-control job proved (twice, with a positive control)
+ * that the memory model is not the cause. That leaves the contract
+ * surface as the only surviving explanation — but a hypothesis left
+ * standing is weaker than one tested.
+ *
+ * Adding the contracts IS the test, and it is a real one: if these two
+ * goals do not disappear, then neither the model nor the contract surface
+ * explains them, F4 REOPENS with both hypotheses dead, and VERIFY-018's
+ * closure note must be retracted. Shapes are deque_verify.h's, retyped
+ * identically — no clause is invented here. */
 #include "semantics/error.h"
 #include "semantics/result/result_defn.h"
 
@@ -303,6 +323,40 @@ static inline result__Bool_Error result__Bool_Error_err(Error err);
     ensures \result <==> r.is_ok;
 */
 static inline bool result__Bool_Error_is_ok(result__Bool_Error r);
+
+/*@ requires \valid(out);
+    assigns *out;
+    behavior ok:
+      assumes r.is_ok;
+      assigns *out;
+      ensures \result == \true;
+      ensures *out == r.val.ok;
+    behavior err:
+      assumes !r.is_ok;
+      assigns \nothing;
+      ensures \result == \false;
+      ensures *out == \old(*out);
+    complete behaviors;
+    disjoint behaviors;
+*/
+static inline bool result__Bool_Error_get_ok(result__Bool_Error r, bool *out);
+
+/*@ requires \valid(out);
+    assigns *out;
+    behavior err:
+      assumes !r.is_ok;
+      assigns *out;
+      ensures \result == \true;
+      ensures *out == r.val.err;
+    behavior ok:
+      assumes r.is_ok;
+      assigns \nothing;
+      ensures \result == \false;
+      ensures *out == \old(*out);
+    complete behaviors;
+    disjoint behaviors;
+*/
+static inline bool result__Bool_Error_get_err(result__Bool_Error r, Error *out);
 
 DEFINE_RESULT_FUNCTIONS(static inline, bool, Error)
 
