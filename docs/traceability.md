@@ -42,10 +42,10 @@
 
 | Field              | Value                                                        |
 |--------------------|--------------------------------------------------------------|
-| **Date**           | 2026-07-12                                                   |
+| **Date**           | 2026-08-15                                                   |
 | **Version**        | v1.3.0                                                       |
-| **Commit**         | e663e2c                                                      |
-| **CI run**         | Canon-C CI #1154                                             |
+| **Commit**         | dbf31c3                                                      |
+| **CI run**         | Canon-C CI #1240                                             |
 | **CI job**         | coverage + frama-c                                           |
 | **Branch**         | master                                                       |
 | **Compiler**       | GCC 14.2.0                                                   |
@@ -54,7 +54,17 @@
 | **Tool**           | gcov-14 --conditions (MC/DC) + lcov (branch)                |
 | **Runner**         | ubuntu-latest (GitHub Actions)                               |
 | **Scope**          | Library headers + Shape-B cover TUs — test files excluded    |
-| **Test binaries**  | 53 (50 test binaries + 3 Shape-B cover TUs `option_cover`, `result_cover`, `vec_cover`; contract_test excluded from the coverage build) |
+| **Test binaries**  | 54 (50 test binaries + 4 Shape-B cover TUs `option_cover`, `result_cover`, `vec_cover`, `deque_cover`; contract_test excluded from the coverage build — confirmed against #1240, which reports "Found 54 data files in build") |
+
+> **Coverage vs. proof provenance (2026-08-21).** This card describes the
+> **coverage** measurement, last moved by the deque arc at CI #1240
+> (dbf31c3). The **WP** pins have since advanced to CI #1247 (43a46b1) via
+> the vec F4 ratchet, which changed no coverage surface: `vec_verify.h` is
+> a WP driver and is not part of the coverage build. Neither did CI
+> #1243–#1245's `lifetime.h` consolidation, whose one function sits inside
+> `CANON_LIFETIME_DEBUG` and is not translated under the coverage flag set.
+> The two provenances are therefore allowed to differ here; where a figure
+> is a proof figure, the master table's #1247 provenance governs.
 
 > Note: this baseline advances from CI #1072 to CI #1089, where the
 > second Shape-B cover TU (`vmacros/coverage/result_cover.c`) entered the
@@ -177,10 +187,21 @@
 
 | Metric     | Percentage | Covered    | Total      |
 |------------|------------|------------|------------|
-| Lines      | 96.3%      | 2566       | 2665       |
-| Functions  | 99.5%      | 621        | 624        |
-| Branches   | 87.6%      | 1557       | 1778       |
-| MC/DC      | 88.0%      | 1692       | 1922       |
+| Lines      | 96.4%      | 2669       | 2768       |
+| Functions  | 99.5%      | 655        | 658        |
+| Branches   | 87.7%      | 1571       | 1792       |
+| MC/DC      | 88.5%      | 1774       | 2004       |
+
+> **Transcribed from CI #1240's coverage job, 2026-08-21.** All four rows are
+> that run's own figures. Deltas from the CI #1202 measurement, for the record:
+> lines 2566/2665 → 2669/2768 (+103), functions 621/624 → 655/658 (+34),
+> branches 1557/1778 → 1571/1792 (+14), MC/DC 1692/1922 → 1774/2004 (+82).
+> **Every delta is fully covered on both sides** — the only measured surface
+> added between the two runs is `vmacros/coverage/deque_cover.c`, which reaches
+> 100% with zero justification rows, and no pre-existing file moved. The MC/DC
+> row was derived ahead of the transcription (1692 + 82 / 1922 + 82, a clean
+> cover TU adding equally to numerator and denominator) and confirmed exactly;
+> the other three were not derivable that way and are transcribed.
 
 arena.h's MC/DC contribution at 89.4% (59/66 post-API-001; 90.6% (58/64)
 when this was written) is the achievable
@@ -603,16 +624,27 @@ do not appear in the per-header MC/DC table because they have no
 measurable condition outcomes under the coverage build. Their content
 is exclusively typedefs, constants, and macros that expand at call
 sites — no `static inline` functions with their own branches for gcov
-to attribute. Runtime evidence comes from `types_test.c`,
+to attribute. **Updated 2026-08-21:** `lifetime.h` is now an exception
+in letter but not in effect — since CI #1243–#1245 it carries one
+`static inline` function, `canon_lifetime_next_id_`, consolidated from
+eleven private copies. It sits inside `CANON_LIFETIME_DEBUG`, which is
+off in the coverage build, so it is not translated and emits no
+instrumented lines, branches or conditions; its absence from the table
+is unchanged, but the reason is now exclusion by configuration rather
+than absence of code. Runtime evidence comes from `types_test.c`,
 `limits_test.c`, `scope_test.c`, and `ownership_test.c` respectively,
 which lock the headers' documented behavior to regression tests. The
 condition outcomes measured by those tests are attributed to the
 calling TU's expansion sites, not to the headers themselves.
 
 `lifetime.h` has no dedicated test file by the same logic — its
-content (two typedefs and one constant) makes no claim that could
-fail on any conforming C99 target beyond what `types_test.c` already
-covers. Lifetime substrate behavior is exercised through
+default-configuration content (two typedefs and one constant) makes no
+claim that could fail on any conforming C99 target beyond what
+`types_test.c` already covers. The `CANON_LIFETIME_DEBUG`-gated
+`canon_lifetime_next_id_` added at CI #1243–#1245 does make such a
+claim, but only on a path this build never takes; its concurrency
+contract is stated in `docs/thread-safety.md` and its atomic-intrinsic
+deviation in MISRA-DEV-018. Lifetime substrate behavior is exercised through
 `borrow_test.c` and the per-container tests across all 16 CI configs
 under both `CANON_LIFETIME` modes. See verification.md's roadmap
 table for the matching N/A disposition.
@@ -688,6 +720,29 @@ across four categories, including the new macro-body-loop class
 forward-flagged for deque, and 22 on the fresh result(Bool, Error)
 instantiation (VERIFY-018 incl. Correction note 2026-07-16).
 
+As of 2026-08-14 (baseline CI #1234 / 5ae441d; set-identical CI #1237 /
+08bdf42; enforced at CI #1238 / db0a864; re-confirmed CI #1239 /
+06e4cad and CI #1240 / dbf31c3), deque became the fourth
+driver-verified Shape-B module, the second data/-layer module, and the
+first data/-layer driver on plain `Typed` (VERIFY-019) — 24 generated
+functions via the `DEFINE_DEQUE_STRUCTS` / `DEFINE_DEQUE_FUNCTIONS`
+split, landed at CI #1225 (1f5549b) with the expansion verified
+byte-identical to the pre-split macro *before* the driver was drafted,
+executing VERIFY-018 finding F3's standing checklist item. Its
+headline result is negative space: **zero core-substrate inheritance**,
+making deque the first module whose inherited surface is smaller than
+its predecessor's, and so the first confirmation of composability in
+the converse direction to every prior one. Its proof is additionally
+memory-model invariant — set-identical residuals under `Typed` and
+`Typed+Cast` modulo the typed_→typed_cast_ prefix, recorded separately
+as VERIFY-019-M because it is a claim about the method rather than
+about deque — and that control closed VERIFY-018 finding F4 by
+elimination. The confirming fix followed: `vec_verify.h` contracted
+`get_ok`/`get_err` at CI #1246 (c427548, a deliberately red run against
+the standing 198-goal pin), and the acknowledged ratchet landed at CI
+#1247 (43a46b1, 2026-08-18), moving vec 198 → 196 and the pinned
+proved line 5231 / 5429 → 5271 / 5467.
+
 | Header     | Functions | Proof obligations | Proved (auto)     | Unproved | Deviation    |
 |------------|-----------|-------------------|-------------------|----------|--------------|
 | checked.h  | 30        |              1755 | 1753 (99.89%) | 2        | VERIFY-002   |
@@ -704,10 +759,13 @@ instantiation (VERIFY-018 incl. Correction note 2026-07-16).
 | result     | 17        |               215 | 185 (86.05%) | 30       | VERIFY-015   |
 | borrow.h   | 24        |              2458 | 2439 (99.23%) | 19       | VERIFY-016   |
 | diag.h     | 13        |              3060 | 3050 (99.67%) | 10       | VERIFY-017   |
-| vec        | 37        |              5429 | 5231 (96.35%) | 198      | VERIFY-018   |
-| **Total**  | **315**   | **30599**         | **29899 (97.71%)**| **700**  |              |
+| vec        | 37        |              5467 | 5271 (96.41%) | 196      | VERIFY-018   |
+| deque      | 24        |              1668 | 1601 (95.98%) | 67       | VERIFY-019   |
+| **Total**  | **339**   | **32305**         | **31540 (97.63%)**| **765**  |              |
 
-All figures are the enforced CI pins at HEAD (post CI #1202). `ptr.h`'s row
+All figures are the enforced CI pins at HEAD (43a46b1, CI #1247 — post the
+deque arc of CI #1225–#1240 and the vec F4 ratchet of CI #1246–#1247).
+`ptr.h`'s row
 is its full-TU figure; its module-own baseline before checked.h gained the
 division/modulo families was 1739/1729, with the same 10 named residuals.
 Function counts for arena.h and pool.h include the `_cbytes` accessors added
@@ -731,18 +789,24 @@ instantiating `DEFINE_VEC(static inline, int)` via the
 STRUCTS/FUNCTIONS split. Unlike option/result, vec's TU **does** pull
 in the substrate stack — the facade includes slice.h, ptr.h, and
 arena.h → memory.h, plus the option and result instantiations the
-driver composes — so its 5380 obligations are the largest full-run
-figure in the table. Its 121 inherited goals re-emerge
+driver composes — so its 5467 obligations are the largest full-run
+figure in the table. Its 123 inherited goals re-emerge
 **byte-identically** from seven already-documented families (arena.h
-46, option 32, memory.h 20, slice.h-libc 13, ptr.h 6, checked.h 2,
-contract.h 2) — the core arm equal to arena.h's pinned list verbatim,
-the option arm equal modulo the typed_→typed_cast_ prefix — and its
-remaining 22 non-own goals belong to the fresh result(Bool, Error)
-instantiation, a new verification subject (VERIFY-015 verifies
-(int, VErr)). See VERIFY-018 incl. Correction note 2026-07-16.
+48, option 32, memory.h 20, slice.h-libc 13, ptr.h 6, checked.h 2,
+contract.h 2) — the core arm equal to arena.h's pinned list verbatim
+(48, not the 46 of the pre-API-001 baseline: arena.h's two `_cbytes`
+const twins re-emit here), the option arm equal modulo the
+typed_→typed_cast_ prefix — and its remaining 20 non-own goals belong
+to the fresh result(Bool, Error) instantiation, a new verification
+subject (VERIFY-015 verifies (int, VErr)). That arm read 22 until
+2026-08-18: the pair removed was the `get_ok`/`get_err` union-read
+obligation of VERIFY-018 finding F4 — **removable, not residual** —
+eliminated by contracting the two functions in the driver (measured
+c427548 / CI #1246, ratcheted 43a46b1 / CI #1247). See VERIFY-018 incl.
+Correction note 2026-07-16 and DEMONSTRATED note 2026-08-17.
 
 **Prover setup**: Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1 (triple-prover,
-`-wp-timeout 120`). Of the 688 unproved goals, the 428 in-place-header
+`-wp-timeout 120`). Of the 765 unproved goals, the 438 in-place-header
 goals (including borrow.h's 19 — 17 inherited re-emissions plus 2
 memcmp-danglingness goals, VERIFY-016 — and diag.h's 10 — the
 contract.h handler pair plus 8 libc byte-view goals at its
@@ -771,9 +835,20 @@ ACSL loop annotations cannot survive macro definition; the first
 class where MC/DC is the primary evidence, MCDC-010), and 22
 Typed+Cast int↔char bridging goals; notably **zero** vec-own
 function-pointer-dispatch goals — the first module without the
-OWN-003 class of its own. result additionally carries the union-model
-standing hypothesis (no goals; all union-member postconditions proved
-under a WP union model the tool itself flags — see VERIFY-015).
+OWN-003 class of its own. Two of those goals — the `get_ok`/`get_err`
+pair on the fresh result(Bool, Error) arm — were removed rather than
+reclassified at CI #1247, VERIFY-018 finding F4 having been shown to be
+a precondition the driver could have stated and did not; the arm reads
+20, not 22, from 2026-08-18 onward. deque's 67 driver-module goals
+(VERIFY-019) are 2 inherited contract.h handler goals, 32 option-arm
+inheritance goals, 28 on a fresh result(Bool, Error) instantiation
+carrying the full home contract set, and 5 deque-own (the swap cluster
+only) — with **zero core-substrate goals**, deque's include closure
+containing none of memory.h, ptr.h, slice.h, arena.h or checked.h.
+Class arithmetic: 438 + 64 + 196 + 67 = 765. result additionally
+carries the union-model standing hypothesis (no goals; all
+union-member postconditions proved under a WP union model the tool
+itself flags — see VERIFY-015).
 
 **Note on totals**: each per-header row reports that header's own
 obligations (substrate goals are counted under their owning header,
@@ -952,9 +1027,11 @@ casts), like error.h. All 34 are documented in VERIFY-014 with manual-
 proof arguments. option's WP run is enforced (exact-count + by-name
 roll-call) as of CI #1067.
 
-The vec baseline (5184 / 5380) is the first **data/-layer**
-verification and the composable-verification thesis's first test on a
-**mega-TU**: the driver composes the full core/ substrate (through
+The vec baseline (5184 / 5380 at CI #1152 — the pin has since ratcheted
+three times, to 5271 / 5467 at CI #1247; the figures in this paragraph
+describe the baseline run and are left as measured) is the first
+**data/-layer** verification and the composable-verification thesis's
+first test on a **mega-TU**: the driver composes the full core/ substrate (through
 arena.h), the verified option instantiation (option_verify.h
 re-included), a fresh result(Bool, Error) instantiation, and vec's
 own 37 generated functions in one translation unit — the largest
@@ -1212,6 +1289,8 @@ unprovable by construction — cites the coverage stream as its
 | 2026-07-12 | 5bfde5b → e663e2c | #1146 → #1154 | v1.3.0  | 96.4%  | 99.5%     | 87.8%    | 88.4%  | vec — MC/DC cover TU + WP driver through enforcement (MCDC-010, VERIFY-018), both streams in one arc; third Shape-B module, **first data/-layer module verified**, first driver on Typed+Cast. **Measurement (5bfde5b/#1146)**: `vmacros/coverage/vec_cover.c` lands (direct `DEFINE_VEC(static inline, int)` instantiation — third attribution variant: generated conditions attribute to the cover TU itself; 152 generated incl. 12 DEFINE_VEC_SLICE facade-view conditions + 6 scaffolding); 155/158 (98.10%) from the first run, the documented ceiling — U1/U2 (`!checked_mul` true in alloc/arena_alloc) guard-redundancy-infeasible and U3 (heap `!buf`) environmental, all three written down with dispositions before the run and confirmed exactly at block level; the arena `!buf` TRUE leg covered via deterministic exhaustion (the heap-vs-arena contrast evidence); Shape-B attribution check confirms the pattern (vec_test.c owns all 640 test-measured outcomes; vec_impl.h functions-but-no-conditions fingerprint = the Shape-A-drift tripwire); per-line + attribution debug steps added. Aggregate MC/DC 87.5% → 88.4% (1679/1900), branches 87.7% → 87.8% (1542/1756), lines 96.1% → 96.4% (2515/2610), functions 621/624. **Proof (driver arc #1144–#1152, enforced e663e2c/#1154)**: WP over `vmacros/vdrivers/vec_verify.h` via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3, landed before the driver — the split-patch-first checklist item). Chronology: run 1 1eeb58c/#1150 (4988/5350, 362 — spec-less composed callees, lesson R1: composition, not weaker specs), run 2 8a3bb1e/#1151 (5208/5413, 205 — inherited stabilized at 143 names), run 3 baseline 96dd41d/#1152 (5184/5380, exactly 196: 193 Timeout + 3 Unknown + 0 Failed; delegate narrowing closed 9 own goals 62 → 53; two retry-variance candidates failed a third consecutive run and pinned). 196 = 143 inherited model-variant re-emissions (arena 46, option 32, result 22, memory 20, slice-libc 13, ptr 3, checked/align 5, contract 2) + 53 own: (e) 2 allocation-model, (d) 5 element-transfer (frame-only memcopy/memmove), (g) 24 fill macro-body-loop (unprovable by construction; MC/DC primary evidence; deque's shift loops pre-classified), (h) 22 Typed+Cast bridging; zero own fn-pointer goals (first module without OWN-003). U1/U2 WP-corroborated: alloc/arena_alloc prove branch-complete. Enforced (pinned `5184 / 5380` + zero-Failed + exact 196 + by-name roll-call = set equality) green first try at #1154 while prover attribution, +14 source lines, and roll-call order all shifted — name-only matching validated empirically; set name-identical three consecutive runs. Runtime ~2h50m, timeout-dominated (every proving goal ≤332 ms); -wp-cache evaluated and rejected; 120 s timeout retained campaign-wide; job `timeout-minutes: 240`. Findings: F3 landed; F1 (append_array overlap doc) and F2 (slice_init NULL+0 one-token guard; cover-TU exclusion in force) owed upstream. **Correction (2026-07-16, docs-only)**: byte-level diffs of the frozen #1154 artifacts (wp-proof-arena/-option/-result/-vec) falsified two interpretive claims in this entry as first written — (1) the "model-variant re-emissions" reading: the checked/align five are the pinned home residuals of checked.h/ptr.h, the 89-goal core arm is **byte-identical** to arena.h's list (fragment indices and Timeout/Unknown sub-verdicts reproduced), the option arm byte-identical mod the typed_→typed_cast_ prefix (34/34) — **no verdict flip anywhere in the unit**; (2) the 143:53 inherited:own split: result(Bool, Error) is a **fresh instantiation** (VERIFY-015 verifies (int, VErr)) — reclassified 121 inherited + 75 subject-side; the fresh instance reproduces the family's home profile 20/20 at clause-family granularity, drops 8 never-emitted assigns goals, adds 2 union get_* mem-access goals (attribution open, F4). Pinned 196-name baseline, gates, and counts unchanged; superseded text retained verbatim in VERIFY-018's Correction note; instantiation-identity rule added to docs/vmacros.md (deque drivers to pre-register inheritance vs. fresh arms). No re-run required — only the artifacts the enforcement discipline preserves. |
 | 2026-07-25 | 6e7d50c → 023019b | #1187 → #1189 | v1.3.0  | 96.4%  | 99.5%     | 87.8%    | 88.3%  | MISRA C:2012 cleanup campaign, phase 1 (Commits 1–9c) — and the first **measurement-surface** correction of the campaign. The rule-17.8 sweep (Commit 9, 36 sites) replaced six `if`-clamps with ternary initializers; three of them are min/max-shaped, which GCC gimplifies to branchless `MIN_EXPR` at every optimization level including the -O0 coverage build. Those expressions emit neither a branch nor a condition record, so the aggregate fell **MC/DC 88.4% → 88.3% (1679/1900 → 1671/1892) and branches 1542/1756 → 1534/1748** with **zero coverage lost** — every removed outcome was fully covered (2/2) before the fold, and every missed-set is byte-identical (MCDC-002's four, MCDC-008's two, priority_queue's fifteen). Found by a docs-vs-run audit after the documented figures stopped matching the job output, then localised by four-snapshot local replication and per-line `gcov-14 --conditions --json-format` diffs. Standing rule recorded as the MCDC-001 instrumentation-surface addendum: a min/max-shaped fold is a measurement-surface change, not a coverage change, and must be verified with a pre/post per-line condition diff. Lines 2515/2610 → 2524/2619 (the sweep's net instrumented-line delta). WP: Commit 9's parameter local-copies moved eight goal surfaces (bits −4 from the rotation compound-assignments; slice +4 clamp-fold guarded-initializer pairs, inherited through memory/arena/pool/region/vec; borrow +6), ratcheted in the acknowledged Commit 9b with residual sets name-stable and zero Failed. misra 1672 → 152. |
 | 2026-07-30 | a21a4ff → 1c54f0c | #1202  | v1.3.0  | 96.3%  | 99.5%     | 87.6%    | 88.0%  | API-001 const-correctness (Commit 16/16b) — a **defect found by the MISRA campaign**, not a cleanup. Rule 11.8 identified ten accessors across arena, pool, bitset, priority_queue and stringbuf that accepted a `const` pointer and returned mutable access to the object's storage; a caller holding only a `const Arena*` could obtain a writable `bytes_t` and mutate the arena, demonstrated by writing 0xEE through a const parameter under `-Wall -Wextra -Wpedantic`. `pool_get` was starkest, returning a raw `void*` from a `const Pool*` although `pool_get_const` already existed. Fixed by the convention `slice.h`/`array.h` already used — `X_as_bytes(X*) → bytes_t`, `X_as_cbytes(const X*) → cbytes_t` — which removes the qualifier cast entirely, so **rule 11.8 clears by fix with zero suppressions**; nine `_cbytes` twins added, each carrying its mutable twin's ACSL contract. Guarded by `test/integration/const_correctness_test.c`, which fails to compile on the parent commit. **Coverage**: the new guards are new conditions — MC/DC **1671/1892 → 1692/1922** and branches **1534/1748 → 1557/1778**, both deltas (+30 total; +21 and +23 hit) reconciling exactly to the five changed files (arena 58/64 → 59/66, pool 62/68 → 68/78, bitset 106/122 → 109/126, priority_queue 57/72 → 62/78, stringbuf 95/128 → 101/136); no untouched file moved, which confirmed that excluding the two `test/integration/` compile-time guards from the coverage RUN had closed the max-per-file aggregation artifact Commit 15 introduced unnoticed. The **line** column (2524/2619 → 2566/2665) is NOT solely this commit's: it was last measured at Commit 9c and also absorbs Commits 10–15 (compare.h declarator splits +12, log.h's removed `canon_bool_` wrappers −10, str_split's loop restructure +4, others). arena's one new uncovered outcome is a genuine gap, not a ceiling item, and is kept out of MCDC-003's provably-unexecutable six; pool's four are marked **provisional** in MCDC-004 — inferred from guard structure and the +6/+10 split, not from a per-outcome gcov audit, so no new ceiling is published. **WP**: unlike Commit 9b this was not scalar-only drift — the unproved set grew by 12, every one the const twin of an already-documented residual (`*_cbytes_call_cbytes_from_requires` timing out on exactly the obligation its `*_bytes_call_bytes_from_requires` twin does); four pins ratcheted (arena 3430/3521, pool 3884/4003, region 3578/3692, vec 5231/5429) with twelve CHECKS roll-call entries added and zero Failed. Campaign phase 2 (Commits 10–16) also re-baselined the misra analysis surface itself (MISRA-SCAN-001: template fragments are not translation units, −10 findings, include-graph reachability proving no analysis loss) and found a second real defect — eleven public header pairs that could not be compiled together (Commit 15, guarded by `header_combination_test`). misra 152 → 53, eighteen rules held at zero (fourteen by fix, four by documented deviation: MISRA-DEV-014..017). | |
-| 2026-08-15 | 1f5549b → db0a864 | #1225 → #1240 | v1.3.0  | 96.4%  | 99.5%     | 87.7%    | 88.5%  | deque — MC/DC cover TU + WP driver through enforcement (MCDC-011, VERIFY-019, VERIFY-019-M), both streams in one arc; **fourth** Shape-B module, second data/-layer module, first data/-layer driver on plain **Typed**. **Split first (1f5549b/#1225)**: `DEFINE_DEQUE_STRUCTS`/`_FUNCTIONS` landed before the driver was drafted — VERIFY-018 F3's standing checklist item — with the expansion verified byte-identical to the pre-split macro across four linkage/type combinations and the one-instantiation-per-TU rule added to `deque_defn.h`. **Measurement (MCDC-011)**: `vmacros/coverage/deque_cover.c` reaches **82/82 (100.00%) with zero justification rows** — the first *large* clean cover TU (result_cover's 100% is over 6 outcomes). Denominator pre-counted statically off the preprocessed expansion (39 generated conditions / 78 outcomes + 2 scaffolding = 41/82) and matched on every run. Run 0 (#1231) measured 79/82; all three misses were **state-tracking errors in the cover TU**, not properties of deque — two `tail == 0` FALSE legs that the file's own comments wrongly claimed to drive (capacity 4, tail 3 → the `push_back` wraps tail back to 0), and a fill loop that never entered because `d` was already 4/4 — each closed by finding the driving input exactly as the pre-registered disposition required, with the stale comments corrected in place rather than deleted. Shape B **confirmed** by attribution (`deque_impl.h`: functions and lines, "No conditions", under both `deque_test.c` and `deque_cover.c`; Shape-A-drift tripwire silent), on the coverage stream's evidence alone — the WP run does not test attribution. Aggregate MC/DC 88.4% → 88.5% (1774/2004). **Proof (VERIFY-019, #1234 → enforced #1238, re-confirmed #1239–#1240)**: WP over `vmacros/vdrivers/deque_verify.h`, `-wp-model Typed`. 1601/1668, exactly **67** unproved, **0 Failed/Invalid/Stepout**: 2 handler + 32 option (inheritance, zero `typed_cast_` prefixed) + 28 fresh result(Bool, Error) (full home contract set attached — the instantiation-identity rule's first option, where vec took the second) + 5 own (swap cluster only) + **0 core substrate**. The zero is the entry's headline: vec inherited 91 core goals byte-identically from arena.h; deque's closure contains none of those headers, making it **the first module whose inherited surface is SMALLER than its predecessor's** — composability confirmed in the converse direction to every prior confirmation. Class (g) macro-body-loop, forward-flagged for deque by VERIFY-018, **withdrawn before the first run**: a ring shifts nothing and `deque_impl.h` contains exactly one `while`, the contract idiom's `do{}while(0)`; the enforced job gates against any loop goal ever appearing. ARM D predicted 0 own residuals and was **refuted at run 0** (9), then diagnosed: 4 were a missing default `assigns` on the pop_*/peek_* callees (a driver-drafting error, fixed by adopting `vec_int_pop`'s shape; not returned since) and 5 the swap cluster — while the modular-arithmetic candidate did **not** fire, so the ring's `% capacity` sites and `remaining`'s unguarded `capacity - size` canary proved on the strength of `size <= capacity` alone. A prediction-bookkeeping error is recorded honestly: #1234's "TOTAL 67/67" matched by **cancellation** (arms summed 69 against a total of 67, two equal and opposite errors), corrected at #1237, and the job now exits before invoking WP if the arm predictions do not sum to the total. **VERIFY-019-M**: `f4-control.yml` (manual, gates nothing) ran the unmodified driver under Typed+Cast twice — same 1601/1668, same Qed 1239 / solver 277 / terminating 38 / unreachable 47 / residual 67, and the 67 names **set-identical modulo the `typed_`→`typed_cast_` prefix**. Seven runs, two models, one distinct decomposition; solver attribution ranged Alt-Ergo 228–244, CVC5 16–30, Z3 17–24 while nothing structural moved — *which goals need a solver at all is invariant; which solver reaches them first is scheduling*, the clearest justification yet for pooling Timeout with Unknown, and the model-axis analogue of arena-32's width-axis result. That control also **closed VERIFY-018 F4**: with contracts held identical and the instrument verified changed (67 cast-prefixed / 0 plain), the memory model is eliminated and the `get_ok`/`get_err` pair is a **contract-surface** effect of the full home set's `requires \valid(out)` — the last two goals in the 30,127-goal dataset without a pinned class, now pinned and **removable**. Confirming fix (adding the clause to `vec_verify.h`, expected 198 → 196) queued as its own ratchet arc, deliberately not bundled here. Runtime ~52 min; deque is not the workflow's long pole. Findings owed upstream: F1 (peek_*/pop_* NULL-guard asymmetry under `-DCANON_NO_REQUIRE`) and F2 (a NULL deque answers true to both `is_empty` and `is_full`), both comment-only. |
+| 2026-08-15 | 1f5549b → dbf31c3 | #1225 → #1240 | v1.3.0  | 96.4%  | 99.5%     | 87.7%    | 88.5%  | deque — MC/DC cover TU + WP driver through enforcement (MCDC-011, VERIFY-019, VERIFY-019-M), both streams in one arc; **fourth** Shape-B module, second data/-layer module, first data/-layer driver on plain **Typed**. **Split first (1f5549b/#1225)**: `DEFINE_DEQUE_STRUCTS`/`_FUNCTIONS` landed before the driver was drafted — VERIFY-018 F3's standing checklist item — with the expansion verified byte-identical to the pre-split macro across four linkage/type combinations and the one-instantiation-per-TU rule added to `deque_defn.h`. **Measurement (MCDC-011)**: `vmacros/coverage/deque_cover.c` reaches **82/82 (100.00%) with zero justification rows** — the first *large* clean cover TU (result_cover's 100% is over 6 outcomes). Denominator pre-counted statically off the preprocessed expansion (39 generated conditions / 78 outcomes + 2 scaffolding = 41/82) and matched on every run. Run 0 (#1231) measured 79/82; all three misses were **state-tracking errors in the cover TU**, not properties of deque — two `tail == 0` FALSE legs that the file's own comments wrongly claimed to drive (capacity 4, tail 3 → the `push_back` wraps tail back to 0), and a fill loop that never entered because `d` was already 4/4 — each closed by finding the driving input exactly as the pre-registered disposition required, with the stale comments corrected in place rather than deleted. Shape B **confirmed** by attribution (`deque_impl.h`: functions and lines, "No conditions", under both `deque_test.c` and `deque_cover.c`; Shape-A-drift tripwire silent), on the coverage stream's evidence alone — the WP run does not test attribution. Aggregate MC/DC 88.0% → 88.5% (1692/1922 → 1774/2004 — the clean 82/82 cover TU adds 82 to numerator and denominator alike; **corrected 2026-08-21**, this entry as first written read "88.4% → 88.5%", the 88.4% being the vec row's figure two entries above rather than the API-001 row's 88.0% immediately above). **Proof (VERIFY-019, #1234 → enforced #1238, re-confirmed #1239–#1240)**: WP over `vmacros/vdrivers/deque_verify.h`, `-wp-model Typed`. 1601/1668, exactly **67** unproved, **0 Failed/Invalid/Stepout**: 2 handler + 32 option (inheritance, zero `typed_cast_` prefixed) + 28 fresh result(Bool, Error) (full home contract set attached — the instantiation-identity rule's first option, where vec took the second) + 5 own (swap cluster only) + **0 core substrate**. The zero is the entry's headline: vec inherited 91 core goals byte-identically from arena.h; deque's closure contains none of those headers, making it **the first module whose inherited surface is SMALLER than its predecessor's** — composability confirmed in the converse direction to every prior confirmation. Class (g) macro-body-loop, forward-flagged for deque by VERIFY-018, **withdrawn before the first run**: a ring shifts nothing and `deque_impl.h` contains exactly one `while`, the contract idiom's `do{}while(0)`; the enforced job gates against any loop goal ever appearing. ARM D predicted 0 own residuals and was **refuted at run 0** (9), then diagnosed: 4 were a missing default `assigns` on the pop_*/peek_* callees (a driver-drafting error, fixed by adopting `vec_int_pop`'s shape; not returned since) and 5 the swap cluster — while the modular-arithmetic candidate did **not** fire, so the ring's `% capacity` sites and `remaining`'s unguarded `capacity - size` canary proved on the strength of `size <= capacity` alone. A prediction-bookkeeping error is recorded honestly: #1234's "TOTAL 67/67" matched by **cancellation** (arms summed 69 against a total of 67, two equal and opposite errors), corrected at #1237, and the job now exits before invoking WP if the arm predictions do not sum to the total. **VERIFY-019-M**: `f4-control.yml` (manual, gates nothing) ran the unmodified driver under Typed+Cast twice — same 1601/1668, same Qed 1239 / solver 277 / terminating 38 / unreachable 47 / residual 67, and the 67 names **set-identical modulo the `typed_`→`typed_cast_` prefix**. Seven runs, two models, one distinct decomposition; solver attribution ranged Alt-Ergo 228–244, CVC5 16–30, Z3 17–24 while nothing structural moved — *which goals need a solver at all is invariant; which solver reaches them first is scheduling*, the clearest justification yet for pooling Timeout with Unknown, and the model-axis analogue of arena-32's width-axis result. That control also **closed VERIFY-018 F4**: with contracts held identical and the instrument verified changed (67 cast-prefixed / 0 plain), the memory model is eliminated and the `get_ok`/`get_err` pair is a **contract-surface** effect of the full home set's `requires \valid(out)` — the last two goals in the 30,127-goal dataset without a pinned class, now pinned and **removable**. Confirming fix (adding the clause to `vec_verify.h`, expected 198 → 196) queued as its own ratchet arc, deliberately not bundled here. Runtime ~52 min; deque is not the workflow's long pole. Findings owed upstream: F1 (peek_*/pop_* NULL-guard asymmetry under `-DCANON_NO_REQUIRE`) and F2 (a NULL deque answers true to both `is_empty` and `is_full`), both comment-only. |
+| 2026-08-17 | 5b45aeb → ca909c7 | #1243 → #1245 | v1.3.0  | —      | —         | —        | —      | `lifetime.h`: token generation made race-free, and eleven private copies of the generator consolidated into one `canon_lifetime_next_id_` with a four-level atomic ladder (C11 `_Atomic` → GCC/Clang `__atomic` → MSVC `_InterlockedIncrement64` → non-atomic fallback), `CANON_LIFETIME_ATOMIC_LEVEL_` defined on **every** path including the fallback (the #1244 → #1245 fix). Two of the eleven superseded copies carried `assigns \nothing`, which is **false** — the function writes its counter — and the falsehood survived unnoticed because no verified configuration ever translated it; the replacement deliberately carries no ACSL contract at all, on the argument that another unchecked annotation would repeat the error. Deviation MISRA-DEV-018 (rule 1.2, compiler atomic intrinsics, 2 sites); concurrency contract in `docs/thread-safety.md`. No proof or coverage surface change — the block sits inside `CANON_LIFETIME_DEBUG`, off in every WP and coverage configuration, which is why the full run at #1245 held every pin. Recorded here because it moves `lifetime.h`'s N/A disposition from "no functions to verify" to "one function, excluded by configuration". |
+| 2026-08-18 | c427548 → 43a46b1 | #1246 → #1247 | v1.3.0  | —      | —         | —        | —      | vec F4 closure — **a goal removed, not reclassified**, and the last unpinned pair in the dataset eliminated. VERIFY-019-M had already closed VERIFY-018 F4 by *elimination*: with contracts held identical and the memory model verified changed, the `get_ok`/`get_err` pair had to be a contract-surface effect. This arc **demonstrates** it. `vec_verify.h` contracted 3 of the 17 emitted `result__Bool_Error_*` functions and `get_ok`/`get_err` were not among them, so nothing established `\valid(out)` and `-wp-rte`'s memory-access obligation for each union read had nothing to discharge it; contracting the two — shapes copied from `deque_verify.h`, no clause invented — removed **exactly** those two goals and nothing else. Measured at c427548 / #1246 (2h49m), a deliberately red run against the standing `5231 / 5429` + 198 pin per the job's rule that a goal flipping to Proved is a red run carrying good news; ratcheted at 43a46b1 / #1247 (3h08m) to `5271 / 5467` + 196 with the two `CHECKS` roll-call entries removed. Accounting closes with nothing unexplained: the two contracts add 38 goals of their own (each a `requires`, a default `assigns`, two behaviors, `complete`/`disjoint`), **all 38 prove**, and the two F4 goals flip — +38 total against +40 proved, −2 unproved. Zero Failed, Invalid or Stepout, so neither new contract is falsified by the implementation it describes. The pair was never a property of `result(Bool, Error)`, never a WP union-model artifact and not a memory-model emission: it was a precondition vec's driver could have stated and did not — **removable, not residual**. vec's fresh-result arm reads 20, not 22, from this commit; the 123-goal inherited arm and 91-goal core arm are untouched, the closure being subject-side only. No coverage change: `vec_verify.h` is a WP driver and is not in the coverage build. |
 
 ---

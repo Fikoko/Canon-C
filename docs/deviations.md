@@ -2999,7 +2999,8 @@ frozen CI #1154):
   Stated precisely, that was **elimination, not demonstration** — and
   the demonstration has since been run.
 
-  **DEMONSTRATED 2026-08-17.** `vec_verify.h` contracted 3 of the 17
+  **DEMONSTRATED 2026-08-17 (measured c427548 / CI #1246; ratcheted
+  43a46b1 / CI #1247, 2026-08-18).** `vec_verify.h` contracted 3 of the 17
   emitted `result__Bool_Error_*` functions; `get_ok` and `get_err` were
   not among them, so nothing established that `out` was valid and
   `-wp-rte`'s memory-access obligation for each union read had nothing
@@ -3053,10 +3054,12 @@ categories (g) and (h) — neither predicted, both now recorded forward.
 
 ### Enforcement and runtime
 
-*(Figures below describe the CI #1154 baseline. Since CI #1202 the
-enforced values are `5231 / 5429` and an exact count of 198; see the
-Goal-surface reclassification notes above. The gate DESIGN is
-unchanged.)*
+*(Figures below describe the CI #1154 baseline. The enforced values at
+HEAD are `5271 / 5467` and an exact count of 196, pinned at 43a46b1 /
+CI #1247; the CI #1202 state they superseded was `5231 / 5429` and 198.
+See the Goal-surface reclassification notes and the DEMONSTRATED note
+above. The gate DESIGN is unchanged — gates (0) and (2) below quote the
+#1154 numbers, not the current pins.)*
 
 The `frama-c-vec` CI step enforces **set equality** through four
 gates: (0) the pinned Proved line `5184 / 5380` (catches silent
@@ -3151,6 +3154,8 @@ pinned proved-goal summary ratcheted to 5231/5429 (was 5188/5384; +45 goals, +43
 Cause: inherited verbatim from arena.h's three `_cbytes` accessors via the memory-chain substrate (VERIFY-009 note of the same date); vec's own goal surface is unchanged. Pin provenance updated CI #1187 to CI #1202.
 
 **Reading note (2026-08-09).** The body of this record above was written against the pre-API-001 figures and still says 196 residuals, a 121-goal inherited arm and an 89-goal core arm. Those numbers are historically correct for the baseline they describe and are left as written; the enforced state since CI #1202 is 198 residuals, a 123-goal inherited arm and a 91-goal core arm (the 91 machine-diffed set-identical to arena's roll-call on 2026-08-09). Where the two disagree, the CI pin governs.
+
+**Extended 2026-08-21.** The F4 closure supersedes the CI #1202 state named immediately above. The enforced values at HEAD (43a46b1, CI #1247) are `5271 / 5467` and **196** residuals, decomposing as a 123-goal inherited arm, a 91-goal core arm within it, and a **20**-goal fresh-result arm — was 22, the `get_ok`/`get_err` pair having been *removed* by contract rather than reclassified. The 123 and the 91 are unchanged by the closure, which touched the subject side only. Note the coincidence of digits: the pre-API-001 body and the current HEAD both say 196, but they are different sets — the older 196 has a 121-goal inherited arm and a 22-goal fresh-result arm, the current one 123 and 20. Where any two of these figures disagree, the CI pin governs.
 
 **The unproved set GREW — this is not the usual scalar-only drift.** Two goals entered, both inherited: `typed_cast_arena_free_cbytes_call_cbytes_from_requires{,_2}`.
 Each new residual is the const twin of a residual this record ALREADY

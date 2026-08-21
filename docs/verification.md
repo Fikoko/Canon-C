@@ -10,16 +10,34 @@ Combined verification status across all annotated headers:
 
 | Metric               | Value                                                                          |
 |----------------------|--------------------------------------------------------------------------------|
-| **Headers verified** | 15 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h, vec) |
-| **Functions**        | 315 annotated and verified |
-| **Total obligations**| 30599 (summed over the 15 verification units; substrate goals are re-emitted in each downstream unit, so this counts goal-instances, not distinct obligations) |
-| **Proved automatic** | 29899 (97.71%)                                                                 |
-| **Unproved**         | 700 (all documented; see per-header sections)                                  |
+| **Headers verified** | 16 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h, vec, deque) |
+| **Functions**        | 339 annotated and verified |
+| **Total obligations**| 32305 (summed over the 16 verification units; substrate goals are re-emitted in each downstream unit, so this counts goal-instances, not distinct obligations) |
+| **Proved automatic** | 31540 (97.63%)                                                                 |
+| **Unproved**         | 765 (all documented; see per-header sections)                                  |
 
-*Corrected 2026-08-10.* This card previously read 14 / 273 / 24747 / 24255 /
-492 — the state before vec was verified (24747 = 30599's predecessor 30127
-minus vec's 5380; 492 = 688 minus vec's 196). Figures above are the enforced
-CI pins at HEAD, and match the master table in `docs/traceability.md`.
+*Corrected 2026-08-21.* This card previously read 15 / 315 / 30599 / 29899 /
+700 — the state before deque was verified and before the vec F4 confirming
+fix landed. Two independent movements are folded in here.
+
+(1) **deque** (VERIFY-019; baseline CI #1234 / 5ae441d, set-identical
+#1237 / 08bdf42, enforced #1238 / db0a864, re-confirmed #1239 / 06e4cad
+and #1240 / dbf31c3) adds a sixteenth unit: +24 functions, +1668
+obligations, +1601 proved, +67 unproved.
+
+(2) The **vec F4 closure** contracted `get_ok`/`get_err` in
+`vec_verify.h` at CI #1246 (c427548, 2026-08-17) — a deliberately red
+run, the pin still reading 5231 / 5429 and 198 — and the acknowledged
+ratchet followed at CI #1247 (43a46b1, 2026-08-18), moving the pin to
+5271 / 5467 and EXPECTED_UNPROVED to 196. The two new contracts add 38
+goals of their own, all 38 prove, and the two F4 goals flip: +38 total
+against +40 proved. See VERIFY-018's DEMONSTRATED note in
+`docs/deviations.md`.
+
+Arithmetic: 30599 + 1668 + 38 = 32305; 29899 + 1601 + 40 = 31540;
+700 + 67 − 2 = 765. Figures above are the enforced CI pins at HEAD
+(43a46b1, CI #1247), and match the master table in
+`docs/traceability.md`.
 
 The slice.h baseline (367 / 390) carries a higher residual fraction
 than the four primitives headers because it is the first Canon-C header
@@ -98,12 +116,12 @@ ptr_elem, so it has no per-allocation alignment-pad arithmetic and arena.h's
 26-goal cat 2b arithmetic-chain residual class does not recur in pool.h's own
 surface. See VERIFY-010 in `docs/deviations.md` for the full classification.
 
-A note on totals: the 30599 obligation count is the row-sum of
+A note on totals: the 32305 obligation count is the row-sum of
 each header's own WP-relevant goals — checked.h's 1755, bits.h's
 757, compare.h's 208, ptr.h's 1953, slice.h's 394, memory.h's 2866,
 arena.h's 3521, pool.h's 4003, region.h's 3692, error.h's 65,
-option's 223, result's 215, borrow.h's 2458, diag.h's 3060 and vec's
-5429 (each
+option's 223, result's 215, borrow.h's 2458, diag.h's 3060, vec's
+5467 and deque's 1668 (each
 counted in full because each header was
 verified atop its full substrate, with no separate substrate-free
 measurement available for downstream headers). The CI WP steps for
@@ -2930,14 +2948,14 @@ unproved goals (VERIFY-017).
 | Property               | Value                                          |
 |------------------------|-------------------------------------------------|
 | **Status**             | Verified (with documented residuals) — driver   |
-| **Baseline commit**    | 96dd41d (Canon-C CI #1152, run 3); report-only chronology 1eeb58c (CI #1150, run 1) → 8a3bb1e (CI #1151, run 2); enforced as of e663e2c (CI #1154) |
+| **Baseline commit**    | 96dd41d (Canon-C CI #1152, run 3); report-only chronology 1eeb58c (CI #1150, run 1) → 8a3bb1e (CI #1151, run 2); enforced as of e663e2c (CI #1154); ratcheted 1c54f0c (CI #1202, API-001) and 43a46b1 (CI #1247, F4 closure — measured at c427548 / CI #1246) |
 | **Functions**          | 37 generated `vec_int_*` functions contracted and proved |
-| **Proof obligations**  | 5231 / 5429 discharged automatically (96.35%)   |
-| **Unproved**           | 196 (121 inherited + 75 subject-side: 53 own + 22 fresh result(Bool, Error) instantiation; VERIFY-018 incl. Correction note 2026-07-16; 0 Failed) |
+| **Proof obligations**  | 5271 / 5467 discharged automatically (96.41%)   |
+| **Unproved**           | 196 (123 inherited + 73 subject-side: 53 own + 20 fresh result(Bool, Error) instantiation; VERIFY-018 incl. Correction note 2026-07-16 and DEMONSTRATED note 2026-08-17; 0 Failed) |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
 | **WP flags**           | `-wp -wp-rte -wp-split -wp-timeout 120 -wp-model Typed+Cast` |
-| **CI enforcement**     | Yes — pinned `5231 / 5429` + zero-Failed + exact count 198 + by-name roll-call (set equality) |
+| **CI enforcement**     | Yes — pinned `5271 / 5467` + zero-Failed + exact count 196 + by-name roll-call (set equality); ratcheted at CI #1247 (43a46b1) |
 | **MC/DC coverage**     | 98.10% (155/158 condition outcomes — see MCDC-010) |
 | **CI artifact**        | `wp-proof-vec` (full per-goal breakdown)        |
 
@@ -2955,7 +2973,7 @@ option/result's by-value structs, vec crosses `void*` boundaries —
 the CVC5-presence check of the Typed+Cast family. The TU is the
 largest verified to date: the facade pulls slice.h, ptr.h, arena.h →
 memory.h and the full substrate, plus the option and result
-instantiations the driver composes (5380 goals).
+instantiations the driver composes (5467 goals at HEAD).
 
 The verified configuration is the default shipped build
 (`-DCANON_NO_REQUIRE -DNDEBUG`, `CANON_LIFETIME` off): vec's entire
@@ -3103,8 +3121,9 @@ frama-c \
   vmacros/vdrivers/vec_verify.h
 ```
 
-Expected output: `Proved goals: 5231 / 5429` with the 198 documented
-unproved goals (VERIFY-018), 0 Failed. Wall time ~2h50m
+Expected output: `Proved goals: 5271 / 5467` with the 196 documented
+unproved goals (VERIFY-018), 0 Failed. Wall time ~3h05m (CI #1247;
+~2h50m before the F4 contracts added their 38 goals)
 (timeout-dominated; see VERIFY-018's runtime record).
 
 
@@ -3117,9 +3136,9 @@ unproved goals (VERIFY-018), 0 Failed. Wall time ~2h50m
 | Property               | Value                                          |
 |------------------------|-------------------------------------------------|
 | **Status**             | Verified (with documented residuals) — driver   |
-| **Baseline commit**    | Canon-C CI #1234 (run 1) → #1237 (run 2, set-identical); enforced as of CI #1238; re-confirmed #1239, #1240. Superseded pre-fix measurement: CI #1231 |
+| **Baseline commit**    | 5ae441d (Canon-C CI #1234, run 1) → 08bdf42 (CI #1237, run 2, set-identical); enforced as of db0a864 (CI #1238); re-confirmed 06e4cad (CI #1239) and dbf31c3 (CI #1240). Superseded pre-fix measurement: 0738eb5 (CI #1231) |
 | **Functions**          | 24 generated `deque_int_*` functions contracted and proved |
-| **Proof obligations**  | 1601 / 1668 discharged automatically (95.99%)   |
+| **Proof obligations**  | 1601 / 1668 discharged automatically (95.98%)   |
 | **Unproved**           | 67 (2 inherited handler + 32 option arm + 28 fresh result(Bool, Error) + 5 deque-own; VERIFY-019; **0 Failed, 0 Invalid, 0 Stepout**) |
 | **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
 | **Frama-C version**    | 29.0 (Copper)                                   |
@@ -3309,7 +3328,7 @@ the complete installation and registration procedure.
 | ptr.h        | ✅ Verified       | 1729/1739 | 10 documented timeouts (VERIFY-006); CI run reports 1943/1953 due to checked.h #include |
 | types.h      | N/A              |           | Type definitions only              |
 | limits.h     | N/A              |           | Constant definitions only          |
-| lifetime.h   | N/A              |           | Layout convention only — three typedefs and one constant; no functions to verify. Exercised through borrow_test.c and per-container tests. |
+| lifetime.h   | N/A              |           | Layout convention plus one `CANON_LIFETIME_DEBUG`-gated function. Updated 2026-08-21: the header now also carries `canon_lifetime_next_id_`, the single token generator consolidated from eleven private copies at CI #1243–#1245 (5b45aeb → ca909c7). The N/A disposition is unchanged but its ground has moved — it is no longer "no functions to verify" but "one function, excluded from every verified configuration": all WP jobs run with `CANON_LIFETIME` off, so the block is not translated and contributes zero obligations. It deliberately carries no ACSL contract, a contract there being unchecked decoration — two of the eleven superseded copies asserted `assigns \nothing`, which was false (the function writes its counter) and went unnoticed precisely because nothing checked it. Atomic-ladder deviation: MISRA-DEV-018; concurrency contract: docs/thread-safety.md. Exercised through borrow_test.c and per-container tests. |
 | contract.h   | ✅ Annotated      |           | Handler contract used by ptr.h     |
 
 ### core/ (complete)
@@ -3369,7 +3388,7 @@ discipline) recorded for deque.
 
 | Header       | Status           | Proved    | Notes                                                                  |
 |--------------|------------------|-----------|------------------------------------------------------------------------|
-| vec (driver) | ✅ Verified  | 5231/5429 | Third driver-verified Shape-B module, first data/-layer module, first driver on Typed+Cast (VERIFY-018, enforced CI #1154; baseline CI #1152; report-only #1150–#1151): 37 generated functions via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3); 123 inherited byte-identically (largest TU to date; 91 core = arena.h's set verbatim, 32 option mod prefix) + 75 subject-side (53 own across 4 categories incl. the new macro-body-loop class (g) forward-flagged for deque, + 22 fresh result(Bool, Error) instantiation — VERIFY-018 Correction note 2026-07-16); zero own fn-pointer-dispatch goals; MCDC-010 (155/158 ceiling, U1/U2 WP-corroborated infeasible + U3 heap-environmental; third attribution variant); facade views measured but not yet WP-driven (follow-up); `_range`/`_fmt` extensions deferred |
+| vec (driver) | ✅ Verified  | 5271/5467 | Third driver-verified Shape-B module, first data/-layer module, first driver on Typed+Cast (VERIFY-018, enforced CI #1154; ratcheted CI #1202 and CI #1247/43a46b1 for the F4 closure; baseline CI #1152; report-only #1150–#1151): 37 generated functions via the DEFINE_VEC_STRUCTS/FUNCTIONS split (F3); 123 inherited byte-identically (largest TU to date; 91 core = arena.h's set verbatim, 32 option mod prefix) + 73 subject-side (53 own across 4 categories incl. the new macro-body-loop class (g) forward-flagged for deque, + 20 fresh result(Bool, Error) instantiation, the F4 pair having been removed by contract at CI #1247 — VERIFY-018 Correction note 2026-07-16 and DEMONSTRATED note 2026-08-17); zero own fn-pointer-dispatch goals; MCDC-010 (155/158 ceiling, U1/U2 WP-corroborated infeasible + U3 heap-environmental; third attribution variant); facade views measured but not yet WP-driven (follow-up); `_range`/`_fmt` extensions deferred |
 | deque (driver) | ✅ Verified  | 1601/1668 | Fourth driver-verified Shape-B module, second data/-layer module, first data/-layer driver on plain **Typed** (VERIFY-019, enforced CI #1238; baseline #1234; name-stable #1237; re-confirmed #1239–#1240): 24 generated functions via the DEFINE_DEQUE_STRUCTS/FUNCTIONS split (VERIFY-018 F3's checklist item, landed CI #1225 with byte-identical expansion verified first); **zero core-substrate inheritance** — the first module whose inherited surface is SMALLER than its predecessor's, composability tested in the converse direction; 2 handler + 32 option (inheritance) + 28 fresh result(Bool, Error) + 5 own (swap cluster only); class (g) macro-body-loop **withdrawn** before the run (a ring shifts nothing); **memory-model invariant** (VERIFY-019-M); closed VERIFY-018 F4; MCDC-011 (82/82, 100%, zero justification rows) |
 | hashmap      | Planned          |           | Shape A (confirmed) — in-place surface via `hashmap_impl.h`, no cover TU needed |
 
