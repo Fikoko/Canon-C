@@ -200,6 +200,68 @@ typedef struct {
 } Bitset;
 
 /* ════════════════════════════════════════════════════════════════════════════
+   ACSL logic layer                                              [VERIFY-020]
+   ════════════════════════════════════════════════════════════════════════════
+   Shape follows vmacros/vdrivers/deque_verify.h: a read predicate, a write
+   predicate that strengthens it, and the maintainable structural invariant
+   kept SEPARATE — deque calls its one `ring`, bitset's is `bitset_pad`.
+   Keeping it separate lets the functions that must RESTORE it (set_all, not)
+   say so explicitly, without forcing every function that merely preserves it
+   to re-state it as a preconditon it does not need.
+
+   ON bitset_pad VS bitset_pad_meaning
+   -----------------------------------
+   The invariant's INTENT is "no bit at or above capacity is set". That is
+   bitset_pad_meaning, and it is the sentence a reader wants. What the code
+   actually establishes is a masking equation on the final word, which is
+   bitset_pad. The two are equivalent, but the equivalence is bit-level
+   reasoning the SMT backend is not expected to discharge, so ONLY bitset_pad
+   appears in contracts.
+
+       bitset_pad(bs) ==> bitset_pad_meaning(bs)
+
+   is therefore a MANUAL-PROOF obligation, recorded in VERIFY-020 rather than
+   asserted here by an annotation nothing checks. This is the lifetime.h
+   lesson applied ahead of time: two of the eleven superseded copies of
+   canon_lifetime_next_id_ carried `assigns \nothing` while writing their
+   counter, and the falsehood survived precisely because no verified
+   configuration ever translated it.
+
+   MODEL: Typed+Cast, forced by bitset_as_bytes / bitset_as_cbytes, which
+   hand bs->words (u64*) to bytes_from / cbytes_from as a byte view. Goal
+   names therefore carry the typed_cast_ prefix, as in diag.h and vec.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/*@
+  logic integer bitset_word_l(integer i)   = i / 64;
+  logic integer bitset_bitpos_l(integer i) = i % 64;
+  logic integer bitset_words_for(integer n) = (n + 63) / 64;
+
+  predicate bitset_bit_set{L}(Bitset* bs, integer i) =
+      (bs->words[bitset_word_l(i)] & ((u64)1 << bitset_bitpos_l(i))) != 0;
+
+  predicate bitset_view{L}(Bitset* bs) =
+      \valid_read(bs)
+      && bs->capacity > 0
+      && bs->capacity <= CANON_USIZE_MAX - 63
+      && bs->word_count == bitset_words_for(bs->capacity)
+      && \valid_read(bs->words + (0 .. bs->word_count - 1));
+
+  predicate bitset_mut{L}(Bitset* bs) =
+      bitset_view(bs)
+      && \valid(bs)
+      && \valid(bs->words + (0 .. bs->word_count - 1));
+
+  predicate bitset_pad{L}(Bitset* bs) =
+      bs->capacity % 64 == 0
+      || (bs->words[bs->word_count - 1] >> (bs->capacity % 64)) == 0;
+
+  predicate bitset_pad_meaning{L}(Bitset* bs) =
+      \forall integer i;
+          bs->capacity <= i < bs->word_count * 64 ==> !bitset_bit_set(bs, i);
+*/
+
+/* ════════════════════════════════════════════════════════════════════════════
    Internal: lifetime helpers (compiled away in release)
    ════════════════════════════════════════════════════════════════════════════
    When CANON_LIFETIME_DEBUG is enabled, a Bitset exposes a lifetime_t
@@ -261,6 +323,13 @@ typedef struct {
     }
 #endif
 
+/* Contract holds in the VERIFIED configuration (CANON_LIFETIME off), under
+   which the body is `(void)bs`. Under CANON_LIFETIME_DEBUG the true clause
+   is `assigns bs->lt.id, bs->lt.open` — that configuration is not verified,
+   and is not claimed here. */
+/*@ requires \valid(bs);
+    assigns \nothing;
+*/
 static inline void bitset_lifetime_open_(Bitset* bs) {
 #ifdef CANON_LIFETIME_DEBUG
     bs->lt.id   = bitset_lifetime_next_id_(bs);
@@ -269,6 +338,10 @@ static inline void bitset_lifetime_open_(Bitset* bs) {
     (void)bs;
 }
 
+/* Same configuration note as bitset_lifetime_open_ above. */
+/*@ requires \valid(bs);
+    assigns \nothing;
+*/
 static inline void bitset_lifetime_close_(Bitset* bs) {
 #ifdef CANON_LIFETIME_DEBUG
     bs->lt.open = false;
@@ -281,9 +354,19 @@ static inline void bitset_lifetime_close_(Bitset* bs) {
    ════════════════════════════════════════════════════════════════════════════ */
 
 /** @brief Word index for bit i */
+/*@ assigns \nothing;
+    ensures \result == i / 64;
+*/
 static inline usize bitset_word_of(usize i) { return i / BITSET_BITS_PER_WORD; }
 
 /** @brief Bit mask for bit i within its word */
+/* `\result != 0` is load-bearing, not decoration: bitset_set's postcondition
+   reduces to (x | m) & m != 0, which is unprovable without it. -wp-rte also
+   emits a shift-count obligation here, discharged by i % 64 <= 63. */
+/*@ assigns \nothing;
+    ensures \result == (u64)((u64)1 << (i % 64));
+    ensures \result != 0;
+*/
 static inline u64 bitset_mask_of(usize i) { return (u64)1 << (i % BITSET_BITS_PER_WORD); }
 
 /**
@@ -291,6 +374,19 @@ static inline u64 bitset_mask_of(usize i) { return (u64)1 << (i % BITSET_BITS_PE
  *
  * Called after set_all and bitset_not to ensure bits beyond capacity stay zero.
  */
+/* Does NOT require bitset_pad on entry — this is the function that
+   establishes it, and set_all / not call it exactly when it is broken.
+   `assigns` is an upper bound, so the rem == 0 path writing nothing is
+   within the clause. */
+/*@ requires bitset_mut(bs);
+
+    assigns bs->words[bs->word_count - 1];
+
+    ensures bitset_pad(bs);
+    ensures \forall integer k;
+        0 <= k < bs->word_count - 1 ==> bs->words[k] == \old(bs->words[k]);
+    ensures bitset_mut(bs);
+*/
 static inline void bitset_clear_padding(borrowed(Bitset*) bs) {
     require_msg(bs != NULL, "bitset_clear_padding: bs cannot be NULL");
     usize rem = bs->capacity % BITSET_BITS_PER_WORD;
@@ -323,6 +419,31 @@ static inline void bitset_clear_padding(borrowed(Bitset*) bs) {
  *
  * Performance: O(n/64) — clears backing words
  */
+/* `capacity <= CANON_USIZE_MAX - 63` is finding F1: BITSET_WORD_COUNT(n) is
+   (n + 63) / 64, which wraps above that bound, and the three require_msg
+   guards below do not check it. The contract admits the obligation rather
+   than pretending it is absent; whether the implementation should also guard
+   is a live design question for VERIFY-020, not a cleanup.
+
+   `\separated` is required, not defensive: bs and words are independent
+   caller allocations, and mem_zero writes through one while the other is
+   being assigned. Without it the frame is unprovable. */
+/*@ requires \valid(bs);
+    requires capacity > 0;
+    requires capacity <= CANON_USIZE_MAX - 63;
+    requires \valid(words + (0 .. bitset_words_for(capacity) - 1));
+    requires \separated(bs, words + (0 .. bitset_words_for(capacity) - 1));
+
+    assigns bs->words, bs->capacity, bs->word_count,
+            words[0 .. bitset_words_for(capacity) - 1];
+
+    ensures bs->words == words;
+    ensures bs->capacity == capacity;
+    ensures bs->word_count == bitset_words_for(capacity);
+    ensures \forall integer k; 0 <= k < bs->word_count ==> bs->words[k] == 0;
+    ensures bitset_mut(bs);
+    ensures bitset_pad(bs);
+*/
 static inline void bitset_init(borrowed(Bitset*) bs, borrowed(u64*) words, usize capacity) {
     require_msg(bs       != NULL, "bitset_init: bs cannot be NULL");
     require_msg(words    != NULL, "bitset_init: words cannot be NULL");
@@ -358,6 +479,11 @@ static inline void bitset_init(borrowed(Bitset*) bs, borrowed(u64*) words, usize
  *
  * Performance: O(1)
  */
+/* Configuration note as bitset_lifetime_close_. Under CANON_LIFETIME_DEBUG
+   the true clause is `assigns bs->lt.open`. */
+/*@ requires bs == \null || \valid(bs);
+    assigns \nothing;
+*/
 static inline void bitset_close(borrowed(Bitset*) bs) {
     if (!bs) { return; }
     bitset_lifetime_close_(bs);
@@ -379,6 +505,38 @@ static inline void bitset_close(borrowed(Bitset*) bs) {
  *
  * Performance: O(1)
  */
+/* `requires bs->words != \null` is finding F2, stated as its own clause and
+   NOT folded into bitset_mut. set / clear / toggle / test check only `!bs`,
+   while clear_all / set_all / not / count / is_empty / find_* all check
+   `!bs || !bs->words`. On a zero-initialized `Bitset b = {0}` the index guard
+   below fails and — under -DCANON_NO_REQUIRE, the flag this very WP job uses
+   — compiles out, leaving a dereference of words == NULL. Structurally this
+   is deque's F1 (peek_* guarded by require_msg where pop_* checks at
+   runtime), except that bitset's asymmetry is WITHIN one family rather than
+   between two, which makes it more surprising to a caller. Kept as a
+   separate clause so that if the implementation grows the runtime check,
+   exactly one line moves. */
+/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words != \null;
+    requires bs == \null || i < bs->capacity;
+
+    behavior null:
+      assumes bs == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null;
+      assigns bs->words[bitset_word_l(i)];
+      ensures bitset_bit_set(bs, i);
+      ensures \forall integer k;
+          0 <= k < bs->word_count && k != bitset_word_l(i)
+              ==> bs->words[k] == \old(bs->words[k]);
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_set(borrowed(Bitset*) bs, usize i) {
     if (!bs) { return; }
     require_msg(i < bs->capacity, "bitset_set: index out of range");
@@ -396,6 +554,27 @@ static inline void bitset_set(borrowed(Bitset*) bs, usize i) {
  *
  * Performance: O(1)
  */
+/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words != \null;
+    requires bs == \null || i < bs->capacity;
+
+    behavior null:
+      assumes bs == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null;
+      assigns bs->words[bitset_word_l(i)];
+      ensures !bitset_bit_set(bs, i);
+      ensures \forall integer k;
+          0 <= k < bs->word_count && k != bitset_word_l(i)
+              ==> bs->words[k] == \old(bs->words[k]);
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_clear(borrowed(Bitset*) bs, usize i) {
     if (!bs) { return; }
     require_msg(i < bs->capacity, "bitset_clear: index out of range");
@@ -413,6 +592,27 @@ static inline void bitset_clear(borrowed(Bitset*) bs, usize i) {
  *
  * Performance: O(1)
  */
+/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words != \null;
+    requires bs == \null || i < bs->capacity;
+
+    behavior null:
+      assumes bs == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null;
+      assigns bs->words[bitset_word_l(i)];
+      ensures bitset_bit_set(bs, i) <==> !\old(bitset_bit_set(bs, i));
+      ensures \forall integer k;
+          0 <= k < bs->word_count && k != bitset_word_l(i)
+              ==> bs->words[k] == \old(bs->words[k]);
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_toggle(borrowed(Bitset*) bs, usize i) {
     if (!bs) { return; }
     require_msg(i < bs->capacity, "bitset_toggle: index out of range");
@@ -428,6 +628,15 @@ static inline void bitset_toggle(borrowed(Bitset*) bs, usize i) {
  * @return false if bs == NULL
  * Performance: O(1)
  */
+/* Single-clause, no behaviors: \result is false for NULL and the conjunction
+   says so directly. Same posture as deque_int_is_full's "true for NULL,
+   exactly as is_empty is. Stated, not smoothed over." */
+/*@ requires bs == \null || bitset_view(bs);
+    requires bs == \null || bs->words != \null;
+    requires bs == \null || i < bs->capacity;
+    assigns \nothing;
+    ensures \result <==> (bs != \null && bitset_bit_set(bs, i));
+*/
 static inline bool bitset_test(borrowed(const Bitset*) bs, usize i) {
     if (!bs) { return false; }
     require_msg(i < bs->capacity, "bitset_test: index out of range");
@@ -445,6 +654,30 @@ static inline bool bitset_test(borrowed(const Bitset*) bs, usize i) {
  *
  * Performance: O(1)
  */
+/* Pure delegation to set / clear, so this should discharge from their
+   contracts with no new reasoning — a cheap check that the two are stated
+   strongly enough to compose. */
+/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words != \null;
+    requires bs == \null || i < bs->capacity;
+
+    behavior null:
+      assumes bs == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null;
+      assigns bs->words[bitset_word_l(i)];
+      ensures bitset_bit_set(bs, i) <==> value;
+      ensures \forall integer k;
+          0 <= k < bs->word_count && k != bitset_word_l(i)
+              ==> bs->words[k] == \old(bs->words[k]);
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_assign(borrowed(Bitset*) bs, usize i, bool value) {
     if (value) { bitset_set(bs, i); }
     else       { bitset_clear(bs, i); }

@@ -4633,7 +4633,223 @@ jobs:
           name: wp-proof-diag
           path: wp_diag_output.txt
           retention-days: 90
-  
+
+  frama-c-bitset:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/framac-setup
+      - name: "WP: data/bitset.h"
+        # bitset.h — VERIFY-020, PATCH 1 of N, REPORT-ONLY.
+        #
+        # In-place header: no driver, no cover TU. Fourth after slice.h,
+        # borrow.h and diag.h.
+        #
+        # Scope of THIS run: the ACSL logic layer plus Group 1 only — the
+        # ten functions that carry no dependency on bits.h (word_of,
+        # mask_of, clear_padding, init, close, set, clear, toggle, test,
+        # assign) plus the two lifetime helpers. count / find_first /
+        # find_next / find_last and the three _option wrappers are NOT yet
+        # contracted, deliberately: bits_popcount and bits_ctz are
+        # specified at RANGE strength only, by a written decision in
+        # bits.h, so those seven functions are subject to a
+        # SPECIFICATION-STRENGTH CAP that has no precedent in this
+        # campaign. Every prior ceiling was PROVER weakness (timeouts, WP
+        # feature gaps). This one is upstream SPECIFICATION weakness
+        # propagating downward. It gets its own record in VERIFY-020, and
+        # its own patch.
+        #
+        # MODEL: Typed+Cast, forced by bitset_as_bytes / bitset_as_cbytes
+        # handing bs->words (u64*) to bytes_from / cbytes_from. Goal names
+        # therefore carry the typed_cast_ prefix (diag.h / vec precedent).
+        # A plain-Typed run would be a different unit; do not "simplify"
+        # this to Typed without re-deriving the roll-call.
+        #
+        # ENFORCE=0 ON PURPOSE. Nothing is pinned until the predictions
+        # below have been checked against a real run and recorded in
+        # VERIFY-020. Do not set ENFORCE=1 in the same commit that first
+        # turns this job green.
+        run: |
+          eval $(opam env --switch=frama-c)
+          # ---- REPORT-ONLY: no pins until VERIFY-020 records a baseline ----
+          ENFORCE=0
+          EXPECTED_UNPROVED=""
+          EXPECTED_PROVED=""
+          WP_MODEL="Typed+Cast"   # forced by as_bytes / as_cbytes
+          # ------------------------------------------------------------------
+          FAILURES=0
+          note_fail() {
+            echo "$1"
+            FAILURES=$((FAILURES + 1))
+          }
+          set +e
+          frama-c \
+            -wp -wp-rte \
+            -wp-model "${WP_MODEL}" \
+            -wp-prover alt-ergo,z3,cvc5 \
+            -wp-timeout 120 \
+            -wp-split \
+            -cpp-extra-args=" \
+              -I core/primitives \
+              -I core \
+              -I semantics \
+              -I data \
+              -I . \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            data/bitset.h 2>&1 | tee wp_bitset_output.txt
+          WP_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo ""
+          echo "==============================================="
+          echo "  WP (bitset.h) exit status: ${WP_EXIT}"
+          if [ "${ENFORCE}" -eq 1 ]; then
+            echo "  MODE: ENFORCED  MODEL: ${WP_MODEL}"
+          else
+            echo "  MODE: report-only (ENFORCE=${ENFORCE})  MODEL: ${WP_MODEL}"
+          fi
+          echo "==============================================="
+          PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_bitset_output.txt || true)
+          echo "  ${PROVED_LINE}"
+          if [ -z "${PROVED_LINE}" ]; then
+            note_fail "FAIL: WP did not produce a verification summary."
+            echo "      frama-c aborted before running WP — check for"
+            echo "      [kernel:annot-error] or [kernel] User Error above."
+            echo "      Most likely cause on patch 1: an ACSL syntax error in"
+            echo "      the logic layer, or option_usize not instantiated"
+            echo "      (bitset.h needs CANON_OPTION(usize) from the includer;"
+            echo "      if WP cannot see it, that is a REAL finding about the"
+            echo "      header's self-containedness, not a job bug)."
+            echo ""
+            echo "First diagnostic lines from WP output:"
+            grep -E "^\[(kernel|wp)" wp_bitset_output.txt | head -20 || true
+          else
+            TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_bitset_output.txt || true)
+            UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_bitset_output.txt || true)
+            FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_bitset_output.txt || true)
+            INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_bitset_output.txt || true)
+            STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_bitset_output.txt || true)
+            UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
+            echo "  Timeouts: ${TIMEOUT_COUNT}"
+            echo "  Unknown:  ${UNKNOWN_COUNT}"
+            echo "  Failed:   ${FAILED_COUNT}"
+            echo "  Total unproved (T+U): ${UNPROVED_COUNT}"
+            # Failed / Invalid are NOT residuals and are never pinned. On a
+            # report-only first run they are the single most important
+            # signal: they mean a contract written above is FALSE, not
+            # merely hard. Surfaced loudly even though the job stays green.
+            if [ "${FAILED_COUNT}" -ne 0 ]; then
+              echo ""
+              echo "  !!! ${FAILED_COUNT} goal(s) FAILED — a contract in"
+              echo "      bitset.h is falsified. On patch 1 the likely"
+              echo "      culprits, in order: bitset_pad preservation in"
+              echo "      set/clear/toggle (see P1), the \\separated clause"
+              echo "      in init, or bitset_mask_of's \\result != 0."
+              grep -E "^\[wp\] \[Failed\]" wp_bitset_output.txt || true
+            fi
+            if [ "${INVALID_COUNT}" -ne 0 ]; then
+              echo ""
+              echo "  !!! ${INVALID_COUNT} goal(s) INVALID — a contract is"
+              echo "      FALSIFIED WITH A COUNTER-EXAMPLE. Invalid is WP's"
+              echo "      refutation verdict; it can never be pinned and is"
+              echo "      categorically different from a residual. Read the"
+              echo "      counter-example before touching anything else."
+              grep -E "^\\[wp\\] \\[Invalid\\]" wp_bitset_output.txt
+            fi
+            if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+              echo "  NOTE: ${STEPOUT_COUNT} Stepout — never observed in this"
+              echo "        project. Not pooled into the residual count."
+              grep -E "^\\[wp\\] \\[Stepout\\]" wp_bitset_output.txt
+            fi
+            if [ -n "${EXPECTED_UNPROVED}" ] && \
+               [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
+              note_fail "FAIL: unproved count ${UNPROVED_COUNT} != pinned ${EXPECTED_UNPROVED}."
+            fi
+            PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
+            echo "  Proved: ${PROVED_COUNT}"
+            if [ -n "${EXPECTED_PROVED}" ] && \
+               [ "${PROVED_COUNT}" != "${EXPECTED_PROVED}" ]; then
+              note_fail "FAIL: proved count ${PROVED_COUNT} != pinned ${EXPECTED_PROVED}."
+            fi
+            echo ""
+            echo "  --- All unproved goals (name-stability record) ---"
+            grep -E "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\]" wp_bitset_output.txt || \
+              echo "  (none)"
+            echo ""
+            echo "  ================================================="
+            echo "   PREDICTIONS — written before the first run"
+            echo "  ================================================="
+            echo ""
+            echo "  P1: the one hard spot is bitset_pad preservation in the"
+            echo "      FINAL word. Every other Group 1 goal is either a"
+            echo "      syntactic match to the code or plain bitvector work."
+            echo "      The exception is set/clear/toggle/assign proving"
+            echo "      'ensures bitset_pad(bs)'. When word_l(i) < wc-1 it is"
+            echo "      trivial. When the index lands IN the final word, WP"
+            echo "      must derive i % 64 < capacity % 64 from i < capacity"
+            echo "      and i / 64 == (capacity+63)/64 - 1. True, but"
+            echo "      integer-division reasoning rather than bitvector."
+            echo "      If it times out the fix is a LEMMA, not a"
+            echo "      justification row."
+            echo ""
+            echo "  P2: inherited subset of 43 for THIS patch — contract 2,"
+            echo "      memory 20, slice-libc 13, ptr 6, checked 2. option's"
+            echo "      32 and borrow's 2 enter only with the _option and"
+            echo "      as_borrowed_bytes families (patch 3). bits.h's 15"
+            echo "      enter only with count / find_* (patch 2). Full-header"
+            echo "      arm at the end of the arc: 92."
+            echo ""
+            echo "  P3: bits.h's 15 residuals re-emit BYTE-IDENTICALLY."
+            echo "      bitset is the FIRST verified module whose closure"
+            echo "      contains bits.h — all eleven previously verified"
+            echo "      headers were checked and none include it. So this is"
+            echo "      byte-identity's first test on a timeout-class"
+            echo "      ARITHMETIC surface; every prior test was libc or"
+            echo "      WP-feature-gap. No instantiation prefix to differ."
+            echo "      IF THIS PREDICTION FAILS, STOP: it is a finding"
+            echo "      about the method, not about bitset."
+            echo ""
+            echo "  P4: a Typed+Cast bridging class at the as_bytes /"
+            echo "      as_cbytes / as_borrowed_bytes sites, analogous to"
+            echo "      vec's class (h), but over 3 sites rather than vec's"
+            echo "      surface. NOT expected in patch 1 — those three are"
+            echo "      uncontracted here — so any bridging goal appearing"
+            echo "      NOW is unpredicted and worth reading."
+            echo "      (Corrected before first run: an earlier draft of"
+            echo "      this arc predicted plain Typed. bitset_as_bytes"
+            echo "      makes that wrong.)"
+            echo ""
+            echo "  --- Group 1 roll-call: functions that MUST appear proved ---"
+            # Not a gate while ENFORCE=0. A name missing here means WP never
+            # saw the function — usually an ACSL block that failed to attach.
+            for fn in bitset_word_of bitset_mask_of bitset_clear_padding \
+                      bitset_init bitset_close bitset_set bitset_clear \
+                      bitset_toggle bitset_test bitset_assign; do
+              if grep -qE "typed_cast_${fn}" wp_bitset_output.txt; then
+                echo "    seen: ${fn}"
+              else
+                echo "    NOT SEEN: ${fn}  <- contract may not have attached"
+              fi
+            done
+          fi
+          echo ""
+          echo "==============================================="
+          if [ "${FAILURES}" -gt 0 ]; then
+            echo "  ${FAILURES} check(s) reported."
+          fi
+          echo "  REPORT-ONLY: this job does not gate the build."
+          echo "  Record the baseline in VERIFY-020 before pinning."
+          echo "==============================================="
+
+      - name: Upload WP bitset log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wp-proof-bitset
+          path: wp_bitset_output.txt
+          retention-days: 90
+
   # -------------------------------------------------------------------------
   # 6. MC/DC coverage — GCC 14 -fcondition-coverage (Linux only)
   #
