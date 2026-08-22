@@ -52,9 +52,14 @@
 #include "core/slice.h"
 #include "semantics/option/option.h"
 
-/* CANON_OPTION(usize) must be instantiated BEFORE including bitset.h
- * because bitset.h uses option_usize in static inline function bodies. */
-CANON_OPTION(usize)
+/* option_usize is instantiated BY bitset.h since 2026-08-22, behind the
+ * CANON_OPTION_USIZE_DEFINED guard (vec_impl.h's convention). This file used
+ * to carry a bare CANON_OPTION(usize) here, with a comment explaining that
+ * bitset.h required its includer to pre-instantiate. That requirement is
+ * gone: bitset.h is now self-contained, and a pre-instantiation here would
+ * be a redefinition. To interpose a DIFFERENT option_usize — as
+ * vmacros/vdrivers/bitset_verify.h does, with contracts — define
+ * CANON_OPTION_USIZE_DEFINED first and emit your own. */
 
 #include "data/bitset.h"
 

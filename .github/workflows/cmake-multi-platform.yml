@@ -4643,8 +4643,15 @@ jobs:
       - name: "WP: data/bitset.h"
         # bitset.h — VERIFY-020, PATCH 1 of N, REPORT-ONLY.
         #
-        # In-place header: no driver, no cover TU. Fourth after slice.h,
-        # borrow.h and diag.h.
+        # NOT an in-place header, contrary to the original classification.
+        # bitset.h uses option_usize but never instantiates it, so frama-c
+        # aborts in the PARSER when handed the header directly. See the
+        # banner in bitset_verify.h. Its own 32 functions are still
+        # contracted IN PLACE in bitset.h; the driver exists solely to
+        # interpose a CONTRACTED option_usize (vec run-1 lesson R1: a bare
+        # CANON_OPTION leaves the combinators spec-less and drowns the
+        # caller). Smallest driver in the project; contracts none of the
+        # subject module.
         #
         # Scope of THIS run: the ACSL logic layer plus Group 1 only — the
         # ten functions that carry no dependency on bits.h (word_of,
@@ -4698,7 +4705,7 @@ jobs:
               -I . \
               -DCANON_NO_REQUIRE \
               -DNDEBUG" \
-            data/bitset.h 2>&1 | tee wp_bitset_output.txt
+            vmacros/vdrivers/bitset_verify.h 2>&1 | tee wp_bitset_output.txt
           WP_EXIT=${PIPESTATUS[0]}
           set -e
           echo ""
@@ -4793,12 +4800,17 @@ jobs:
             echo "      If it times out the fix is a LEMMA, not a"
             echo "      justification row."
             echo ""
-            echo "  P2: inherited subset of 43 for THIS patch — contract 2,"
-            echo "      memory 20, slice-libc 13, ptr 6, checked 2. option's"
-            echo "      32 and borrow's 2 enter only with the _option and"
-            echo "      as_borrowed_bytes families (patch 3). bits.h's 15"
-            echo "      enter only with count / find_* (patch 2). Full-header"
-            echo "      arm at the end of the arc: 92."
+            echo "  P2 (REVISED before first green run): the FULL 92-goal"
+            echo "      arm appears in patch 1 — contract 2 + bits 15 +"
+            echo "      memory 20 + slice-libc 13 + ptr 6 + checked 2 +"
+            echo "      borrow 2 + option 32 = 92. The original prediction of"
+            echo "      a 43-goal SUBSET was wrong twice: option enters now"
+            echo "      because the driver contracts option_usize, and"
+            echo "      bits.h enters now because bits.h's OWN functions"
+            echo "      carry contracts and WP verifies every contracted"
+            echo "      function in the TU — nothing to do with whether"
+            echo "      bitset contracts its callers. Strictly better: it"
+            echo "      makes P3 testable on run 1 instead of patch 2."
             echo ""
             echo "  P3: bits.h's 15 residuals re-emit BYTE-IDENTICALLY."
             echo "      bitset is the FIRST verified module whose closure"

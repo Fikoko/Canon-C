@@ -26,6 +26,32 @@
 #include "semantics/option/option.h"
 #include "semantics/borrow.h"
 
+/**
+ * @brief Instantiate option_usize exactly once across all translation units
+ *
+ * bitset_find_first_option / find_next_option / find_last_option return
+ * option_usize. Until 2026-08-22 this header did NOT instantiate it and
+ * required every includer to do so first — test/data/bitset_test.c carried
+ * the instruction in a comment, and bitset.h was the only header in the tree
+ * that made a caller pre-instantiate a generic. That asymmetry was found by
+ * VERIFY-020: frama-c, handed the header directly, aborted in the PARSER at
+ * bitset_find_first_option with "syntax error", because it had no includer to
+ * do the instantiating.
+ *
+ * The guard convention is vec_impl.h's, verbatim (see the
+ * CANON_RESULT_BOOL_ERROR_DEFINED block there): instantiate behind a
+ * type-specific guard so that a caller wanting a DIFFERENT option_usize —
+ * notably vmacros/vdrivers/bitset_verify.h, which needs a CONTRACTED one —
+ * defines the guard first and interposes its own. Callers that already
+ * pre-instantiate with a bare CANON_OPTION(usize) must now either drop that
+ * line or define the guard; see the note in bitset_test.c.
+ */
+#ifndef CANON_OPTION_USIZE_DEFINED
+    #define CANON_OPTION_USIZE_DEFINED
+    /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
+    CANON_OPTION(usize)
+#endif
+
 #ifdef CANON_LIFETIME_DEBUG
     #include <stdint.h>                    /* uintptr_t */
     #include "core/primitives/lifetime.h"  /* region_id_t, lifetime_t */
