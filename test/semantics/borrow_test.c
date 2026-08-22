@@ -117,14 +117,15 @@ DEFINE_BORROWED_SLICE(int)
  *   - DEFINE_DEQUE (deque_int_pop_*_option, deque_int_peek_*_option)
  *   - DEFINE_PRIORITY_QUEUE (pq_int_pop_option, pq_int_peek_option)
  *
- * option_usize is required by:
- *   - data/bitset.h (bitset_find_first_option / _next_option / _last_option
- *     return option_usize and reference it in their bodies)
+ * option_usize is NO LONGER instantiated here. Since 2026-08-22 data/bitset.h
+ * instantiates it itself, behind the CANON_OPTION_USIZE_DEFINED guard
+ * (vec_impl.h's convention), so a CANON_OPTION(usize) at this point would be
+ * a redefinition. bitset.h is included below and brings its own.
  *
- * Both must be instantiated before any of those headers expand. */
+ * CANON_OPTION(int) stays: vec and deque still need it instantiated before
+ * their DEFINE_ macros expand. */
 #include "semantics/option/option.h"
 CANON_OPTION(int)
-CANON_OPTION(usize)
 
 #include "data/vec/vec.h"
 DEFINE_VEC(static inline, int)
@@ -142,8 +143,8 @@ DEFINE_PRIORITY_QUEUE(int)
 #include "data/hashmap/hashmap.h"
 
 /* Phase 5: bitset and stringbuf. These have no DEFINE_X macro — they're
- * concrete types, included directly. bitset.h depends on CANON_OPTION(usize)
- * which is instantiated above. */
+ * concrete types, included directly. bitset.h instantiates its own
+ * option_usize (see the note above). */
 #include "data/bitset.h"
 #include "data/stringbuf.h"
 

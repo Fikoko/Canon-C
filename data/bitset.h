@@ -89,7 +89,10 @@
  * return option_usize instead of the BITSET_NPOS sentinel. Use these in
  * preference to the raw variants in new code.
  *
- * Requires CANON_OPTION(usize) to be instantiated before including this header.
+ * option_usize is instantiated by this header (guard: CANON_OPTION_USIZE_DEFINED).
+ * Callers need do nothing. To supply your own — e.g. a contracted instantiation
+ * for verification, as vmacros/vdrivers/bitset_verify.h does — define that
+ * guard and emit it before including.
  *
  * The raw sentinel-returning variants (bitset_find_first, bitset_find_next,
  * bitset_find_last) are kept for BITSET_FOR_EACH and performance-critical
@@ -146,7 +149,9 @@
  * ```c
  * #include "data/bitset.h"
  *
- * CANON_OPTION(usize)   // required before including bitset.h
+ * // option_usize comes with the header — no pre-instantiation needed.
+ * // (This example previously showed a CANON_OPTION(usize) line AFTER the
+ * //  include, which could never have worked in either direction.)
  *
  * // Stack-backed bitset for 200 bits
  * u64 words[BITSET_WORD_COUNT(200)];
@@ -982,7 +987,7 @@ static inline usize bitset_find_last(borrowed(const Bitset*) bs) {
 
 /* ════════════════════════════════════════════════════════════════════════════
    Search — option_usize variants (preferred) — O(n/64)
-   Requires CANON_OPTION(usize) to be instantiated before including this header.
+   option_usize is instantiated by this header; see CANON_OPTION_USIZE_DEFINED.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /**

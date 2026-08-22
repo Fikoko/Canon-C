@@ -28,14 +28,22 @@
 #include "core/pool.h"
 #include "core/slice.h"
 
-/* bitset.h is deliberately NOT included here. It requires CANON_OPTION(usize)
-   to be instantiated in the including translation unit, and that macro
-   expands ~14 static inline functions INTO THIS FILE. Clang exempts
+/* bitset.h is still NOT included here, but the ORIGINAL REASON HAS EXPIRED and
+   is recorded so nobody re-derives it. It used to read: bitset.h requires
+   CANON_OPTION(usize) in the including translation unit, that macro expands
+   ~14 static inline functions INTO THIS FILE, and clang exempts
    header-defined functions from -Wunused-function but not main-file ones, so
-   instantiating a type this test does not otherwise use breaks the clang
-   builds. bitset_as_cbytes is covered by test_bitset_cbytes_accessor in
-   test/data/bitset_test.c, which binds through a const Bitset* and therefore
-   carries the same const guarantee. */
+   instantiating a type this test does not otherwise use broke the clang
+   builds.
+
+   Since 2026-08-22 bitset.h instantiates option_usize itself, behind
+   CANON_OPTION_USIZE_DEFINED. The expansion now happens inside a HEADER, where
+   clang's exemption does apply, so the clang obstacle is gone and this file
+   COULD include bitset.h. Left out for now only because the coverage is
+   already there and adding it is a separate change with its own measurement
+   consequences: bitset_as_cbytes is covered by test_bitset_cbytes_accessor in
+   test/data/bitset_test.c, which binds through a const Bitset* and carries the
+   same const guarantee. Revisit deliberately, not by accident. */
 #include "data/priority_queue.h"
 #include "data/stringbuf.h"
 
