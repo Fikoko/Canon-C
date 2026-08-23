@@ -270,19 +270,86 @@ typedef struct {
    names therefore carry the typed_cast_ prefix, as in diag.h and vec.
    ════════════════════════════════════════════════════════════════════════════ */
 
+/* ── DIVISION-FREE REFORMULATION, 2026-08-23 (VERIFY-020 experiment E1) ──────
+   Patch 1 left EIGHTEEN Group-1 residuals, and every one of them mentions
+   bitset_pad or bitset_mut. The first diagnosis was "the predicate is big".
+   That does not fit the evidence: bitset_init's ensures_3 is
+   `word_count == bitset_words_for(capacity)`, whose code line is literally
+   `bs->word_count = BITSET_WORD_COUNT(capacity)` — nothing big about it.
+
+   The common factor is INTEGER DIVISION, and the asymmetry that makes it
+   expensive is positional:
+
+       division in a `requires` is ASSUMED  -> free
+       division in an `ensures`  is PROVEN  -> expensive
+
+   Division entered every proof obligation through two doors: bitset_view via
+   `word_count == bitset_words_for(capacity)`, and bitset_pad via
+   `capacity % 64`. Both predicates appear in ensures positions throughout, so
+   the cost was paid on every goal.
+
+   Both doors are now closed by characterising the same facts with
+   MULTIPLICATION and SUBTRACTION only:
+
+       word_count == ceil(capacity/64)
+         <==>  word_count > 0 && (word_count-1)*64 < capacity <= word_count*64
+
+   verified exhaustively over capacity in [1,600] plus the 64/128/192/1000/
+   4096/65535 boundaries.
+
+   The payoff extends to P1. Preserving bitset_pad after a single-bit write
+   into the FINAL word needed `i % 64 < capacity % 64` derived from
+   `i < capacity` — integer-division reasoning, and the reason a lemma was
+   expected. In the division-free form the same fact is subtraction: with
+   k = i - (wc-1)*64 and rem = capacity - (wc-1)*64, `i < capacity` gives
+   `k < rem` by subtracting (wc-1)*64 from both sides. Checked exhaustively:
+   zero counterexamples over capacity in [1,400) and every i < capacity.
+
+   bitset_rem also absorbs the old `capacity % 64 == 0` disjunct. When
+   capacity is a multiple of 64, rem == 64 rather than 0, and shifting a
+   u64-valued term right by 64 yields 0 on ACSL's mathematical integers — so
+   the two cases collapse into one clause.
+
+   ASSUMPTION, stated because it is not machine-checked here: that ACSL's `>>`
+   on an integer-lifted u64 term is division by 2^k, hence 0 for k >= 64. It
+   should be — ACSL integers are unbounded — but if E1 leaves clear_padding's
+   pad goals unproved while the others clear, this is the first thing to
+   suspect.
+
+   NOT ELIMINATED, only CONFINED: bitset_init still has to connect the machine
+   computation (capacity + 63)/64 to the multiplication bounds, and
+   bitset_clear_padding still relates the code's `capacity % 64` to
+   bitset_rem. That is one division goal in each of two functions, instead of
+   one in every postcondition of every function.
+   ──────────────────────────────────────────────────────────────────────────── */
+
 /*@
   logic integer bitset_word_l(integer i)   = i / 64;
   logic integer bitset_bitpos_l(integer i) = i % 64;
+
+  // Retained for `requires` positions ONLY, where division is assumed and
+  // therefore free. It must not appear in any ensures / predicate reachable
+  // from an ensures — that is what E1 is removing.
   logic integer bitset_words_for(integer n) = (n + 63) / 64;
 
   predicate bitset_bit_set{L}(Bitset* bs, integer i) =
       (bs->words[bitset_word_l(i)] & ((u64)1 << bitset_bitpos_l(i))) != 0;
 
+  // word_count == ceil(capacity/64), stated without division.
+  predicate bitset_sized{L}(Bitset* bs) =
+      bs->word_count > 0
+      && (bs->word_count - 1) * 64 < bs->capacity
+      && bs->capacity <= bs->word_count * 64;
+
+  // Live bits in the final word: in [1, 64], never 0.
+  logic integer bitset_rem{L}(Bitset* bs) =
+      bs->capacity - (bs->word_count - 1) * 64;
+
   predicate bitset_view{L}(Bitset* bs) =
       \valid_read(bs)
       && bs->capacity > 0
       && bs->capacity <= CANON_USIZE_MAX - 63
-      && bs->word_count == bitset_words_for(bs->capacity)
+      && bitset_sized(bs)
       && \valid_read(bs->words + (0 .. bs->word_count - 1));
 
   predicate bitset_mut{L}(Bitset* bs) =
@@ -291,8 +358,7 @@ typedef struct {
       && \valid(bs->words + (0 .. bs->word_count - 1));
 
   predicate bitset_pad{L}(Bitset* bs) =
-      bs->capacity % 64 == 0
-      || (bs->words[bs->word_count - 1] >> (bs->capacity % 64)) == 0;
+      (bs->words[bs->word_count - 1] >> bitset_rem(bs)) == 0;
 
   predicate bitset_pad_meaning{L}(Bitset* bs) =
       \forall integer i;
@@ -477,7 +543,7 @@ static inline void bitset_clear_padding(borrowed(Bitset*) bs) {
 
     ensures bs->words == words;
     ensures bs->capacity == capacity;
-    ensures bs->word_count == bitset_words_for(capacity);
+    ensures bitset_sized(bs);
     ensures \forall integer k; 0 <= k < bs->word_count ==> bs->words[k] == 0;
     ensures bitset_mut(bs);
     ensures bitset_pad(bs);
