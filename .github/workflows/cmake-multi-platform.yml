@@ -4853,7 +4853,15 @@ jobs:
                       bitset_toggle bitset_test bitset_assign \
                       bitset_lifetime_open_ bitset_lifetime_close_; do
               if grep -qE "^\[rte:annot\] annotating function ${fn}$" wp_bitset_output.txt; then
-                N=$(grep -cE "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\] typed_cast_${fn}_" \
+                # Anchor on the goal-clause suffix set, NOT a bare prefix.
+                # CORRECTED 2026-08-23, the SECOND fix to this block: the
+                # first rewrite left `typed_cast_${fn}_` matching by prefix,
+                # so bitset_set_ swallowed bitset_set_all_*, and
+                # bitset_clear_ swallowed BOTH bitset_clear_all_* and
+                # bitset_clear_padding_*. CI #1252 reported set=6 and
+                # clear=8; the true counts are 2 and 2. An inverted check was
+                # replaced by a miscounting one, directly beside it.
+                N=$(grep -cE "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\] typed_cast_${fn}_(null|live|normal|exit|terminates|exits|assigns|ensures|requires|assert|call|loop|variant)" \
                       wp_bitset_output.txt || true)
                 if [ "${N}" -eq 0 ]; then
                   printf "    %-26s analysed, 0 residuals  (fully proved)\n" "${fn}"

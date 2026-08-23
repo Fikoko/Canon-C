@@ -488,6 +488,115 @@ static void test_bitset_cbytes_accessor(void)
     EXPECT(bitset_as_cbytes(NULL).len == 0u);
 }
 
+/* ── MCDC-012: the uninitialised-Bitset battery ──────────────────────────────
+ *
+ * Drives the `!bs->words` TRUE leg of every function that guards on it.
+ * Measured at CI #1240/#1251/#1252, data/bitset.h sat at 109/126 MC/DC with
+ * SEVENTEEN outcomes uncovered; eleven of them were this one leg, once each
+ * in clear_all, set_all, not, count, is_empty, is_full, find_first,
+ * find_next, find_last, as_bytes and as_cbytes. Every one needs the same
+ * input: a Bitset that is non-NULL but whose words pointer is NULL.
+ *
+ * `Bitset b = {0}` is exactly that state, and it is REACHABLE BY ORDINARY C
+ * — a declared-but-never-initialised Bitset. It is not a synthetic poke at
+ * private state.
+ *
+ * THIS BATTERY IS ALSO THE COVERAGE-SIDE EVIDENCE FOR FINDING F2.
+ * The eleven functions below check `!bs || !bs->words` and return safely.
+ * bitset_set / bitset_clear / bitset_toggle / bitset_test check only `!bs`,
+ * then guard the index with require_msg — which is ((void)0) under
+ * -DCANON_NO_REQUIRE, the flag BOTH the coverage job and the WP job use. On
+ * this very object those four would dereference words == NULL. They are
+ * therefore DELIBERATELY ABSENT from this function, and their absence is the
+ * finding, not an omission. Structurally this is deque's F1, except bitset's
+ * asymmetry is WITHIN one family rather than between two.
+ *
+ * Do not "complete" this battery by adding the four. That would be UB in the
+ * configuration being measured. See VERIFY-020 F2 for the disposition. */
+static void test_uninitialised_bitset(void)
+{
+    Bitset b = {0};          /* non-NULL, words == NULL, capacity == 0 */
+
+    /* void bulk ops: silent no-ops */
+    bitset_clear_all(&b);
+    bitset_set_all(&b);
+    bitset_not(&b);
+
+    /* queries: documented NULL-ish returns */
+    EXPECT(bitset_count(&b)    == 0);
+    EXPECT(bitset_is_empty(&b));          /* true, as for NULL */
+    EXPECT(!bitset_is_full(&b));          /* false, as for NULL */
+
+    /* searches: all three sentinels */
+    EXPECT(bitset_find_first(&b)   == BITSET_NPOS);
+    EXPECT(bitset_find_next(&b, 0) == BITSET_NPOS);
+    EXPECT(bitset_find_last(&b)    == BITSET_NPOS);
+
+    /* views: empty, not a NULL-deref */
+    EXPECT(bitset_as_bytes(&b).len  == 0);
+    EXPECT(bitset_as_cbytes(&b).len == 0);
+}
+
+/* ── MCDC-012: the two remaining drivable outcomes ───────────────────────────
+ *
+ * (1) bitset_find_next's `prev >= bs->capacity` TRUE leg. The INNER guard at
+ *     `start >= bs->capacity` was already 2/2; this is the first-guard leg,
+ *     reached by passing prev == capacity outright.
+ *
+ * (2) bitset_and's tail loop `for (w = n; w < bs->word_count; w++)`, entered
+ *     only when bs has MORE words than other. Nothing in the suite ANDed
+ *     unequal capacities, so the loop was never entered — it was also the
+ *     file's ONLY uncovered LINE (bitset.h:792, 99.28% of 139).
+ *
+ * The four outcomes NOT driven here are the `(x < bs->capacity) ? x : NPOS`
+ * FALSE legs in find_first / find_next (x2) / find_last. Those fire only if a
+ * set bit is found at an index >= capacity, which the PADDING INVARIANT
+ * forbids: bits at [capacity, word_count*64) are always zero, so bits_ctz /
+ * bits_clz can never report one. They are defensive branches, dead by
+ * invariant, and reaching them would require writing bs.words[] directly
+ * behind the API to assert behaviour the library does not promise. They take
+ * justification rows (MCDC-012 J1-J4), not a test.
+ *
+ * Note the cross-stream symmetry worth recording in VERIFY-020: the SAME gap
+ * appears in the proof stream as the bitset_pad ==> bitset_pad_meaning
+ * manual-proof obligation. Coverage cannot reach these branches because the
+ * invariant forbids it; WP cannot prove them redundant because pad_meaning is
+ * not machine-checked. One fact, two instruments. diag.h line 293 is the
+ * existing "invariant-dead" precedent. */
+static void test_mcdc_residual_legs(void)
+{
+    /* (1) prev >= capacity, first guard */
+    {
+        u64 words[BITSET_WORD_COUNT(64)];
+        Bitset bs;
+        bitset_init(&bs, words, 64);
+        bitset_set(&bs, 0);
+        EXPECT(bitset_find_next(&bs, 64)  == BITSET_NPOS);  /* prev == cap  */
+        EXPECT(bitset_find_next(&bs, 999) == BITSET_NPOS);  /* prev >  cap  */
+    }
+
+    /* (2) bitset_and tail loop: bs wider than other */
+    {
+        u64 wide_words[BITSET_WORD_COUNT(192)];   /* 3 words */
+        u64 narrow_words[BITSET_WORD_COUNT(64)];  /* 1 word  */
+        Bitset wide, narrow;
+        bitset_init(&wide,   wide_words,   192);
+        bitset_init(&narrow, narrow_words, 64);
+
+        bitset_set(&wide, 5);      /* word 0 — survives if also in narrow */
+        bitset_set(&wide, 70);     /* word 1 — beyond narrow, must clear  */
+        bitset_set(&wide, 150);    /* word 2 — beyond narrow, must clear  */
+        bitset_set(&narrow, 5);
+
+        bitset_and(&wide, &narrow);
+
+        EXPECT(bitset_test(&wide, 5));        /* common bit kept          */
+        EXPECT(!bitset_test(&wide, 70));      /* tail word zeroed         */
+        EXPECT(!bitset_test(&wide, 150));     /* tail word zeroed         */
+        EXPECT(bitset_count(&wide) == 1);
+    }
+}
+
 int main(void)
 {
     test_bitset_cbytes_accessor();
@@ -503,6 +612,8 @@ int main(void)
     test_for_each();
     test_as_bytes();
     test_word_boundary();
+    test_uninitialised_bitset();
+    test_mcdc_residual_legs();
 
     if (g_failed == 0) {
         printf("OK  bitset_test  (all assertions passed)\n");
