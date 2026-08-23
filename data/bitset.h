@@ -26,6 +26,11 @@
 #include "semantics/option/option.h"
 #include "semantics/borrow.h"
 
+#ifdef CANON_LIFETIME_DEBUG
+    #include <stdint.h>                    /* uintptr_t */
+    #include "core/primitives/lifetime.h"  /* region_id_t, lifetime_t */
+#endif
+
 /**
  * @brief Instantiate option_usize exactly once across all translation units
  *
@@ -45,16 +50,18 @@
  * defines the guard first and interposes its own. Callers that already
  * pre-instantiate with a bare CANON_OPTION(usize) must now either drop that
  * line or define the guard; see the note in bitset_test.c.
+ *
+ * PLACEMENT: this block sits AFTER every #include in the file, deliberately.
+ * MISRA C:2012 rule 20.1 requires an #include to be preceded only by
+ * preprocessor directives or comments, and CANON_OPTION expands to
+ * DECLARATIONS. Placing it above the CANON_LIFETIME_DEBUG include block put
+ * two #includes behind a declaration and raised the advisory MISRA count from
+ * 53 to 55 (data/bitset.h:56-57, rule 20.1) on its first scan. Keep it last.
  */
 #ifndef CANON_OPTION_USIZE_DEFINED
     #define CANON_OPTION_USIZE_DEFINED
     /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
     CANON_OPTION(usize)
-#endif
-
-#ifdef CANON_LIFETIME_DEBUG
-    #include <stdint.h>                    /* uintptr_t */
-    #include "core/primitives/lifetime.h"  /* region_id_t, lifetime_t */
 #endif
 
 /**

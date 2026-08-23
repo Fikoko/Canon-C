@@ -4832,18 +4832,54 @@ jobs:
             echo "      this arc predicted plain Typed. bitset_as_bytes"
             echo "      makes that wrong.)"
             echo ""
-            echo "  --- Group 1 roll-call: functions that MUST appear proved ---"
-            # Not a gate while ENFORCE=0. A name missing here means WP never
-            # saw the function — usually an ACSL block that failed to attach.
+            echo "  --- Group 1 roll-call ---"
+            # CORRECTED 2026-08-23. The first version of this block grepped
+            # the whole log for "typed_cast_<fn>" and printed "NOT SEEN ...
+            # contract may not have attached" when absent. That reading is
+            # INVERTED: the log names only UNPROVED goals, so absence means
+            # the function proved CLEANLY. On the first run it flagged
+            # word_of, mask_of, test and close — precisely the four that
+            # reached zero residuals. A reader trusting it would have chased
+            # four phantoms.
+            #
+            # Two independent facts, read from two different places:
+            #   ANALYSED  <- the "[rte:annot] annotating function <fn>" list,
+            #                which is what WP actually saw. Absence here is
+            #                the real alarm: the function never entered the
+            #                TU, or its ACSL block failed to attach.
+            #   residuals <- count of unproved goals naming it. Zero is BEST.
             for fn in bitset_word_of bitset_mask_of bitset_clear_padding \
                       bitset_init bitset_close bitset_set bitset_clear \
-                      bitset_toggle bitset_test bitset_assign; do
-              if grep -qE "typed_cast_${fn}" wp_bitset_output.txt; then
-                echo "    seen: ${fn}"
+                      bitset_toggle bitset_test bitset_assign \
+                      bitset_lifetime_open_ bitset_lifetime_close_; do
+              if grep -qE "^\[rte:annot\] annotating function ${fn}$" wp_bitset_output.txt; then
+                N=$(grep -cE "^\[wp\] \[(Timeout|Unknown|Failed|Invalid|Stepout)\] typed_cast_${fn}_" \
+                      wp_bitset_output.txt || true)
+                if [ "${N}" -eq 0 ]; then
+                  printf "    %-26s analysed, 0 residuals  (fully proved)\n" "${fn}"
+                else
+                  printf "    %-26s analysed, %s residual(s)\n" "${fn}" "${N}"
+                fi
               else
-                echo "    NOT SEEN: ${fn}  <- contract may not have attached"
+                printf "    %-26s NOT ANALYSED  <- real problem: absent from the\n" "${fn}"
+                echo   "                               TU, or its ACSL block did not attach"
               fi
             done
+            echo ""
+            echo "  --- Residual split: inherited vs bitset-own ---"
+            INH=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_(contract_|option_usize_|bits_|checked_|align_(up|down|padding)_|ptr_|bytes_|str_|mem_|borrowed_bytes_)" \
+                    wp_bitset_output.txt || true)
+            OWN=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_bitset_" \
+                    wp_bitset_output.txt || true)
+            echo "    inherited: ${INH}   (P2 predicts 92: contract 2 + bits 15 +"
+            echo "               memory 20 + slice-libc 13 + ptr 6 + checked 2 +"
+            echo "               borrow 2 + option 32)"
+            echo "    bitset-own: ${OWN}"
+            echo "    NOTE: most bitset-own residuals belong to functions that are"
+            echo "          NOT YET CONTRACTED (Group 2/3). Uncontracted functions"
+            echo "          still receive -wp-rte goals and, having no preconditions,"
+            echo "          cannot discharge their memory-access obligations. Those"
+            echo "          are pending work, not residuals; do not pin them." 
           fi
           echo ""
           echo "==============================================="
@@ -5401,6 +5437,124 @@ jobs:
             done
           fi
       
+      - name: "Debug: per-line MC/DC detail for bitset (in-place header)"
+        # VERIFY-020 / MCDC-012. Measurement half of the bitset arc.
+        # Baseline at CI #1240 and unchanged at #1251: 109/126 (86.5%),
+        # SEVENTEEN outcomes missed. This step enumerates them; nothing
+        # else in the job does, and 17 unexplained outcomes cannot be
+        # dispositioned from a percentage.
+        #
+        # WHY THERE IS NO bitset_cover.c, AND WHY THAT IS NOT AN OVERSIGHT
+        # ----------------------------------------------------------------
+        # vec, deque, option and result each need a cover TU because their
+        # conditions live in IMPL_ macro BODIES, stamped to the
+        # instantiation site — which for the tests is a test/ file the
+        # coverage glob removes. bitset is an ordinary header: its
+        # conditions are stamped to data/bitset.h and are already measured.
+        # gcov target here is therefore bitset_test, exactly as for
+        # region.h / borrow.h / diag.h.
+        #
+        # A prediction was made and REFUTED before this step was written,
+        # and the refutation is why the step looks like this. Since
+        # 2026-08-22 bitset.h instantiates option_usize itself (behind
+        # CANON_OPTION_USIZE_DEFINED). The prediction was that option's ~30
+        # condition outcomes would migrate INTO bitset.h's row, taking the
+        # denominator 126 -> 156 and the rate 86.5% -> ~72%. MEASURED AT
+        # #1251: 109/126, byte-identical to #1240, and the aggregate
+        # unchanged at 1774/2004.
+        #
+        # The reasoning error: gcov measures EMITTED code. The six option
+        # combinators (map, and_then, or_else, filter, combine_with, eq)
+        # are static inline with NO CALLER anywhere in the build, so GCC
+        # discards them — no arcs, no conditions, nothing to inflate a
+        # denominator with. option_cover.c reports 30 precisely because it
+        # CALLS them. The only measurable trace of the migration is in the
+        # summary: functions 655/658 -> 660/663, +5 covered on both sides,
+        # zero new uncovered — some/none/is_some/unwrap, the four bitset
+        # actually calls, moving from an excluded test file into a measured
+        # header. Lines +1.
+        #
+        # Adding a bitset_cover.c would therefore ADD risk for no gain: it
+        # would compile bitset.h a SECOND time under -DCANON_NO_REQUIRE
+        # alongside bitset_test.c's build of the same header, and lcov
+        # merges by (file, line). bitset would be the first module whose
+        # measured header carries a macro instantiation built under two
+        # flag sets. Don't invite that to cover conditions that are
+        # already covered.
+        #
+        # WHAT THE 17 ARE NOT: require_msg artifacts. The coverage build
+        # passes -DCANON_NO_REQUIRE (see the configure step), so require_msg
+        # is ((void)0) here exactly as in the WP run — that flag alignment
+        # is deliberate and is why the two streams measure the same surface.
+        # So finding F2's NULL legs in set/clear/toggle/test are NOT in this
+        # denominator, and the 17 must be explained by something else.
+        #
+        # LIKELY CANDIDATES, to be confirmed against the dump rather than
+        # assumed: the `!bs || !bs->words` runtime guards in clear_all /
+        # set_all / not / count / is_empty / is_full / is_disjoint /
+        # find_* (real runtime tests, not require_msg, so they compile in
+        # and both legs need driving); clear_padding's `rem != 0u`; and the
+        # word-index ternaries in find_next / find_last.
+        #
+        # DISPOSITION: same rule deque's MCDC-011 used. An uncovered
+        # outcome is first assumed to have a driving input that
+        # bitset_test.c does not yet supply — find it and extend the test.
+        # A justification row is the LAST resort and needs a genuine
+        # infeasibility argument, which is a finding worth writing up
+        # rather than a bookkeeping entry.
+        #
+        # Report-only. Never fails the coverage job.
+        run: |
+          cd build
+          BITSET_GCDA=$(find . -name "bitset_test*.gcda" | head -1)
+          if [ -z "$BITSET_GCDA" ]; then
+            echo "ERROR: could not locate bitset_test gcda file"
+            find . -name "*.gcda" | head -20
+            exit 0   # report-only — do not fail the coverage job
+          fi
+          echo "Running gcov on: $BITSET_GCDA"
+          gcov-14 --conditions --all-blocks "$BITSET_GCDA" 2>&1 | \
+            grep -A 200 "bitset.h" | head -500
+          echo ""
+          echo "=== File ownership check (bitset is NOT a macro module) ==="
+          echo "Expected: conditions attribute to data/bitset.h itself."
+          echo "If they appear against test/data/bitset_test.c instead, the"
+          echo "coverage glob is removing them and bitset WOULD need a cover"
+          echo "TU after all — that would be a new finding, not a config bug."
+          gcov-14 --conditions --all-blocks "$BITSET_GCDA" 2>&1 | \
+            grep -E "^File .*(bitset\.h|bitset_test\.c)" -A 2 || true
+          echo ""
+          echo "=== Looking for the generated .gcov file for bitset.h ==="
+          find . -name "bitset.h.gcov" -exec echo "Found: {}" \;
+          BITSET_GCOV=$(find . -name "bitset.h.gcov" | head -1)
+          if [ -n "$BITSET_GCOV" ]; then
+            echo ""
+            echo "=== The 17 missed outcomes (expected count: 17) ==="
+            MISSED=$(grep -c "not covered" "$BITSET_GCOV" || true)
+            echo "  'not covered' lines found: ${MISSED}"
+            echo ""
+            grep -n -B 6 "not covered" "$BITSET_GCOV" | head -160 || \
+              echo "  (none found — check the full dump below)"
+            echo ""
+            echo "=== option_usize instantiation footprint ==="
+            echo "Expected: the six combinators (map/and_then/or_else/filter/"
+            echo "combine_with/eq) have NO caller and are discarded by GCC, so"
+            echo "they contribute NO conditions here. If they appear, the"
+            echo "refuted prediction above was right after all and the"
+            echo "denominator should have moved — read that before anything else."
+            grep -nE "option_usize_(map|and_then|or_else|filter|combine_with|eq)" \
+              "$BITSET_GCOV" | head -20 || \
+              echo "  (absent, as measured at #1251 — expected)"
+            echo ""
+            echo "=== Full contents of $BITSET_GCOV ==="
+            cat "$BITSET_GCOV"
+          else
+            echo "No bitset.h.gcov file generated — trying alternative approach"
+            for d in $(find . -type d -name "*.dir"); do
+              ls "$d"/*bitset* 2>/dev/null || true
+            done
+          fi
+
       - name: "Debug: per-line MC/DC detail for option (cover TU)"
         # First measured MC/DC baseline for the option module: 29/30 (96.7%),
         # exactly 1 condition outcome missed. Report-only — surfaces which
