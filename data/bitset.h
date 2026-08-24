@@ -270,105 +270,61 @@ typedef struct {
    names therefore carry the typed_cast_ prefix, as in diag.h and vec.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── E1a: DIVISION-FREE SIZING ONLY ─────────────────────────────────────────
-   VERIFY-020 experiment E1a. This is E1 with its second half REMOVED, after
-   E1 took the CI runner down twice.
+/* ── E1 / E1a: THE DIVISION HYPOTHESIS, REFUTED ─────────────────────────────
+   Two experiments, two multi-hour runs, one negative result. Recorded in
+   full because the negative result is the useful part.
 
-   WHAT E1 CLAIMED
-   ---------------
-   Patch 1's eighteen Group-1 residuals all mention bitset_pad or bitset_mut,
-   and the common factor is INTEGER DIVISION in PROVEN positions: division in
-   a `requires` is assumed and free, division in an `ensures` must be proved
-   and is expensive. E1 closed both doors division entered through --
-   bitset_view's `word_count == bitset_words_for(capacity)` and bitset_pad's
-   `capacity % 64` -- by restating each with multiplication and subtraction.
+   THE HYPOTHESIS
+   Patch 1 left eighteen Group-1 residuals, all mentioning bitset_pad or
+   bitset_mut. E1 proposed that the common factor was INTEGER DIVISION in
+   PROVEN positions -- free in a `requires`, expensive in an `ensures` --
+   entering through bitset_view's `word_count == bitset_words_for(capacity)`
+   and bitset_pad's `capacity % 64`.
 
-   WHAT HAPPENED
-   -------------
-   CI #1254, commit 1eb5d5c: frama-c-bitset died TWICE on the same commit.
-   Once as "the hosted runner lost communication with the server", once at
-   1h 0m 2s with the log cut mid-results after `4311 goals scheduled`. The
-   job carries no timeout-minutes and GitHub's default is 360, so nothing in
-   the workflow stopped it. Every sibling job was GREEN on the same runner
-   pool and the same commit -- frama-c-vec, frama-c-deque, frama-c-diag,
-   frama-c-arena, all of them, including WP runs far heavier than this one.
-   Attribution is not in doubt: E1 did this, not infrastructure.
+   E1 (1eb5d5c, CI #1254): killed the runner TWICE. Not infrastructure --
+   every sibling WP job was green on the same pool and commit. Cause: E1
+   replaced `>> (capacity % 64)`, whose exponent is SYNTACTICALLY bounded in
+   [0,63], with `>> bitset_rem(bs)`, whose bound follows only by deriving it
+   from bitset_sized. Until derived, the term is x >> k with k an unbounded
+   symbolic expression -- x / 2^k, exponential in a free variable. Memory
+   blow-up, which -wp-timeout cannot bound. The redundant-looking disjunct
+   removed as a "simplification" was load-bearing FOR THE PROVER though
+   redundant for the LOGIC. That is the one durable finding of this arc, and
+   it is why bitset_pad's `% 64` and disjunct below must stay.
 
-   THE MECHANISM, AND WHY THE "ELEGANT" HALF WAS THE DANGEROUS ONE
-   ---------------------------------------------------------------
-   The old bitset_pad read
+   E1a (CI #1255): kept only bitset_sized, reverted bitset_pad. Result: ALL
+   EIGHTEEN residuals unchanged, same goal indices. The twelve
+   bitset_mut/bitset_view goals did not clear. DIVISION WAS NOT THE COST.
 
-       capacity % 64 == 0 || (words[wc-1] >> (capacity % 64)) == 0
+   THREE WRONG GUESSES, AND THE CORRECTION
+   Predicate size, then a missing lemma, then division. Each cost a run. The
+   error was not any single hypothesis but the method: diagnosing by
+   archaeology on straight-line goals instead of measuring.
 
-   whose shift amount is SYNTACTICALLY BOUNDED: any solver sees `% 64` and
-   knows the exponent lies in [0,63] without deriving anything. The disjunct
-   additionally handed it a free case split.
-
-   E1 replaced that with `words[wc-1] >> bitset_rem(bs)`, where bitset_rem is
-   `capacity - (word_count-1)*64`. Its bound in [1,64] follows ONLY from
-   bitset_sized, which the solver must derive first. Until it does, the term
-   is `x >> k` with k an unbounded symbolic expression -- that is `x / 2^k`,
-   exponential in a free variable, and a classic term-explosion shape. That
-   explains death by memory rather than a clean timeout, and it explains why
-   -wp-timeout 120 did not save the run: a timeout bounds time, not memory.
-
-   So removing the disjunct made the shift exponent LESS bounded while
-   looking like a simplification. The redundant-seeming disjunct was
-   load-bearing for the PROVER even though it was redundant for the LOGIC.
-   The risk flagged in E1's own banner -- ACSL `>>` semantics at k >= 64 --
-   was the wrong worry entirely.
-
-   WHAT E1a KEEPS AND WHAT IT DROPS
-   --------------------------------
-   KEEPS  bitset_sized, bitset_view built on it, init ensuring it. This is
-          the division hypothesis where it matters: twelve of the eighteen
-          residuals are bitset_mut / bitset_view goals. `(word_count-1)*64 <
-          capacity` is symbolic-times-CONSTANT -- linear arithmetic, cheap,
-          a different risk class from a symbolic shift exponent.
-   DROPS  bitset_rem entirely. bitset_pad returns to its exact patch-1 form,
-          `% 64` and disjunct included.
-
-   E1 changed two predicates in one commit while its own message said "one
-   variable". That bundling is the whole reason a second run is needed to
-   learn which half was wrong. E1a is the change that should have shipped.
-
-   The sizing characterisation is unchanged and still exhaustively verified:
-       word_count == ceil(capacity/64)
-         <==> word_count > 0 && (word_count-1)*64 < capacity <= word_count*64
-   over capacity in [1,600] plus 64/128/192/1000/4096/65535.
-
-   STILL EXPECTED TO FAIL, and that is the point of keeping it separate:
-   bitset_pad's six set/clear/toggle goals and clear_padding's three keep
-   their division and should keep timing out. If E1a clears the twelve
-   bitset_mut goals and leaves those nine, the diagnosis is confirmed for
-   bitset_view and the pad half needs a DIFFERENT remedy -- most likely a
-   bounded-exponent formulation that keeps `% 64` visible, not one that
-   hides it behind an expression.
+   THE REFRAME THAT SHOULD HAVE COME FIRST
+   Eighteen residuals is not a defect. vec carries 196, arena 91, pool 119,
+   deque 67 -- residuals are normal here, and what makes them acceptable is
+   that they are documented, name-pinned, and carry manual-proof arguments.
+   Eighteen would be the SMALLEST own-residual set in the data/ layer.
+   The real question was never "can these reach zero" but "are these
+   predicates affordable inside LOOP INVARIANTS", and that is answered by
+   writing one, not by theorising about postconditions. See bitset_not.
    ──────────────────────────────────────────────────────────────────────────── */
 
 /*@
   logic integer bitset_word_l(integer i)   = i / 64;
   logic integer bitset_bitpos_l(integer i) = i % 64;
 
-  // Retained for `requires` positions ONLY, where division is assumed and
-  // therefore free. It must not appear in any ensures / predicate reachable
-  // from an ensures — that is what E1 is removing.
   logic integer bitset_words_for(integer n) = (n + 63) / 64;
 
   predicate bitset_bit_set{L}(Bitset* bs, integer i) =
       (bs->words[bitset_word_l(i)] & ((u64)1 << bitset_bitpos_l(i))) != 0;
 
-  // word_count == ceil(capacity/64), stated without division.
-  predicate bitset_sized{L}(Bitset* bs) =
-      bs->word_count > 0
-      && (bs->word_count - 1) * 64 < bs->capacity
-      && bs->capacity <= bs->word_count * 64;
-
   predicate bitset_view{L}(Bitset* bs) =
       \valid_read(bs)
       && bs->capacity > 0
       && bs->capacity <= CANON_USIZE_MAX - 63
-      && bitset_sized(bs)
+      && bs->word_count == bitset_words_for(bs->capacity)
       && \valid_read(bs->words + (0 .. bs->word_count - 1));
 
   predicate bitset_mut{L}(Bitset* bs) =
@@ -376,11 +332,11 @@ typedef struct {
       && \valid(bs)
       && \valid(bs->words + (0 .. bs->word_count - 1));
 
-  // RESTORED to the patch-1 form by E1a. The `% 64` keeps the shift
-  // exponent syntactically bounded in [0,63], and the disjunct gives the
-  // solver a free case split. Both were removed by E1 and both turned out
-  // to be load-bearing for the prover. Do not "simplify" this again without
-  // a run that proves it safe.
+  // DO NOT "SIMPLIFY" THIS. The `% 64` keeps the shift exponent
+  // syntactically bounded in [0,63], and the disjunct gives the solver a
+  // free case split. E1 removed both as redundant and took the CI runner
+  // down twice (CI #1254). Redundant for the logic, load-bearing for the
+  // prover.
   predicate bitset_pad{L}(Bitset* bs) =
       bs->capacity % 64 == 0
       || (bs->words[bs->word_count - 1] >> (bs->capacity % 64)) == 0;
@@ -568,7 +524,7 @@ static inline void bitset_clear_padding(borrowed(Bitset*) bs) {
 
     ensures bs->words == words;
     ensures bs->capacity == capacity;
-    ensures bitset_sized(bs);
+    ensures bs->word_count == bitset_words_for(capacity);
     ensures \forall integer k; 0 <= k < bs->word_count ==> bs->words[k] == 0;
     ensures bitset_mut(bs);
     ensures bitset_pad(bs);
@@ -854,8 +810,65 @@ static inline void bitset_set_all(borrowed(Bitset*) bs) {
  *
  * Performance: O(n/64)
  */
+/* ── GROUP 2 PROBE, VERIFY-020 ───────────────────────────────────────────────
+   bitset_not is the simplest loop in the header: one pass, one write per
+   word, then clear_padding. It is contracted here ALONE, ahead of the other
+   nine loops, to answer one question with a measurement instead of a fourth
+   theory:
+
+       are bitset_mut / bitset_pad affordable when mentioned in a LOOP
+       INVARIANT, given that they already time out on straight-line
+       postconditions?
+
+   Three guesses (predicate size, a missing lemma, integer division) each
+   cost a multi-hour run and each was wrong. This probe costs the same one
+   run and cannot be wrong about the thing it measures, because it is the
+   thing itself rather than a proxy for it.
+
+   READING IT
+     invariant proves            -> the predicates survive loop contexts;
+                                    write the remaining nine invariants
+     invariant times out         -> they do not; Group 2 needs a different
+                                    specification style (most likely: state
+                                    the frame pointwise over words and keep
+                                    bitset_mut out of the invariant entirely)
+     Failed / Invalid            -> an invariant below is FALSE, not hard;
+                                    that outranks everything else in the log
+
+   The invariant is deliberately MINIMAL. It states the pointwise effect and
+   the frame, and it does NOT carry bitset_mut, because carrying it is
+   precisely what is in question. bitset_pad is not an invariant of the loop
+   at all -- the loop BREAKS the padding invariant by inverting bits above
+   capacity, and clear_padding restores it afterwards. That is why the
+   postcondition asserts bitset_pad while the invariant does not.
+   ──────────────────────────────────────────────────────────────────────────── */
+/*@ requires bs == \null || bitset_mut(bs);
+    requires bs == \null || bs->words != \null;
+
+    behavior null:
+      assumes bs == \null || bs->words == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && bs->words != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures \forall integer k;
+          0 <= k < bs->word_count ==> bs->words[k] == ~\old(bs->words[k]);
+      ensures bitset_pad(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_not(borrowed(Bitset*) bs) {
     if (!bs || !bs->words) { return; }
+    /*@ loop invariant 0 <= w <= bs->word_count;
+        loop invariant \forall integer k;
+            0 <= k < w ==> bs->words[k] == ~\at(bs->words[k], Pre);
+        loop invariant \forall integer k;
+            w <= k < bs->word_count ==> bs->words[k] == \at(bs->words[k], Pre);
+        loop assigns w, bs->words[0 .. bs->word_count - 1];
+        loop variant bs->word_count - w;
+    */
     for (usize w = 0; w < bs->word_count; w++) {
         bs->words[w] = ~bs->words[w];
     }
