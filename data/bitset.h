@@ -270,57 +270,80 @@ typedef struct {
    names therefore carry the typed_cast_ prefix, as in diag.h and vec.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── DIVISION-FREE REFORMULATION, 2026-08-23 (VERIFY-020 experiment E1) ──────
-   Patch 1 left EIGHTEEN Group-1 residuals, and every one of them mentions
-   bitset_pad or bitset_mut. The first diagnosis was "the predicate is big".
-   That does not fit the evidence: bitset_init's ensures_3 is
-   `word_count == bitset_words_for(capacity)`, whose code line is literally
-   `bs->word_count = BITSET_WORD_COUNT(capacity)` — nothing big about it.
+/* ── E1a: DIVISION-FREE SIZING ONLY ─────────────────────────────────────────
+   VERIFY-020 experiment E1a. This is E1 with its second half REMOVED, after
+   E1 took the CI runner down twice.
 
-   The common factor is INTEGER DIVISION, and the asymmetry that makes it
-   expensive is positional:
+   WHAT E1 CLAIMED
+   ---------------
+   Patch 1's eighteen Group-1 residuals all mention bitset_pad or bitset_mut,
+   and the common factor is INTEGER DIVISION in PROVEN positions: division in
+   a `requires` is assumed and free, division in an `ensures` must be proved
+   and is expensive. E1 closed both doors division entered through --
+   bitset_view's `word_count == bitset_words_for(capacity)` and bitset_pad's
+   `capacity % 64` -- by restating each with multiplication and subtraction.
 
-       division in a `requires` is ASSUMED  -> free
-       division in an `ensures`  is PROVEN  -> expensive
+   WHAT HAPPENED
+   -------------
+   CI #1254, commit 1eb5d5c: frama-c-bitset died TWICE on the same commit.
+   Once as "the hosted runner lost communication with the server", once at
+   1h 0m 2s with the log cut mid-results after `4311 goals scheduled`. The
+   job carries no timeout-minutes and GitHub's default is 360, so nothing in
+   the workflow stopped it. Every sibling job was GREEN on the same runner
+   pool and the same commit -- frama-c-vec, frama-c-deque, frama-c-diag,
+   frama-c-arena, all of them, including WP runs far heavier than this one.
+   Attribution is not in doubt: E1 did this, not infrastructure.
 
-   Division entered every proof obligation through two doors: bitset_view via
-   `word_count == bitset_words_for(capacity)`, and bitset_pad via
-   `capacity % 64`. Both predicates appear in ensures positions throughout, so
-   the cost was paid on every goal.
+   THE MECHANISM, AND WHY THE "ELEGANT" HALF WAS THE DANGEROUS ONE
+   ---------------------------------------------------------------
+   The old bitset_pad read
 
-   Both doors are now closed by characterising the same facts with
-   MULTIPLICATION and SUBTRACTION only:
+       capacity % 64 == 0 || (words[wc-1] >> (capacity % 64)) == 0
 
+   whose shift amount is SYNTACTICALLY BOUNDED: any solver sees `% 64` and
+   knows the exponent lies in [0,63] without deriving anything. The disjunct
+   additionally handed it a free case split.
+
+   E1 replaced that with `words[wc-1] >> bitset_rem(bs)`, where bitset_rem is
+   `capacity - (word_count-1)*64`. Its bound in [1,64] follows ONLY from
+   bitset_sized, which the solver must derive first. Until it does, the term
+   is `x >> k` with k an unbounded symbolic expression -- that is `x / 2^k`,
+   exponential in a free variable, and a classic term-explosion shape. That
+   explains death by memory rather than a clean timeout, and it explains why
+   -wp-timeout 120 did not save the run: a timeout bounds time, not memory.
+
+   So removing the disjunct made the shift exponent LESS bounded while
+   looking like a simplification. The redundant-seeming disjunct was
+   load-bearing for the PROVER even though it was redundant for the LOGIC.
+   The risk flagged in E1's own banner -- ACSL `>>` semantics at k >= 64 --
+   was the wrong worry entirely.
+
+   WHAT E1a KEEPS AND WHAT IT DROPS
+   --------------------------------
+   KEEPS  bitset_sized, bitset_view built on it, init ensuring it. This is
+          the division hypothesis where it matters: twelve of the eighteen
+          residuals are bitset_mut / bitset_view goals. `(word_count-1)*64 <
+          capacity` is symbolic-times-CONSTANT -- linear arithmetic, cheap,
+          a different risk class from a symbolic shift exponent.
+   DROPS  bitset_rem entirely. bitset_pad returns to its exact patch-1 form,
+          `% 64` and disjunct included.
+
+   E1 changed two predicates in one commit while its own message said "one
+   variable". That bundling is the whole reason a second run is needed to
+   learn which half was wrong. E1a is the change that should have shipped.
+
+   The sizing characterisation is unchanged and still exhaustively verified:
        word_count == ceil(capacity/64)
-         <==>  word_count > 0 && (word_count-1)*64 < capacity <= word_count*64
+         <==> word_count > 0 && (word_count-1)*64 < capacity <= word_count*64
+   over capacity in [1,600] plus 64/128/192/1000/4096/65535.
 
-   verified exhaustively over capacity in [1,600] plus the 64/128/192/1000/
-   4096/65535 boundaries.
-
-   The payoff extends to P1. Preserving bitset_pad after a single-bit write
-   into the FINAL word needed `i % 64 < capacity % 64` derived from
-   `i < capacity` — integer-division reasoning, and the reason a lemma was
-   expected. In the division-free form the same fact is subtraction: with
-   k = i - (wc-1)*64 and rem = capacity - (wc-1)*64, `i < capacity` gives
-   `k < rem` by subtracting (wc-1)*64 from both sides. Checked exhaustively:
-   zero counterexamples over capacity in [1,400) and every i < capacity.
-
-   bitset_rem also absorbs the old `capacity % 64 == 0` disjunct. When
-   capacity is a multiple of 64, rem == 64 rather than 0, and shifting a
-   u64-valued term right by 64 yields 0 on ACSL's mathematical integers — so
-   the two cases collapse into one clause.
-
-   ASSUMPTION, stated because it is not machine-checked here: that ACSL's `>>`
-   on an integer-lifted u64 term is division by 2^k, hence 0 for k >= 64. It
-   should be — ACSL integers are unbounded — but if E1 leaves clear_padding's
-   pad goals unproved while the others clear, this is the first thing to
-   suspect.
-
-   NOT ELIMINATED, only CONFINED: bitset_init still has to connect the machine
-   computation (capacity + 63)/64 to the multiplication bounds, and
-   bitset_clear_padding still relates the code's `capacity % 64` to
-   bitset_rem. That is one division goal in each of two functions, instead of
-   one in every postcondition of every function.
+   STILL EXPECTED TO FAIL, and that is the point of keeping it separate:
+   bitset_pad's six set/clear/toggle goals and clear_padding's three keep
+   their division and should keep timing out. If E1a clears the twelve
+   bitset_mut goals and leaves those nine, the diagnosis is confirmed for
+   bitset_view and the pad half needs a DIFFERENT remedy -- most likely a
+   bounded-exponent formulation that keeps `% 64` visible, not one that
+   hides it behind an expression.
    ──────────────────────────────────────────────────────────────────────────── */
 
 /*@
@@ -341,10 +364,6 @@ typedef struct {
       && (bs->word_count - 1) * 64 < bs->capacity
       && bs->capacity <= bs->word_count * 64;
 
-  // Live bits in the final word: in [1, 64], never 0.
-  logic integer bitset_rem{L}(Bitset* bs) =
-      bs->capacity - (bs->word_count - 1) * 64;
-
   predicate bitset_view{L}(Bitset* bs) =
       \valid_read(bs)
       && bs->capacity > 0
@@ -357,8 +376,14 @@ typedef struct {
       && \valid(bs)
       && \valid(bs->words + (0 .. bs->word_count - 1));
 
+  // RESTORED to the patch-1 form by E1a. The `% 64` keeps the shift
+  // exponent syntactically bounded in [0,63], and the disjunct gives the
+  // solver a free case split. Both were removed by E1 and both turned out
+  // to be load-bearing for the prover. Do not "simplify" this again without
+  // a run that proves it safe.
   predicate bitset_pad{L}(Bitset* bs) =
-      (bs->words[bs->word_count - 1] >> bitset_rem(bs)) == 0;
+      bs->capacity % 64 == 0
+      || (bs->words[bs->word_count - 1] >> (bs->capacity % 64)) == 0;
 
   predicate bitset_pad_meaning{L}(Bitset* bs) =
       \forall integer i;

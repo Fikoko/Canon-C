@@ -4637,6 +4637,32 @@ jobs:
   frama-c-bitset:
     needs: build
     runs-on: ubuntu-latest
+    # ── RESOURCE GUARDS, added after CI #1254 ───────────────────────────────
+    # E1 (commit 1eb5d5c) took the runner down TWICE on the same commit: once
+    # as "the hosted runner lost communication with the server", once at
+    # 1h 0m 2s with the log cut mid-results. Every sibling WP job was green on
+    # the same pool and commit, so this was the job, not the infrastructure.
+    #
+    # BE PRECISE ABOUT WHAT EACH GUARD DOES, because the first instinct was
+    # wrong:
+    #
+    #   timeout-minutes  bounds WALL TIME. It would NOT have prevented #1254 --
+    #                    the run died at one hour against a 360-minute default,
+    #                    so nothing was hanging. Added as hygiene so a future
+    #                    hang fails one job cleanly with a readable log rather
+    #                    than holding a runner slot for six hours.
+    #
+    #   -wp-par 2        bounds MEMORY, and is the guard that actually
+    #                    addresses #1254. WP defaults to one prover process per
+    #                    core (4 on ubuntu-latest), each holding its own term
+    #                    graph. One goal whose terms explode can take the box
+    #                    down; four concurrently guarantee it. -wp-timeout 120
+    #                    does not help: a timeout bounds time, not memory.
+    #
+    # -wp-par 2 makes this job slower. That is a deliberate confound on RUNTIME
+    # and nothing else -- the residual count these experiments measure is
+    # unaffected by prover parallelism.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
@@ -4696,6 +4722,7 @@ jobs:
             -wp-model "${WP_MODEL}" \
             -wp-prover alt-ergo,z3,cvc5 \
             -wp-timeout 120 \
+            -wp-par 2 \
             -wp-split \
             -cpp-extra-args=" \
               -I core/primitives \
