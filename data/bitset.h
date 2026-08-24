@@ -885,13 +885,90 @@ static inline void bitset_not(borrowed(Bitset*) bs) {
  *
  * Performance: O(n/64)
  */
+/* ── GROUP 2, BATCH 1 ─────────────────────────────────────────────────────────
+   Eight functions contracted together. Batching is deliberate and is NOT a
+   relapse from the one-variable discipline that E1/E1a were held to.
+
+   That discipline applies to DIAGNOSTIC EXPERIMENTS, where a shared predicate
+   is under test and bundling two changes makes the result unattributable --
+   exactly what went wrong with E1. Contracting independent functions is not
+   an experiment: every goal is named after its function, so a failure in one
+   is attributable on sight and confounds nothing. Bisecting here would burn
+   hours to learn nothing.
+
+   WHAT THE bitset_not PROBE ESTABLISHED (CI #1256)
+   Contracting a loop REDUCED its residuals, 6 -> 3, and both postconditions
+   proved. All four assert_rte_mem_access goals discharged once
+   `requires bitset_mut(bs)` supplied the validity they lacked. Crucially
+   bitset_pad proved as a POSTCONDITION here, discharged through
+   clear_padding's contract -- so bitset_pad is not intrinsically
+   unaffordable. It is expensive in the single-bit-write context of
+   set/clear/toggle and fine when it arrives through a call. That is why
+   Group 2 is worth writing at all.
+
+   The three that remained on bitset_not were loop_invariant_2_preserved and
+   the two live_assigns parts -- array framing (writing words[w] leaves
+   words[0..w-1] alone), not predicate cost. Expect the same shape here:
+   roughly two to three residuals per loop, mostly framing.
+
+   THE ALIASING DECISION, STATED RATHER THAN HIDDEN
+   and / or / xor read other->words[w] at the same index they write
+   bs->words[w]. If bs and other alias, the read returns the value just
+   written and the pointwise postcondition would be FALSE. So those three
+   require \separated on the word arrays, which puts self-application
+   (bitset_and(&a, &a)) OUTSIDE THE SPECIFICATION even though it is a
+   harmless no-op at runtime. The alternative -- omitting the postcondition
+   to keep self-application admissible -- was rejected: a contract that says
+   nothing about the result is worth less than one that says something under
+   a stated precondition. Callers doing self-application get runtime
+   behaviour that is correct but unverified, and this comment is the record
+   of that trade.
+
+   SPECIFICATION-STRENGTH CAP, AGAIN
+   bitset_count cannot claim `\result <= capacity`. bits_popcount is
+   specified at range strength only (0 <= \result <= 64, by a written
+   decision in bits.h), so the best available is
+   `\result <= 64 * word_count`. bitset_is_full delegates to count and is
+   therefore capped too -- it gets a frame and nothing more. Not a gap in
+   bitset; an inherited limit, same class as the find_* minimality cap.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/*@ requires bs == \null || other == \null || bitset_mut(bs);
+    requires bs == \null || other == \null || bitset_view(other);
+    requires bs == \null || other == \null ||
+             \separated(bs->words + (0 .. bs->word_count - 1),
+                        other->words + (0 .. other->word_count - 1));
+
+    behavior null:
+      assumes bs == \null || other == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && other != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_and(borrowed(Bitset*) bs, borrowed(const Bitset*) other) {
     if (!bs || !other) { return; }
     usize n = (bs->word_count < other->word_count) ? bs->word_count : other->word_count;
+    /*@ loop invariant 0 <= w <= n;
+        loop invariant \forall integer k;
+            w <= k < bs->word_count ==> bs->words[k] == \at(bs->words[k], Pre);
+        loop assigns w, bs->words[0 .. n - 1];
+        loop variant n - w;
+    */
     for (usize w = 0; w < n; w++) {
         bs->words[w] &= other->words[w];
     }
     /* words beyond other's range become 0 — AND with implicit 0 */
+    /*@ loop invariant n <= w <= bs->word_count;
+        loop invariant \forall integer k; n <= k < w ==> bs->words[k] == 0;
+        loop assigns w, bs->words[n .. bs->word_count - 1];
+        loop variant bs->word_count - w;
+    */
     for (usize w = n; w < bs->word_count; w++) {
         bs->words[w] = 0;
     }
@@ -907,9 +984,33 @@ static inline void bitset_and(borrowed(Bitset*) bs, borrowed(const Bitset*) othe
  *
  * Performance: O(n/64)
  */
+/*@ requires bs == \null || other == \null || bitset_mut(bs);
+    requires bs == \null || other == \null || bitset_view(other);
+    requires bs == \null || other == \null ||
+             \separated(bs->words + (0 .. bs->word_count - 1),
+                        other->words + (0 .. other->word_count - 1));
+
+    behavior null:
+      assumes bs == \null || other == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && other != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_or(borrowed(Bitset*) bs, borrowed(const Bitset*) other) {
     if (!bs || !other) { return; }
     usize n = (bs->word_count < other->word_count) ? bs->word_count : other->word_count;
+    /*@ loop invariant 0 <= w <= n;
+        loop invariant \forall integer k;
+            w <= k < bs->word_count ==> bs->words[k] == \at(bs->words[k], Pre);
+        loop assigns w, bs->words[0 .. n - 1];
+        loop variant n - w;
+    */
     for (usize w = 0; w < n; w++) {
         bs->words[w] |= other->words[w];
     }
@@ -925,9 +1026,36 @@ static inline void bitset_or(borrowed(Bitset*) bs, borrowed(const Bitset*) other
  *
  * Performance: O(n/64)
  */
+/* xor calls clear_padding, so unlike and/or it can assert bitset_pad on exit
+   -- the same route by which bitset_not proved its pad postcondition. */
+/*@ requires bs == \null || other == \null || bitset_mut(bs);
+    requires bs == \null || other == \null || bitset_view(other);
+    requires bs == \null || other == \null ||
+             \separated(bs->words + (0 .. bs->word_count - 1),
+                        other->words + (0 .. other->word_count - 1));
+
+    behavior null:
+      assumes bs == \null || other == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && other != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_xor(borrowed(Bitset*) bs, borrowed(const Bitset*) other) {
     if (!bs || !other) { return; }
     usize n = (bs->word_count < other->word_count) ? bs->word_count : other->word_count;
+    /*@ loop invariant 0 <= w <= n;
+        loop invariant \forall integer k;
+            w <= k < bs->word_count ==> bs->words[k] == \at(bs->words[k], Pre);
+        loop assigns w, bs->words[0 .. n - 1];
+        loop variant n - w;
+    */
     for (usize w = 0; w < n; w++) {
         bs->words[w] ^= other->words[w];
     }
@@ -945,9 +1073,24 @@ static inline void bitset_xor(borrowed(Bitset*) bs, borrowed(const Bitset*) othe
  * Uses bits_popcount from core/primitives/bits.h per word.
  * Performance: O(n/64)
  */
+/* CAPPED BY bits.h. The tight bound `\result <= bs->capacity` is NOT
+   available: it needs a functional popcount, and bits_popcount is specified
+   at range strength only (0 <= \result <= 64) by a written decision in
+   bits.h. `64 * word_count` is the strongest claim the substrate supports.
+   Inherited specification-strength limit, not a gap in bitset. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures bs == \null || bs->words == \null ==> \result == 0;
+    ensures \result <= 64 * bs->word_count || bs == \null || bs->words == \null;
+*/
 static inline usize bitset_count(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return 0; }
     usize total = 0;
+    /*@ loop invariant 0 <= w <= bs->word_count;
+        loop invariant total <= 64 * w;
+        loop assigns w, total;
+        loop variant bs->word_count - w;
+    */
     for (usize w = 0; w < bs->word_count; w++) {
         total += (usize)bits_popcount(bs->words[w]);
     }
@@ -960,8 +1103,22 @@ static inline usize bitset_count(borrowed(const Bitset*) bs) {
  * NULL bs returns true.
  * Performance: O(n/64)
  */
+/* Fully specifiable -- no bits.h dependency, so no cap. Returns true for the
+   NULL-ish cases, stated rather than smoothed over. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result == \true;
+    ensures (bs != \null && bs->words != \null) ==>
+            (\result <==> (\forall integer k;
+                 0 <= k < bs->word_count ==> bs->words[k] == 0));
+*/
 static inline bool bitset_is_empty(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return true; }
+    /*@ loop invariant 0 <= w <= bs->word_count;
+        loop invariant \forall integer k; 0 <= k < w ==> bs->words[k] == 0;
+        loop assigns w;
+        loop variant bs->word_count - w;
+    */
     for (usize w = 0; w < bs->word_count; w++) {
         if (bs->words[w] != 0u) { return false; }
     }
@@ -974,6 +1131,14 @@ static inline bool bitset_is_empty(borrowed(const Bitset*) bs) {
  * NULL bs returns false.
  * Performance: O(n/64)
  */
+/* CAPPED TRANSITIVELY. is_full delegates to bitset_count, whose value is
+   capped by bits_popcount's range-only spec, so no functional postcondition
+   is available here either. Frame and the NULL leg are all that can be
+   claimed honestly. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result == \false;
+*/
 static inline bool bitset_is_full(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return false; }
     return bitset_count(bs) == bs->capacity;
@@ -985,10 +1150,24 @@ static inline bool bitset_is_full(borrowed(const Bitset*) bs) {
  * NULL bs or other returns true.
  * Performance: O(n/64)
  */
+/* Read-only, so no \separated is needed and self-application stays inside
+   the spec -- unlike and/or/xor above. bitset_is_disjoint(&a, &a) is
+   specified, and returns true exactly when a is empty over the overlap. */
+/*@ requires bs == \null || other == \null || bitset_view(bs);
+    requires bs == \null || other == \null || bitset_view(other);
+    assigns \nothing;
+    ensures (bs == \null || other == \null) ==> \result == \true;
+*/
 static inline bool bitset_is_disjoint(borrowed(const Bitset*) bs,
                                       borrowed(const Bitset*) other) {
     if (!bs || !other) { return true; }
     usize n = (bs->word_count < other->word_count) ? bs->word_count : other->word_count;
+    /*@ loop invariant 0 <= w <= n;
+        loop invariant \forall integer k;
+            0 <= k < w ==> (bs->words[k] & other->words[k]) == 0;
+        loop assigns w;
+        loop variant n - w;
+    */
     for (usize w = 0; w < n; w++) {
         if ((bs->words[w] & other->words[w]) != 0u) { return false; }
     }
@@ -1001,6 +1180,12 @@ static inline bool bitset_is_disjoint(borrowed(const Bitset*) bs,
  * NULL bs returns 0.
  * Performance: O(1)
  */
+/* No loop, no substrate dependency: fully specified. */
+/*@ requires bs == \null || \valid_read(bs);
+    assigns \nothing;
+    ensures bs == \null ==> \result == 0;
+    ensures bs != \null ==> \result == bs->capacity;
+*/
 static inline usize bitset_capacity(borrowed(const Bitset*) bs) {
     return bs ? bs->capacity : 0u;
 }
