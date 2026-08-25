@@ -1408,6 +1408,28 @@ static inline usize bitset_find_last(borrowed(const Bitset*) bs) {
  *
  * Performance: O(n/64) worst case
  */
+/* ── GROUP 3 ─────────────────────────────────────────────────────────────────
+   The last six. Two families, two different reasons they were left last.
+
+   THE _option WRAPPERS are pure delegation, and CI #1258 named their only
+   residual precisely: call_bitset_find_first_requires (and _next_, _last_).
+   An uncontracted caller cannot establish its callee's precondition, so the
+   fix is simply to state the same precondition the callee has. Nothing
+   subtle -- these three goals exist only because the wrappers had no
+   contract at all.
+
+   They also INHERIT THE MINIMALITY CAP transitively. bitset_find_first
+   cannot claim its result is the least set index, so neither can
+   bitset_find_first_option. What IS claimable passes straight through:
+   None for the NULL-ish cases, and Some(v) ==> v < capacity. Third place
+   the bits.h range-only decision surfaces in this header, and the reason
+   the cap is worth naming once loudly rather than re-explaining per site.
+   ──────────────────────────────────────────────────────────────────────────── */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> !\result.has_value;
+    ensures \result.has_value ==> \result.value < bs->capacity;
+*/
 static inline option_usize bitset_find_first_option(borrowed(const Bitset*) bs) {
     usize raw = bitset_find_first(bs);
     if (raw == BITSET_NPOS) { return option_usize_none(); }
@@ -1433,6 +1455,12 @@ static inline option_usize bitset_find_first_option(borrowed(const Bitset*) bs) 
  *
  * Performance: O(n/64) worst case per call
  */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> !\result.has_value;
+    ensures \result.has_value ==> \result.value < bs->capacity;
+    ensures \result.has_value ==> \result.value > prev;
+*/
 static inline option_usize bitset_find_next_option(borrowed(const Bitset*) bs, usize prev) {
     usize raw = bitset_find_next(bs, prev);
     if (raw == BITSET_NPOS) { return option_usize_none(); }
@@ -1448,6 +1476,11 @@ static inline option_usize bitset_find_next_option(borrowed(const Bitset*) bs, u
  *
  * Performance: O(n/64) worst case
  */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> !\result.has_value;
+    ensures \result.has_value ==> \result.value < bs->capacity;
+*/
 static inline option_usize bitset_find_last_option(borrowed(const Bitset*) bs) {
     usize raw = bitset_find_last(bs);
     if (raw == BITSET_NPOS) { return option_usize_none(); }
@@ -1471,6 +1504,47 @@ static inline option_usize bitset_find_last_option(borrowed(const Bitset*) bs) {
  *
  * Performance: O(1)
  */
+/* ── THE as_bytes FAMILY AND THE Typed+Cast BRIDGE (P4) ──────────────────────
+   These three are why the whole TU runs under Typed+Cast rather than plain
+   Typed: they hand bs->words, a u64*, to bytes_from / cbytes_from /
+   borrowed_bytes_from_lifetime as a BYTE view.
+
+   bytes_from's precondition is
+
+       requires len > 0 ==> \valid((u8 *)ptr + (0 .. len - 1));
+
+   while bitset_view supplies
+
+       \valid_read(bs->words + (0 .. bs->word_count - 1))
+
+   as a u64* range. Those are the same memory. Establishing the second from
+   the first is a MEMORY-MODEL bridge, not a specification gap -- WP's
+   Typed+Cast model does not automatically transport range validity across a
+   pointer-type change.
+
+   THE CHOICE MADE HERE, AND THE ONE REJECTED
+   It would be easy to make these goals disappear by adding
+       requires \valid((u8*)bs->words + (0 .. bs->word_count * 8 - 1));
+   to each contract. That would be DISHONEST. It pushes onto every caller an
+   obligation about a byte-level view of memory the function already knows is
+   valid, and it would buy a clean residual count by making the API worse.
+   The contracts below state what these functions actually require -- a valid
+   Bitset -- and the bridging goals stand as documented residuals.
+
+   This is P4, predicted before the first run of this arc:
+     "a Typed+Cast bridging class at the as_bytes / as_cbytes /
+      as_borrowed_bytes sites, analogous to vec's class (h), but over 3
+      sites rather than vec's surface."
+   Expect roughly 9 goals here to survive, three per site. If they do, P4 is
+   confirmed and the class is real; if contracting collapses them, P4 was
+   wrong about the mechanism and that is worth more than the nine goals.
+   ──────────────────────────────────────────────────────────────────────────── */
+/*@ requires bs == \null || bs->words == \null || bitset_mut(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result.len == 0;
+    ensures (bs != \null && bs->words != \null) ==>
+            \result.len == bs->word_count * 8;
+*/
 static inline bytes_t bitset_as_bytes(borrowed(Bitset*) bs) {
     if (!bs || !bs->words) { return bytes_empty(); }
     return bytes_from(bs->words, bs->word_count * sizeof(u64));
@@ -1479,6 +1553,14 @@ static inline bytes_t bitset_as_bytes(borrowed(Bitset*) bs) {
 /**
  * @brief Read-only twin of bitset_as_bytes() — see API-001
  */
+/* Read-only twin of bitset_as_bytes (API-001). Same bridge, bitset_view
+   rather than bitset_mut because nothing is written. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result.len == 0;
+    ensures (bs != \null && bs->words != \null) ==>
+            \result.len == bs->word_count * 8;
+*/
 static inline cbytes_t bitset_as_cbytes(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return cbytes_empty(); }
     return cbytes_from(bs->words, bs->word_count * sizeof(u64));
@@ -1503,6 +1585,19 @@ static inline cbytes_t bitset_as_cbytes(borrowed(const Bitset*) bs) {
  *
  * Performance: O(1)
  */
+/* Same bridge again, plus the lifetime substrate. The `source` field is
+   claimed because borrowed_bytes_from_lifetime's own contract states it
+   (ensures source_stored), so it passes through for free.
+
+   CONFIGURATION NOTE, same discipline as bitset_close: under
+   CANON_LIFETIME_DEBUG the third argument is &bs->lt; in the VERIFIED
+   configuration it is NULL and the lifetime check is inert. The contract
+   describes the configuration actually being verified and does not claim
+   anything about the other one. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures \result.source == bs || bs == \null || bs->words == \null;
+*/
 static inline borrowed_bytes bitset_as_borrowed_bytes(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return borrowed_bytes_empty(); }
     return borrowed_bytes_from_lifetime(
