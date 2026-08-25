@@ -781,6 +781,26 @@ static inline void bitset_assign(borrowed(Bitset*) bs, usize i, bool value) {
  *
  * Performance: O(n/64)
  */
+/* GROUP 2, BATCH 2. clear_all / set_all were missed from batch 1 -- they are
+   bulk ops and belonged there. No loops of their own; they delegate to
+   mem_zero / mem_set, so the contract's job is purely to supply the validity
+   those calls need. */
+/*@ requires bs == \null || bs->words == \null || bitset_mut(bs);
+
+    behavior null:
+      assumes bs == \null || bs->words == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && bs->words != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures \forall integer k; 0 <= k < bs->word_count ==> bs->words[k] == 0;
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_clear_all(borrowed(Bitset*) bs) {
     if (!bs || !bs->words) { return; }
     mem_zero(bs->words, bs->word_count * sizeof(u64));
@@ -795,6 +815,27 @@ static inline void bitset_clear_all(borrowed(Bitset*) bs) {
  *
  * Performance: O(n/64)
  */
+/* set_all BREAKS the padding invariant (mem_set writes 0xFF over the whole
+   word array, including bits above capacity) and then RESTORES it via
+   clear_padding. That is exactly why bitset_pad is a separate predicate
+   rather than folded into bitset_mut: a function that must restore an
+   invariant has to be able to say so without being required to preserve it
+   throughout. */
+/*@ requires bs == \null || bs->words == \null || bitset_mut(bs);
+
+    behavior null:
+      assumes bs == \null || bs->words == \null;
+      assigns \nothing;
+
+    behavior live:
+      assumes bs != \null && bs->words != \null;
+      assigns bs->words[0 .. bs->word_count - 1];
+      ensures bitset_pad(bs);
+      ensures bitset_mut(bs);
+
+    complete behaviors;
+    disjoint behaviors;
+*/
 static inline void bitset_set_all(borrowed(Bitset*) bs) {
     if (!bs || !bs->words) { return; }
     mem_set(bs->words, 0xFF, bs->word_count * sizeof(u64));
@@ -1205,8 +1246,48 @@ static inline usize bitset_capacity(borrowed(const Bitset*) bs) {
  *
  * Performance: O(n/64) worst case
  */
+/* ── THE SEARCH FAMILY AND THE MINIMALITY CAP ────────────────────────────────
+   find_first / find_next / find_last are the functions the
+   specification-strength cap bites hardest. bits_ctz and bits_clz are
+   specified at RANGE strength only -- `0 <= \result <= 64`, with a written
+   rationale in bits.h that a functional definition needs an axiomatisation
+   beyond current SMT capability. So:
+
+     PROVABLE      \result == BITSET_NPOS || \result < bs->capacity
+                   -- straight from the explicit (bit < capacity) guard,
+                      no ctz reasoning involved.
+     PROVABLE      the NULL-ish legs return BITSET_NPOS.
+     NOT PROVABLE  that \result is the FIRST (or LAST) set bit. MINIMALITY is
+                   the whole of what is lost, and it is lost upstream, not
+                   here. A caller gets "in range or NPOS", not "the least
+                   index with a set bit".
+
+   Naming it precisely matters: the cap is one word wide. Everything else
+   about these functions is specifiable, and is specified below.
+
+   HONEST EXPECTATION FOR THIS BATCH: find_* will improve LEAST of the five.
+   find_next computes `w = bitset_word_of(start)` and then indexes
+   bs->words[w]; showing w < word_count requires deriving start/64 <
+   word_count from start < capacity <= word_count*64 -- integer division,
+   which E1/E1a established is expensive here. Its assert_rte_mem_access
+   goals may well survive. find_last uses `while (w-- > 0)` on a usize, an
+   idiom whose loop variant is awkward because w wraps to SIZE_MAX on exit;
+   that variant may not discharge. Both are predicted rather than discovered
+   after the fact.
+   ──────────────────────────────────────────────────────────────────────────── */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result == BITSET_NPOS;
+    ensures \result == BITSET_NPOS ||
+            (bs != \null && bs->words != \null && \result < bs->capacity);
+*/
 static inline usize bitset_find_first(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return BITSET_NPOS; }
+    /*@ loop invariant 0 <= w <= bs->word_count;
+        loop invariant \forall integer k; 0 <= k < w ==> bs->words[k] == 0;
+        loop assigns w;
+        loop variant bs->word_count - w;
+    */
     for (usize w = 0; w < bs->word_count; w++) {
         if (bs->words[w] != 0u) {
             usize bit = w * BITSET_BITS_PER_WORD + (usize)bits_ctz(bs->words[w]);
@@ -1233,6 +1314,18 @@ static inline usize bitset_find_first(borrowed(const Bitset*) bs) {
  *
  * Performance: O(n/64) worst case per call
  */
+/* Hardest of the three: two loops' worth of structure (one masked first-word
+   probe plus a scan), three early returns, and the division noted above. The
+   `bs->words[w] >> bit` shift is safe -- bit is start % 64, syntactically
+   bounded in [0,63], the same property E1 removed from bitset_pad and had to
+   put back. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result == BITSET_NPOS;
+    ensures prev >= bs->capacity || bs == \null || bs->words == \null ||
+            \result == BITSET_NPOS || \result < bs->capacity;
+    ensures \result == BITSET_NPOS || \result > prev;
+*/
 static inline usize bitset_find_next(borrowed(const Bitset*) bs, usize prev) {
     if (!bs || !bs->words || (prev >= bs->capacity)) { return BITSET_NPOS; }
 
@@ -1249,6 +1342,10 @@ static inline usize bitset_find_next(borrowed(const Bitset*) bs, usize prev) {
         return (found < bs->capacity) ? found : BITSET_NPOS;
     }
 
+    /*@ loop invariant w <= bs->word_count;
+        loop assigns w;
+        loop variant bs->word_count - w;
+    */
     for (w = w + 1u; w < bs->word_count; w++) {
         if (bs->words[w] != 0u) {
             usize found = w * BITSET_BITS_PER_WORD + (usize)bits_ctz(bs->words[w]);
@@ -1268,9 +1365,25 @@ static inline usize bitset_find_next(borrowed(const Bitset*) bs, usize prev) {
  *
  * Performance: O(n/64) worst case
  */
+/* `while (w-- > 0)` on an unsigned counter: the test reads w, then decrements,
+   so on the final iteration w becomes SIZE_MAX after the loop exits. The
+   invariant is therefore stated as w <= word_count rather than 0 <= w, and
+   the variant is w itself. This idiom is idiomatic C and awkward ACSL; if the
+   variant does not discharge, the honest fix is a justification note, NOT
+   rewriting working code to suit the prover. */
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    assigns \nothing;
+    ensures (bs == \null || bs->words == \null) ==> \result == BITSET_NPOS;
+    ensures \result == BITSET_NPOS ||
+            (bs != \null && bs->words != \null && \result < bs->capacity);
+*/
 static inline usize bitset_find_last(borrowed(const Bitset*) bs) {
     if (!bs || !bs->words) { return BITSET_NPOS; }
     usize w = bs->word_count;
+    /*@ loop invariant w <= bs->word_count;
+        loop assigns w;
+        loop variant w;
+    */
     while (w-- > 0) {
         if (bs->words[w] != 0u) {
             usize bit = w * BITSET_BITS_PER_WORD +
