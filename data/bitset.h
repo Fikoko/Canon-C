@@ -544,7 +544,14 @@ static inline void bitset_init(borrowed(Bitset*) bs, borrowed(u64*) words, usize
        This guard was MISSING from the three above rather than omitted on
        purpose; the contract already carried the obligation as
        `requires capacity <= CANON_USIZE_MAX - 63`. */
-    require_msg(capacity <= CANON_USIZE_MAX - 63u,
+    /* Parenthesised for MISRA C:2012 rule 12.1 (explicit precedence). The
+       unparenthesised form raised the advisory count 53 -> 54 at CI #1262 --
+       the F1 commit claimed pin-neutrality "in both streams" having checked
+       MC/DC by measurement and WP by inference, and never considered MISRA
+       at all. There are THREE pinned streams, not two.
+       core/memory.h:343 and :381 already write the fully parenthesised form;
+       this line was the odd one out. */
+    require_msg(capacity <= (CANON_USIZE_MAX - 63u),
                 "bitset_init: capacity too large (word count would overflow)");
 
     bs->words      = words;
