@@ -488,6 +488,60 @@ static void test_bitset_cbytes_accessor(void)
     EXPECT(bitset_as_cbytes(NULL).len == 0u);
 }
 
+/* ── VERIFY-020 F1: the capacity-overflow guard ──────────────────────────────
+ *
+ * BITSET_WORD_COUNT(n) is (n + 63) / 64 computed in usize, which WRAPS above
+ * CANON_USIZE_MAX - 63. Measured on the unguarded header: capacity ==
+ * USIZE_MAX yields word_count == 0, mem_zero writes zero bytes, and
+ * bitset_init SUCCEEDS SILENTLY. Every subsequent `i < bs->capacity` index
+ * guard then passes for any i, so bs->words[i / 64] becomes an out-of-bounds
+ * write at a caller-controlled offset.
+ *
+ * The realistic trigger is not an absurd literal. It is an ordinary upstream
+ * underflow -- bitset_init(&bs, buf, n - 1) with n == 0 -- which is exactly
+ * what this test performs.
+ *
+ * NOTE ON WHAT THIS TEST CAN AND CANNOT SEE. require_msg is ((void)0) under
+ * -DCANON_NO_REQUIRE, the flag the coverage and WP jobs both use, so the
+ * guard compiles out there and this test cannot assert on it in that
+ * configuration. It asserts only that the CONTRACT-CHECKED build rejects the
+ * input. That is the library's model for every other constructor guard, not
+ * a weakness peculiar to this one -- but it means the release configuration
+ * is still exposed, and that is stated in VERIFY-020 F1 rather than papered
+ * over by a green test. */
+#ifndef CANON_NO_REQUIRE
+static int g_f1_fired = 0;
+static void f1_handler(const char* file, int line, const char* func,
+                       const char* expr, const char* msg) {
+    (void)file; (void)line; (void)func; (void)expr; (void)msg;
+    g_f1_fired = 1;
+}
+#endif
+
+static void test_f1_capacity_overflow_guard(void)
+{
+#ifdef CANON_NO_REQUIRE
+    /* Guard compiles out; nothing to assert. Documented above. */
+#else
+    u64 words[BITSET_WORD_COUNT(64)];
+    Bitset bs;
+    usize n = 0;
+
+    contract_set_handler(f1_handler);
+    g_f1_fired = 0;
+    bitset_init(&bs, words, n - 1u);      /* underflows to USIZE_MAX */
+    EXPECT(g_f1_fired == 1);
+
+    /* The bound itself: USIZE_MAX - 63 is the first REJECTED capacity, and
+     * the guard must not fire on ordinary sizes. */
+    g_f1_fired = 0;
+    bitset_init(&bs, words, 64);
+    EXPECT(g_f1_fired == 0);
+
+    contract_set_handler(NULL);
+#endif
+}
+
 /* ── MCDC-012: the uninitialised-Bitset battery ──────────────────────────────
  *
  * Drives the `!bs->words` TRUE leg of every function that guards on it.
@@ -614,6 +668,7 @@ int main(void)
     test_word_boundary();
     test_uninitialised_bitset();
     test_mcdc_residual_legs();
+    test_f1_capacity_overflow_guard();
 
     if (g_failed == 0) {
         printf("OK  bitset_test  (all assertions passed)\n");

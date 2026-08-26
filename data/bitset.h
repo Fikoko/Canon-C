@@ -533,6 +533,19 @@ static inline void bitset_init(borrowed(Bitset*) bs, borrowed(u64*) words, usize
     require_msg(bs       != NULL, "bitset_init: bs cannot be NULL");
     require_msg(words    != NULL, "bitset_init: words cannot be NULL");
     require_msg(capacity  > 0u,    "bitset_init: capacity must be > 0");
+    /* VERIFY-020 F1. BITSET_WORD_COUNT(n) is (n + 63) / 64 in usize, which
+       WRAPS above CANON_USIZE_MAX - 63. The failure is silent and unbounded:
+       capacity == USIZE_MAX gives word_count == 0, mem_zero writes 0 bytes so
+       init SUCCEEDS, and thereafter every `i < bs->capacity` index guard
+       passes for any i — making bs->words[i / 64] an out-of-bounds write at a
+       caller-controlled offset.
+       The realistic trigger is not an absurd literal but an ordinary upstream
+       underflow: bitset_init(&bs, buf, n - 1) with n == 0.
+       This guard was MISSING from the three above rather than omitted on
+       purpose; the contract already carried the obligation as
+       `requires capacity <= CANON_USIZE_MAX - 63`. */
+    require_msg(capacity <= CANON_USIZE_MAX - 63u,
+                "bitset_init: capacity too large (word count would overflow)");
 
     bs->words      = words;
     bs->capacity   = capacity;
