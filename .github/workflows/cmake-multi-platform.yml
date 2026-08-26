@@ -5059,7 +5059,39 @@ jobs:
             echo "      this arc predicted plain Typed. bitset_as_bytes"
             echo "      makes that wrong.)"
             echo ""
-            echo "  --- Group 1 roll-call ---"
+            echo "  ================================================="
+            echo "   VERDICTS — scored at CI #1260, the enforcing run"
+            echo "  ================================================="
+            echo "  P1  REFUTED, then SUBSUMED. It called for a LEMMA to"
+            echo "      derive i%64 < capacity%64. No lemma was ever written:"
+            echo "      E1's division-free form made the same fact plain"
+            echo "      SUBTRACTION. And the goals P1 named are residuals"
+            echo "      anyway. Right that the obstacle was arithmetic,"
+            echo "      wrong about the mechanism and wrong about the fix."
+            echo "  P2  EXACT. 92, family by family, on every run from #1251"
+            echo "      to #1260. The only prediction in this arc that was"
+            echo "      right first time and never adjusted."
+            echo "  P3  CONFIRMED. bits.h's 15 re-emit byte-identically."
+            echo "      bitset is the first verified module whose closure"
+            echo "      contains bits.h, so this was byte-identity's first"
+            echo "      test on a timeout-class ARITHMETIC surface rather"
+            echo "      than libc or a WP feature gap. It held."
+            echo "  P4  CONFIRMED, OVER-COUNTED. The Typed+Cast bridging"
+            echo "      class is real and sits exactly where predicted, but"
+            echo "      at 6 goals (2 per site), not the 9 estimated. Right"
+            echo "      mechanism, wrong size."
+            echo ""
+            echo "  NOT PREDICTED, and the arc's most useful finding: a"
+            echo "  disjunct that is REDUNDANT FOR THE LOGIC can be"
+            echo "  LOAD-BEARING FOR THE PROVER. E1 removed"
+            echo "  'capacity%64 == 0 ||' from bitset_pad as a"
+            echo "  simplification and took the CI runner down twice --"
+            echo "  the shift exponent stopped being syntactically bounded"
+            echo "  in [0,63] and became x/2^k with k a free variable."
+            echo "  See the DO-NOT-SIMPLIFY note on bitset_pad."
+
+            echo ""
+            echo "  --- Per-function roll-call (all 32 contracted) ---"
             # CORRECTED 2026-08-23. The first version of this block grepped
             # the whole log for "typed_cast_<fn>" and printed "NOT SEEN ...
             # contract may not have attached" when absent. That reading is
@@ -5110,19 +5142,68 @@ jobs:
             echo "               memory 20 + slice-libc 13 + ptr 6 + checked 2 +"
             echo "               borrow 2 + option 32)"
             echo "    bitset-own: ${OWN}"
-            echo "    NOTE: most bitset-own residuals belong to functions that are"
-            echo "          NOT YET CONTRACTED (Group 2/3). Uncontracted functions"
-            echo "          still receive -wp-rte goals and, having no preconditions,"
-            echo "          cannot discharge their memory-access obligations. Those"
-            echo "          are pending work, not residuals; do not pin them." 
+            # CORRECTED after CI #1260. This NOTE said "most bitset-own
+            # residuals belong to functions that are NOT YET CONTRACTED
+            # (Group 2/3) ... do not pin them". True when written at patch 1;
+            # false since Group 3 landed at #1259. ALL 32 functions are
+            # contracted and the job IS pinned. Replaced with what the 66
+            # actually are.
+            echo "    All 32 bitset functions are contracted (Groups 1-3 complete),"
+            echo "    so none of the 66 is pending work. They are:"
+            echo "      ~25  array framing on and / or / xor / not -- writing"
+            echo "           words[w] leaves words[0..w-1] alone, which WP does"
+            echo "           not frame for free"
+            echo "       18  Group 1: init, clear_padding, set, clear, toggle, assign"
+            echo "        9  clear_all / set_all frames over symbolic mem_zero /"
+            echo "           mem_set ranges"
+            echo "        6  P4 Typed+Cast bridge at the three as_bytes sites"
+            echo "           (u64* range validity does not transport to (u8*))"
+            echo "      rest singletons on the queries and finds" 
           fi
           echo ""
           echo "==============================================="
           if [ "${FAILURES}" -gt 0 ]; then
             echo "  ${FAILURES} check(s) reported."
           fi
-          echo "  REPORT-ONLY: this job does not gate the build."
-          echo "  Record the baseline in VERIFY-020 before pinning."
+          # CORRECTED after CI #1260. This footer was unconditional text
+          # written when the job was created and never revisited: it printed
+          # "REPORT-ONLY: this job does not gate the build. Record the
+          # baseline in VERIFY-020 before pinning" FOUR LINES BELOW a header
+          # reading "MODE: ENFORCED", on a run that gated correctly.
+          #
+          # The gate was right and the narration was lying. That is the
+          # lifetime.h shape exactly -- a false `assigns \nothing` survived
+          # eleven copies because no verified configuration ever translated
+          # it. Text nobody re-reads decays silently. Make the footer read
+          # the same variable the gate reads.
+          if [ "${ENFORCE}" -eq 1 ]; then
+            if [ "${FAILURES}" -eq 0 ]; then
+              echo "  VERIFY-020 ENFORCED PASS: ${EXPECTED_PROVED} proved, 0 Failed,"
+              echo "        count ${UNPROVED_COUNT}/${EXPECTED_UNPROVED}, and all"
+              echo "        ${EXPECTED_UNPROVED} residuals verified BY NAME in both"
+              echo "        directions (set equality). Arms: 2 handler + 32"
+              echo "        option_usize (inheritance) + 58 core substrate +"
+              echo "        66 bitset-own."
+              echo ""
+              echo "        66 own is the SMALLEST own-residual set of any"
+              echo "        driver-verified module in the project: vec 196,"
+              echo "        pool 119, region 114, arena 91, deque 67."
+              echo ""
+              echo "        A residual that starts PROVING turns this job RED."
+              echo "        That is good news arriving as a red run, by design."
+              echo "        Ratchet the pin in its own commit; never delete a"
+              echo "        name to make the gate pass."
+            else
+              echo "  VERIFY-020 ENFORCED FAIL: ${FAILURES} check(s) above."
+              echo "        missing  -> a pinned residual now proves: RATCHET."
+              echo "        unpinned -> a NEW residual appeared: INVESTIGATE."
+              echo "        both     -> a goal oscillates across runs; the pin"
+              echo "                    is flaky and that is the finding."
+            fi
+          else
+            echo "  REPORT-ONLY: this job does not gate the build."
+            echo "  Record the baseline in VERIFY-020 before pinning."
+          fi
           echo "==============================================="
 
       - name: Upload WP bitset log
