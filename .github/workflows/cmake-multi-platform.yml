@@ -4691,8 +4691,8 @@ jobs:
           eval $(opam env --switch=frama-c)
           # ---- ENFORCED as of VERIFY-020, baseline CI #1259 (95526a9) ----
           ENFORCE=1
-          EXPECTED_UNPROVED=158
-          EXPECTED_PROVED="4828 / 4986"
+          EXPECTED_UNPROVED=163
+          EXPECTED_PROVED="4839 / 5002"
           WP_MODEL="Typed+Cast"   # forced by as_bytes / as_cbytes
           # ------------------------------------------------------------------
           FAILURES=0
@@ -4806,14 +4806,10 @@ jobs:
             # partition verified arithmetically -- 2 + 32 + 58 + 66 = 158, no
             # duplicates, nothing unclassified -- before being written here.
             CHECKS=(
-              # ARM C — contract.h handler pair. Definition-presence only; bitset has
-              #         zero direct CANON_INVOKE_HANDLER_ calls.
+              # ARM C — contract.h handler pair. Definition-presence only.
               "typed_cast_contract_default_handler_loop_invariant_established"
               "typed_cast_contract_default_handler_terminates"
-              # ARM A — option_usize, INHERITANCE via the interposition driver. These 32
-              #         are option's own roll-call MINUS the 2 handler goals it
-              #         counts inside its 34. typed_cast_ prefix throughout:
-              #         bitset runs Typed+Cast, option's home unit runs Typed.
+              # ARM A — option_usize, INHERITANCE via the interposition driver (32).
               "typed_cast_option_usize_map_terminates_part2"
               "typed_cast_option_usize_map_terminates_part3"
               "typed_cast_option_usize_map_exits_part1"
@@ -4846,14 +4842,9 @@ jobs:
               "typed_cast_option_usize_eq_terminates_part4"
               "typed_cast_option_usize_eq_assert_rte_function_pointer_part2"
               "typed_cast_option_usize_eq_assigns_part5"
-              # ARM S — CORE SUBSTRATE, 58 goals, every one byte-identical to its home
-              #         module's pinned list modulo the typed_cast_ prefix:
-              #         bits 15, memory 20, slice-libc 13, ptr 6, checked 2,
-              #         borrow 2. bits.h's 15 are the arc's P3: bitset is the
-              #         FIRST verified module whose closure contains bits.h, so
-              #         this was byte-identity's first test on a timeout-class
-              #         ARITHMETIC surface rather than libc or feature-gap.
-              #         Confirmed on every run from #1251 onward.
+              # ARM S — CORE SUBSTRATE, 58, byte-identical to each home module's
+              #         pinned list modulo the typed_cast_ prefix: bits 15,
+              #         memory 20, slice-libc 13, ptr 6, checked 2, borrow 2.
               "typed_cast_bits_clear_ensures"
               "typed_cast_bits_insert_full_width_ensures_part2"
               "typed_cast_bits_insert_normal_ensures_part3"
@@ -4912,69 +4903,73 @@ jobs:
               "typed_cast_mem_equal_bytes_call_memcmp_requires_danglingness_s2"
               "typed_cast_borrowed_bytes_eq_call_memcmp_requires_danglingness_s1"
               "typed_cast_borrowed_bytes_eq_call_memcmp_requires_danglingness_s2"
-              # ARM D — bitset's OWN residuals, 66. Smallest own-residual set of any
-              #         driver-verified module in the project (vec 196, pool 119,
-              #         region 114, arena 91, deque 67). Classes below.
-              "typed_cast_bitset_clear_padding_ensures_part1"
+              # ARM D — bitset's OWN residuals, 71 (was 66; +5 at CI #1264, see the
+              #         F5 proof-cost note in the commit message).
               "typed_cast_bitset_clear_padding_ensures_2_part1"
               "typed_cast_bitset_clear_padding_ensures_3_part1"
+              "typed_cast_bitset_clear_padding_ensures_part1"
+              "typed_cast_bitset_init_assigns_exit_part5"
+              "typed_cast_bitset_init_assigns_normal_part5"
+              "typed_cast_bitset_init_call_mem_zero_requires"
               "typed_cast_bitset_init_ensures_3"
               "typed_cast_bitset_init_ensures_4"
               "typed_cast_bitset_init_ensures_5"
               "typed_cast_bitset_init_ensures_6"
-              "typed_cast_bitset_init_assigns_exit_part5"
-              "typed_cast_bitset_init_assigns_normal_part5"
-              "typed_cast_bitset_init_call_mem_zero_requires"
-              "typed_cast_bitset_set_live_ensures_3_part2"
-              "typed_cast_bitset_set_live_ensures_4_part2"
-              "typed_cast_bitset_clear_live_ensures_3_part2"
-              "typed_cast_bitset_clear_live_ensures_4_part2"
-              "typed_cast_bitset_toggle_live_ensures_3_part2"
-              "typed_cast_bitset_toggle_live_ensures_4_part2"
+              "typed_cast_bitset_set_assert_rte_mem_access"
+              "typed_cast_bitset_set_live_ensures_3_part3"
+              "typed_cast_bitset_set_live_ensures_4_part3"
+              "typed_cast_bitset_clear_assert_rte_mem_access"
+              "typed_cast_bitset_clear_live_ensures_3_part3"
+              "typed_cast_bitset_clear_live_ensures_4_part3"
+              "typed_cast_bitset_toggle_assert_rte_mem_access"
+              "typed_cast_bitset_toggle_live_ensures_3_part3"
+              "typed_cast_bitset_toggle_live_ensures_4_part3"
+              "typed_cast_bitset_test_assert_rte_mem_access"
               "typed_cast_bitset_assign_null_assigns_normal_part1"
               "typed_cast_bitset_assign_null_assigns_normal_part2"
               "typed_cast_bitset_clear_all_assert_rte_mem_access"
               "typed_cast_bitset_clear_all_call_mem_zero_requires"
-              "typed_cast_bitset_clear_all_live_ensures_part3"
-              "typed_cast_bitset_clear_all_live_ensures_2_part3"
               "typed_cast_bitset_clear_all_live_assigns_normal"
+              "typed_cast_bitset_clear_all_live_ensures_2_part3"
+              "typed_cast_bitset_clear_all_live_ensures_part3"
               "typed_cast_bitset_set_all_assert_rte_mem_access"
               "typed_cast_bitset_set_all_call_mem_set_requires"
               "typed_cast_bitset_set_all_live_assigns_exit_part1"
               "typed_cast_bitset_set_all_live_assigns_normal_part1"
-              "typed_cast_bitset_not_loop_invariant_2_preserved"
+              "typed_cast_bitset_not_assert_rte_mem_access"
               "typed_cast_bitset_not_live_assigns_exit_part1"
               "typed_cast_bitset_not_live_assigns_normal_part1"
-              "typed_cast_bitset_and_loop_invariant_2_preserved_part1"
-              "typed_cast_bitset_and_loop_invariant_2_preserved_part2"
-              "typed_cast_bitset_and_loop_invariant_3_preserved_part1"
-              "typed_cast_bitset_and_loop_invariant_3_preserved_part2"
-              "typed_cast_bitset_and_loop_invariant_3_established_part1"
-              "typed_cast_bitset_and_loop_invariant_3_established_part2"
+              "typed_cast_bitset_not_loop_invariant_2_preserved"
               "typed_cast_bitset_and_assert_rte_mem_access_11_part1"
               "typed_cast_bitset_and_assert_rte_mem_access_11_part2"
-              "typed_cast_bitset_and_live_ensures_part3"
-              "typed_cast_bitset_and_live_ensures_part4"
               "typed_cast_bitset_and_live_assigns_part5"
               "typed_cast_bitset_and_live_assigns_part6"
-              "typed_cast_bitset_or_loop_invariant_2_preserved_part1"
-              "typed_cast_bitset_or_loop_invariant_2_preserved_part2"
+              "typed_cast_bitset_and_live_ensures_part3"
+              "typed_cast_bitset_and_live_ensures_part4"
+              "typed_cast_bitset_and_loop_invariant_2_preserved_part1"
+              "typed_cast_bitset_and_loop_invariant_2_preserved_part2"
+              "typed_cast_bitset_and_loop_invariant_3_established_part1"
+              "typed_cast_bitset_and_loop_invariant_3_established_part2"
+              "typed_cast_bitset_and_loop_invariant_3_preserved_part1"
+              "typed_cast_bitset_and_loop_invariant_3_preserved_part2"
               "typed_cast_bitset_or_live_ensures_part3"
               "typed_cast_bitset_or_live_ensures_part4"
-              "typed_cast_bitset_xor_loop_invariant_2_preserved_part1"
-              "typed_cast_bitset_xor_loop_invariant_2_preserved_part2"
+              "typed_cast_bitset_or_loop_invariant_2_preserved_part1"
+              "typed_cast_bitset_or_loop_invariant_2_preserved_part2"
               "typed_cast_bitset_xor_call_bitset_clear_padding_requires_part1"
               "typed_cast_bitset_xor_call_bitset_clear_padding_requires_part2"
               "typed_cast_bitset_xor_live_assigns_normal_part5"
               "typed_cast_bitset_xor_live_assigns_normal_part6"
+              "typed_cast_bitset_xor_loop_invariant_2_preserved_part1"
+              "typed_cast_bitset_xor_loop_invariant_2_preserved_part2"
               "typed_cast_bitset_count_assert_rte_mem_access"
               "typed_cast_bitset_is_empty_assert_rte_mem_access"
               "typed_cast_bitset_is_full_assert_rte_mem_access"
               "typed_cast_bitset_find_first_assert_rte_mem_access"
-              "typed_cast_bitset_find_next_ensures_3_part7"
               "typed_cast_bitset_find_next_assert_rte_mem_access"
-              "typed_cast_bitset_find_last_assert_rte_mem_access"
+              "typed_cast_bitset_find_next_ensures_3_part7"
               "typed_cast_bitset_find_next_option_ensures_2_part2"
+              "typed_cast_bitset_find_last_assert_rte_mem_access"
               "typed_cast_bitset_as_bytes_assert_rte_mem_access"
               "typed_cast_bitset_as_bytes_call_bytes_from_requires_2"
               "typed_cast_bitset_as_cbytes_assert_rte_mem_access"
