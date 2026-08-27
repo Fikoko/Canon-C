@@ -330,6 +330,35 @@ than minting new ptr.h goals) are the instances. The defining feature
 is an explicit cost comparison: the entry argues why the residual is
 cheaper than the closure.
 
+**Shape 5 — Specification-strength inheritance.** A residual that no
+amount of prover effort can close, because the property cannot be
+*stated*: the callee's contract is deliberately too weak to support it.
+VERIFY-020 (bitset) is the first instance and the reason this shape is
+listed separately from Shape 3. `bits_popcount`, `bits_ctz` and
+`bits_clz` are specified at RANGE strength only — `0 <= \result <= 64`
+— by a written decision in bits.h that a functional definition needs an
+axiomatisation beyond current SMT capability. `bitset_count` therefore
+cannot claim `\result <= bs->capacity`; `bitset_is_full` delegates and
+is capped transitively; `bitset_find_*` cannot claim minimality, and
+the `_option` wrappers inherit the same cap a second time.
+
+The distinction from Shape 3 is the direction of the constraint.
+Inherited residuals are *goals* that re-emerge unchanged downstream;
+these are *claims the downstream contract cannot make at all*. The
+distinction from Shape 2 is where the limit lives: a WP feature gap is
+the verifier's, and a future Frama-C could close it; this is the
+upstream module's own specification decision, and only re-specifying
+bits.h would move it. The distinction from Shape 4 is who is choosing:
+Shape 4 is the entry's own cost comparison, Shape 5 is a cap the entry
+inherits and can only report.
+
+The defining feature is that the entry names the cap's **width**. In
+VERIFY-020 it is exactly one word — "minimality" — and everything else
+about `find_*` is specified: `\result == NPOS || \result < capacity`
+IS proved. An unqualified "capped by bits.h" would understate what the
+contracts do deliver, which is why the width is stated rather than the
+dependency.
+
 The canonical references for VERIFY- entry *structure* (status box,
 per-category goal lists, manual proof arguments, CI wrapper
 enforcement) are the entries themselves in `docs/verification.md` and

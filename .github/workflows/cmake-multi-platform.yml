@@ -5228,6 +5228,11 @@ jobs:
               echo "        That is good news arriving as a red run, by design."
               echo "        Ratchet the pin in its own commit; never delete a"
               echo "        name to make the gate pass."
+              echo ""
+              echo "        See docs/verification.md (data/bitset.h section)"
+              echo "        and docs/deviations.md (VERIFY-020) for the full"
+              echo "        residual classification and findings F1-F5;"
+              echo "        MCDC-012 for the coverage-stream record."
             else
               echo "  VERIFY-020 ENFORCED FAIL: ${FAILURES} check(s) above."
               echo "        missing  -> a pinned residual now proves: RATCHET."

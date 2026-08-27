@@ -3435,6 +3435,309 @@ work for it.
 
 ---
 
+## VERIFY-020: Specification-Strength Inheritance, and a Prover-Load-Bearing Redundancy Twice (bitset, fifth driver-verified module, third data/-layer module)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | VERIFY-020 |
+| **Date**       | 2026-08-27 |
+| **Baseline commit** | Canon-C CI #1266 (16d0f0b). Enforced at #1260 with 158; ratcheted to 163 at #1265 after F2/F5; re-confirmed at #1266. Superseded measurements: #1251 (221), #1256 (218), #1257 (172), #1258 (163 own-66), #1259–#1263 (158) |
+| **Scope**      | `data/bitset.h` via `vmacros/vdrivers/bitset_verify.h` — 5002 obligations, 163 unproved (2 handler + 32 option_usize + 58 core substrate + 71 bitset-own) |
+| **Category**   | Formal verification completeness |
+| **Enforcement**| Enforced: pinned Proved line, zero Failed/Invalid/Stepout, exact count, and a by-name roll-call over all 163 in **both directions** (set equality) |
+
+**Description**: 163 of 5002 proof obligations (3.26%) on the bitset
+driver are not discharged by the triple-prover configuration
+(Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1) at a 120-second timeout with
+`-wp-split`, and **0 are Failed, Invalid or Stepout** — no contract is
+falsified. bitset is the **fifth driver-verified module** and the
+**third data/-layer module**.
+
+**71 own residuals is the smallest own-residual set of any
+driver-verified module in the project** — vec 196, pool 119, region
+114, arena 91, deque 67. The class breakdown is derived by the job
+rather than hardcoded, and sums exactly:
+
+| n | class |
+|---:|---|
+| 26 | array framing on and / or / xor / not |
+| 22 | Group 1 single-bit family + init |
+| 9 | clear_all / set_all frames over symbolic mem_zero / mem_set |
+| 6 | P4 Typed+Cast bridge at the three as_bytes sites |
+| 8 | queries and finds |
+| **71** | |
+
+Three results distinguish this entry.
+
+1. **SPECIFICATION-STRENGTH INHERITANCE** (F4) — a residual class new to
+   the campaign. Every prior ceiling was PROVER weakness: a true
+   property the solver could not reach. Here the ceiling is UPSTREAM
+   SPECIFICATION weakness — a property that cannot be stated at all,
+   because the callee's contract is deliberately too weak to support it.
+2. **A REDUNDANCY LOAD-BEARING FOR THE PROVER, FOUND TWICE.** Once by
+   deleting a predicate disjunct (E1, two dead CI runners). Once by
+   deleting a redundant precondition (F5, five goals). The second time
+   happened with the first already documented 300 lines above the edit.
+3. **REAL UNDEFINED BEHAVIOUR** (F2), demonstrated under ASan/UBSan, in
+   a family whose asymmetry had been recorded as a comment for two
+   weeks before it was fixed.
+
+### Specification-strength inheritance (F4)
+
+`bits_popcount`, `bits_ctz` and `bits_clz` are specified at RANGE
+strength only — `0 <= \result <= 64` — by a written decision in bits.h
+that a functional definition needs an axiomatisation beyond current SMT
+capability. Three consequences propagate into bitset, none of them a
+gap in bitset:
+
+- `bitset_count` cannot claim `\result <= bs->capacity`. That needs a
+  functional popcount. The strongest honest claim is
+  `\result <= 64 * word_count`, and that is what is written.
+- `bitset_is_full` delegates to `bitset_count` and is capped
+  TRANSITIVELY.
+- `bitset_find_first` / `_next` / `_last` cannot claim MINIMALITY.
+  `\result == BITSET_NPOS || \result < capacity` IS provable, straight
+  from the explicit guard. That the result is the FIRST or LAST set bit
+  is not. The `_option` wrappers inherit the same cap a second time.
+
+The cap is exactly one word wide — "minimality" — and everything else
+about these functions is specified. Naming its width precisely is the
+point: an unqualified "capped by bits.h" would understate what the
+contracts do deliver.
+
+### The redundancy that was load-bearing — twice
+
+**E1 (CI #1254).** `bitset_pad` reads
+
+```
+capacity % 64 == 0 || (words[wc-1] >> (capacity % 64)) == 0
+```
+
+E1 replaced this with `(words[wc-1] >> bitset_rem(bs)) == 0`. The two
+are mathematically equivalent — verified exhaustively over capacity in
+[1,600] plus the 64/128/192/1000/4096/65535 boundaries.
+
+**It took the CI runner down twice on the same commit.** Once as "the
+hosted runner lost communication with the server", once at 1h 0m 2s
+with the log cut mid-results, against a 360-minute default timeout.
+Every sibling WP job was green on the same runner pool and commit.
+
+The mechanism: `capacity % 64` is SYNTACTICALLY bounded — a solver sees
+`% 64` and knows the exponent lies in [0,63] without deriving anything.
+`bitset_rem(bs)` is an arithmetic expression whose bound in [1,64]
+follows only from `bitset_sized`, which the solver must derive FIRST.
+Until it does, the term is `x >> k` with k an unbounded symbolic
+expression — `x / 2^k`, exponential in a free variable. Memory
+blow-up, which `-wp-timeout` cannot bound because a timeout bounds
+time, not resident memory. `bitset_pad` now carries a DO-NOT-SIMPLIFY
+note at the predicate.
+
+**F5 (CI #1264), the same lesson on a precondition.** Five functions
+carried `requires bs == \null || bs->words != \null`. That clause is
+LOGICALLY REDUNDANT: `bitset_mut` contains
+`\valid(bs->words + (0 .. word_count-1))`, which for word_count >= 1
+already implies `words != \null`. That was checked before deleting it.
+
+WP used it anyway. With the precondition, the memory-access RTE goal
+discharged from the caller obligation directly. Without it, WP must
+derive validity from the runtime guard instead, and times out. Five new
+`assert_rte_mem_access` residuals, one per function.
+
+`bitset_not` is the clean control: its code did not change, its
+behaviors did not change, and the ONLY edit was deleting that one
+redundant line. It cost exactly one goal.
+
+So: a clause redundant for the LOGIC can be load-bearing for the
+PROVER, on predicates and on preconditions alike. The second discovery
+was made with the first already written down, in the same file, a few
+hundred lines above the edit. Documenting a lesson is not the same as
+having learned it.
+
+### Three refuted hypotheses, recorded because they cost four runs
+
+| # | Hypothesis | Outcome |
+|---|---|---|
+| 1 | The predicates are too big to re-establish | Refuted by `init_ensures_3`, whose code line is literally its own assignment |
+| 2 | A missing arithmetic LEMMA (this was P1) | Never needed; E1's division-free form made the same fact subtraction |
+| 3 | Integer division in PROVEN positions | Refuted by E1a (#1255): all 18 unchanged, same goal indices |
+
+The error was not any single hypothesis but the METHOD — diagnosing by
+archaeology on straight-line goals instead of measuring the thing in
+question. The correction was to contract ONE loop (`bitset_not`, the
+simplest in the header) and read the result. That probe cost the same
+one run each wrong guess had cost, and could not be wrong about what it
+measured, because it WAS the thing rather than a proxy. It came back
+6 → 3 with both postconditions proved, which authorised the remaining
+nine loops.
+
+A second-order correction belongs here too: after E1a refuted division
+as the cost of the Group-1 POSTCONDITIONS, that was over-generalised
+into "division is expensive everywhere in this TU", producing a written
+prediction that `find_*` would improve LEAST of its batch. They improved
+MOST — 14 → 4. Division inside an RTE index obligation is cheap when
+`bitset_view` supplies the sizing equation as an ASSUMPTION. That is the
+free-vs-expensive POSITIONAL asymmetry E1 originally identified and that
+was wrongly abandoned along with E1's other half.
+
+### Two contracts deliberately NOT written
+
+**The as_bytes bridge (6 goals).** `bytes_from` requires
+`\valid((u8*)ptr + (0 .. len-1))` while `bitset_view` supplies
+`\valid_read(bs->words + (0 .. word_count-1))` as a `u64*` range. Same
+memory; WP's Typed+Cast model does not transport range validity across
+a pointer-type change. Adding `requires \valid((u8*)bs->words + ...)`
+to each of the three would clear all six by pushing a byte-level
+obligation onto every caller, about memory the function already knows
+is valid. Rejected: it buys a cleaner number by making the API worse.
+
+**Self-application of and/or/xor.** Those three read `other->words[w]`
+at the same index they write `bs->words[w]`, so a pointwise
+postcondition is FALSE under aliasing. They therefore require
+`\separated`, which puts `bitset_and(&a, &a)` outside the specification
+even though it is a harmless no-op at runtime. The alternative —
+dropping the postcondition so self-application stays admissible — was
+rejected: a contract that says nothing about the result is worth less
+than one that says something under a stated precondition.
+`bitset_is_disjoint` is read-only, needs no `\separated`, and keeps
+self-application inside its spec; the asymmetry is deliberate and noted
+at both sites.
+
+### Enforcement, and why set equality in both directions
+
+The count gate is necessary but NOT sufficient: a residual could start
+proving while a new one appeared, leaving the total unchanged, and a
+count-only gate would pass in silence. The job checks that every one of
+the 163 pinned names IS unproved, and separately that no unpinned goal
+is unproved.
+
+Both name arrays were GENERATED by script from CI output, never
+transcribed. Hand-copying 158 identifiers is the mechanical-error class
+this arc tripped on repeatedly: an inverted roll-call at #1252, a
+prefix collision introduced in the same commit that fixed it, a caller
+updated where the tree needed grepping, and — at #1265 — a
+string-indexed edit that matched frama-c-DEQUE's CHECKS array, the
+first of fourteen in the file, and would have replaced deque's 67
+pinned names with bitset's 163. That was caught only because the
+verification counted entries afterwards instead of trusting the
+script's own success message.
+
+The gate is NEGATIVE-tested before each pin change: one fixture with a
+residual removed, and one SWAP fixture where one proves and one new
+appears with the total unchanged. The swap case is the one a count-only
+gate cannot see.
+
+**Stability**: #1264 and #1266 produced identical 163-name sets across
+a source change in between. What DOES move run to run is goal ORDER and
+prover assignment — `checked_add` has been answered by both Z3 and
+Alt-Ergo on different runs. An ordered diff would go red on a run where
+nothing changed; set equality is the correct instrument. Same result
+VERIFY-019-M reached on the model axis: *which goals need a solver is
+invariant; which solver reaches them first is scheduling.*
+
+### Predictions, scored
+
+| | Verdict |
+|---|---|
+| **P1** | REFUTED, then SUBSUMED. Called for a LEMMA; none was written, and the goals it named are residuals anyway. Right that the obstacle was arithmetic, wrong about mechanism and fix. |
+| **P2** | EXACT. 92, family by family, on every run #1251–#1266. The only prediction right first time and never adjusted. |
+| **P3** | CONFIRMED. bits.h's 15 re-emit byte-identically. bitset is the first verified module whose closure contains bits.h, so this was byte-identity's first test on a timeout-class ARITHMETIC surface rather than libc or a WP feature gap. |
+| **P4** | CONFIRMED, OVER-COUNTED. The Typed+Cast bridging class is real and sits exactly where predicted, at 6 goals rather than 9. Lower confidence had been recorded before the run rather than after. |
+
+### Model: Typed+Cast
+
+Forced by `bitset_as_bytes` / `_as_cbytes` / `_as_borrowed_bytes`,
+which hand `bs->words` (a `u64*`) to byte-view constructors. Goal names
+carry the `typed_cast_` prefix throughout. An earlier draft of this arc
+predicted plain Typed; corrected before the first run.
+
+### Classification: in-place contracts, thin interposition driver
+
+Contracts live in `data/bitset.h` itself.
+`vmacros/vdrivers/bitset_verify.h` exists solely to interpose a
+CONTRACTED `option_usize` ahead of the header's own instantiation — it
+contracts none of bitset's functions and is not a Shape-B driver.
+
+### Findings
+
+- **F1 — FIXED** (f18e72c). `BITSET_WORD_COUNT(n)` is `(n+63)/64` in
+  usize and WRAPS above `CANON_USIZE_MAX - 63`. Measured on the
+  unguarded header: `capacity == USIZE_MAX` yields `word_count == 0`,
+  `mem_zero` writes zero bytes, and **`bitset_init` succeeds silently**
+  — after which every `i < bs->capacity` guard passes for any `i`,
+  making `bs->words[i / 64]` an out-of-bounds write at a
+  caller-controlled offset. The realistic trigger is not an absurd
+  literal but an ordinary upstream underflow,
+  `bitset_init(&bs, buf, n - 1)` with `n == 0`. The initial disposition
+  was "live design question"; that was wrong, and the measurement is
+  what changed it.
+
+  **Residual exposure, stated rather than implied**: the guard is a
+  `require_msg`, which is `((void)0)` under `-DCANON_NO_REQUIRE`, so
+  the release configuration is still exposed. That is the library's
+  model for every constructor guard, but it means the fix hardens
+  contract-checked builds only.
+
+- **F2 — FIXED** (61e1312). `set`/`clear`/`toggle`/`test` checked only
+  `!bs`, while eleven siblings checked `!bs || !bs->words`. On a
+  zero-initialised `Bitset b = {0}` the index guard compiled out under
+  `-DCANON_NO_REQUIRE` and the four dereferenced NULL. Demonstrated by
+  reverting only those guards and running under ASan/UBSan:
+  `runtime error: load of null pointer of type 'u64'`, then
+  `AddressSanitizer: SEGV on unknown address 0x000000000000`.
+
+  Scope was wrong twice in the fixing: FIVE functions, not four
+  (`bitset_assign` delegates and was exposed transitively), and five
+  lines per contract, not the "exactly one line" the old comment
+  predicted. The count was caught by an assertion, not by reading.
+
+- **F3 — FIXED** (19febec). bitset.h was the only header in the tree
+  requiring callers to pre-instantiate a generic. It now
+  self-instantiates `option_usize` behind `CANON_OPTION_USIZE_DEFINED`,
+  vec_impl.h's convention verbatim. Found when frama-c, handed the
+  header directly, aborted in the PARSER.
+
+- **F4 — CLASSIFICATION**, the specification-strength cap above. Not a
+  defect; a documented ceiling.
+
+- **F5 — FIXED** (61e1312), found while scoping F2. `bitset_not`
+  carried BOTH `requires bs == \null || bs->words != \null` AND
+  `behavior null: assumes bs == \null || bs->words == \null`. The
+  precondition forbade exactly what the behavior claimed to handle and
+  what the code has always guarded at runtime, so the null behavior was
+  VACUOUS — WP could never enter it. A leftover from the Group-1
+  contract template, carried in when `bitset_not` was contracted as the
+  Group-2 probe.
+
+  Found by scanning all 32 contracts for the signature "requires
+  words != null AND a null behavior assuming words == null".
+  `bitset_not` was the only hit, which is the useful part: the scan is
+  what makes "only one" a measurement rather than an impression.
+
+  **Proof cost**: fixing it, together with F2, added the five
+  `assert_rte_mem_access` residuals described above. Correct
+  specification, five timeouts. Recorded as a price, not absorbed into
+  the count.
+
+### Cross-references
+
+- Coverage-stream record for the same module: MCDC-012 (130/134, four
+  invariant-dead justification rows J1–J4).
+- The `bitset_pad ==> bitset_pad_meaning` MANUAL-PROOF obligation: the
+  masking equation the code establishes is not the sentence a reader
+  wants, and the equivalence is bit-level reasoning the SMT backend is
+  not expected to discharge. Recorded rather than asserted by an
+  annotation nothing checks — the lifetime.h lesson applied ahead of
+  time, where two of eleven superseded copies of
+  `canon_lifetime_next_id_` carried a false `assigns \nothing` that
+  survived precisely because no verified configuration translated it.
+  MCDC-012's J1–J4 are the SAME gap seen from the coverage side.
+- MISRA: `data/bitset.h` contributes zero real violations; the pinned
+  total is 53, unchanged across the arc. F1's guard briefly raised it
+  to 54 under rule 12.1 (explicit precedence) and was parenthesised at
+  fad155a.
+
+---
+
 ## MCDC-001: Coverage Flags Methodology
 
 | Field          | Value |
@@ -5085,6 +5388,155 @@ explicitly to prevent the upgrade being cited from the wrong stream.
 - Cover TU: `vmacros/coverage/deque_cover.c`; CMake target
   `deque_cover` under `-DENABLE_COVERAGE_TUS=ON`; invoked directly by
   the coverage job (never an `add_test`, never globbed).
+
+---
+
+## MCDC-012: An Uninitialised-Bitset Battery That Inverted, and Four Outcomes Dead by Invariant (bitset)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | MCDC-012 |
+| **Date**       | 2026-08-27 |
+| **Baseline commit** | Canon-C CI #1266 (16d0f0b). Enumerated at #1252; 122/126 measured at #1253; ratcheted to 130/134 at #1265 when VERIFY-020 F2 widened the guards |
+| **Scope**      | `data/bitset.h` — 134 condition outcomes, 130 covered (97.01%), 4 justified |
+| **Category**   | Structural coverage completeness |
+| **Enforcement**| Measured in the aggregate MC/DC table; four justification rows below |
+
+**Description**: `data/bitset.h` reaches **130/134 (97.01%)** MC/DC
+condition-outcome coverage under GCC 14 `-fcondition-coverage`, with
+**100.00% of 139 lines**. The four uncovered outcomes are dead by
+invariant and take justification rows, not tests. Aggregate MC/DC is
+1795/2012 (89.2%).
+
+### No cover TU, deliberately
+
+bitset is not a macro module: conditions attribute to `data/bitset.h`
+itself. The ownership tripwire in the coverage job confirms this
+POSITIVELY rather than by assumption — `bitset.h` reports its outcomes
+while `bitset_test.c` separately reports its own, so the glob removes
+only the latter. Adding a cover TU would build under two flag sets
+against the same measured header: a merge hazard with no gain.
+
+### Enumeration, then disposition
+
+CI #1252 enumerated seventeen uncovered outcomes by line. Thirteen were
+drivable and are driven; four are not.
+
+**`test_uninitialised_bitset` — eleven outcomes, then sixteen.** The
+`!bs->words` TRUE leg, once each in `clear_all`, `set_all`, `not`,
+`count`, `is_empty`, `is_full`, `find_first`, `find_next`, `find_last`,
+`as_bytes`, `as_cbytes`. All eleven need the same input: a non-NULL
+Bitset whose words pointer is NULL. `Bitset b = {0}` is exactly that,
+and it is reachable by ordinary C — a declared-but-never-initialised
+Bitset — not a synthetic poke at private state.
+
+**The battery inverted, and that is the interesting part.** As written
+at #1253 it carried:
+
+> *Do not "complete" this battery by adding the four. That would be UB
+> in the configuration being measured.*
+
+`set`/`clear`/`toggle`/`test` checked only `!bs`, then guarded the index
+with `require_msg`, which is `((void)0)` under `-DCANON_NO_REQUIRE` —
+the flag both the coverage and WP jobs use. On this very object those
+four dereferenced NULL. Their ABSENCE was the finding, and the comment
+said so.
+
+VERIFY-020 F2 fixed it. All fifteen functions now guard
+`!bs || !bs->words` uniformly, and the four are present — plus
+`bitset_assign`, which delegates to set/clear and was exposed
+transitively, a fifth site the original F2 scoping missed. The test is
+now the evidence that the UB is GONE rather than the evidence that it
+exists, and the comment records the inversion instead of being quietly
+deleted.
+
+**`test_mcdc_residual_legs` — two outcomes.** `find_next`'s
+`prev >= bs->capacity` TRUE leg, and `bitset_and`'s tail loop
+`for (w = n; w < bs->word_count; w++)`, entered only when `bs` has more
+words than `other`. Nothing in the suite ANDed unequal capacities, so
+that loop was never entered — it was also the file's only uncovered
+LINE.
+
+### The four justified outcomes: J1–J4
+
+| ID | Line | Condition |
+|----|------|-----------|
+| J1 | 1323 | `return (bit < bs->capacity) ? bit : BITSET_NPOS;` — FALSE leg, `bitset_find_first` |
+| J2 | 1371 | same shape, `bitset_find_next` first-word probe |
+| J3 | 1381 | same shape, `bitset_find_next` scan loop |
+| J4 | 1420 | same shape, `bitset_find_last` |
+
+(Lines were 924 / 960 / 966 / 989 before F1 and F2 added code above
+them. The four outcomes are unchanged in identity; only their line
+numbers moved, and the move was verified by re-reading the source at
+the new positions rather than assumed.)
+
+All four fire only if a set bit is found at an index >= capacity, which
+the PADDING INVARIANT forbids: bits at `[capacity, word_count*64)` are
+always zero, so `bits_ctz` / `bits_clz` can never report one. They are
+defensive branches, dead by invariant.
+
+Reaching them would require writing `bs.words[]` directly behind the
+API to assert behaviour the library does not promise. `diag.h` line 293
+is the existing invariant-dead precedent.
+
+**Cross-stream result, and the reason these four matter beyond the
+number.** The SAME gap appears in the proof stream as the
+`bitset_pad ==> bitset_pad_meaning` manual-proof obligation recorded in
+VERIFY-020. Coverage cannot reach these branches because the invariant
+forbids it; WP cannot prove them redundant because `pad_meaning` is not
+machine-checked. One fact, two instruments, neither able to close it
+alone.
+
+### The ratchet, and what it did not disturb
+
+F2 moved the denominator 126 → 134 (+8 outcomes: four `!bs->words`
+TRUE legs and their FALSE partners) and the numerator 122 → 130. Lines
+stayed at 139, because `if (!bs || !bs->words)` occupies the same line
+as `if (!bs)`. The four justified outcomes stayed four: nothing new
+became uncoverable.
+
+Measured locally before the commit and confirmed at #1265/#1266.
+
+### Fallout: fixing UB moved an analyzer finding into view
+
+`bitset_as_bytes` returns `bytes_empty()` — `ptr == NULL` — when
+`words == NULL`. `test_as_bytes` indexed `bv.ptr[0]` with nothing but a
+comment for protection: *"bv.ptr is always non-NULL here, bs.words is a
+stack array."*
+
+On the `words == NULL` path the OLD `bitset_set` dereferenced words
+unconditionally, so clang-analyzer's null-deref report landed inside
+`data/bitset.h` — non-user code, suppressed by `-header-filter`. With
+the F2 guard, `bitset_set` returns early instead, the path survives
+into the test file, and the deref is reported where it is visible.
+
+**The finding was always reachable.** Fixing the UB moved the report
+from a suppressed location to a reported one — the same shape as this
+project's MISRA per-line masking note: a count that rises after cleanup
+work can be surfacing rather than regression, so diff before
+concluding. Fixed by asserting `bv.ptr != NULL` before indexing, which
+`str_view_test`, `stringbuf_test` and `slice_test` already do;
+`bitset_test` was the outlier, substituting a comment for a check.
+
+### Measurement discipline
+
+Local GCC was 13, so `-fcondition-coverage` was unavailable at #1253
+and the change was validated on branch-taken as a proxy before commit,
+predicting exactly four remaining untaken branches at the four lines
+that became J1–J4. CI then measured the real metric and matched. The
+prediction was written before the run rather than after.
+
+The F2 ratchet was measured directly, before and after, with the same
+command and flags.
+
+### Cross-references
+
+- Proof-stream record for the same module: VERIFY-020 (4839/5002, 163
+  pinned residuals, 71 own).
+- F2's WP-side statement and its five-goal proof cost: VERIFY-020 F2
+  and F5.
+- Prior invariant-dead precedent: `semantics/diag.h` line 293.
 
 ---
 

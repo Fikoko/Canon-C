@@ -10,11 +10,11 @@ Combined verification status across all annotated headers:
 
 | Metric               | Value                                                                          |
 |----------------------|--------------------------------------------------------------------------------|
-| **Headers verified** | 16 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h, vec, deque) |
-| **Functions**        | 339 annotated and verified |
-| **Total obligations**| 32305 (summed over the 16 verification units; substrate goals are re-emitted in each downstream unit, so this counts goal-instances, not distinct obligations) |
-| **Proved automatic** | 31540 (97.63%)                                                                 |
-| **Unproved**         | 765 (all documented; see per-header sections)                                  |
+| **Headers verified** | 17 (checked.h, bits.h, compare.h, ptr.h, slice.h, memory.h, arena.h, pool.h, region.h, error.h, option, result, borrow.h, diag.h, vec, deque, bitset) |
+| **Functions**        | 371 annotated and verified |
+| **Total obligations**| 37307 (summed over the 17 verification units; substrate goals are re-emitted in each downstream unit, so this counts goal-instances, not distinct obligations) |
+| **Proved automatic** | 36379 (97.51%)                                                                 |
+| **Unproved**         | 928 (all documented; see per-header sections)                                  |
 
 *Corrected 2026-08-21.* This card previously read 15 / 315 / 30599 / 29899 /
 700 — the state before deque was verified and before the vec F4 confirming
@@ -35,8 +35,19 @@ against +40 proved. See VERIFY-018's DEMONSTRATED note in
 `docs/deviations.md`.
 
 Arithmetic: 30599 + 1668 + 38 = 32305; 29899 + 1601 + 40 = 31540;
-700 + 67 − 2 = 765. Figures above are the enforced CI pins at HEAD
-(43a46b1, CI #1247), and match the master table in
+700 + 67 − 2 = 765.
+
+*Corrected 2026-08-27.* This card previously read 16 / 339 / 32305 /
+31540 / 765 — the state before bitset was verified.
+
+(3) **bitset** (VERIFY-020; enforced CI #1260 / 6cb78da at 158, ratcheted
+CI #1265 / 4241a10 to 163 after the F2/F5 fixes, re-confirmed CI #1266 /
+16d0f0b) adds a seventeenth unit: +32 functions, +5002 obligations,
++4839 proved, +163 unproved.
+
+Arithmetic: 32305 + 5002 = 37307; 31540 + 4839 = 36379;
+765 + 163 = 928. Figures above are the enforced CI pins at HEAD
+(16d0f0b, CI #1266), and match the master table in
 `docs/traceability.md`.
 
 The slice.h baseline (367 / 390) carries a higher residual fraction
@@ -116,12 +127,12 @@ ptr_elem, so it has no per-allocation alignment-pad arithmetic and arena.h's
 26-goal cat 2b arithmetic-chain residual class does not recur in pool.h's own
 surface. See VERIFY-010 in `docs/deviations.md` for the full classification.
 
-A note on totals: the 32305 obligation count is the row-sum of
+A note on totals: the 37307 obligation count is the row-sum of
 each header's own WP-relevant goals — checked.h's 1755, bits.h's
 757, compare.h's 208, ptr.h's 1953, slice.h's 394, memory.h's 2866,
 arena.h's 3521, pool.h's 4003, region.h's 3692, error.h's 65,
 option's 223, result's 215, borrow.h's 2458, diag.h's 3060, vec's
-5467 and deque's 1668 (each
+5467, deque's 1668 and bitset's 5002 (each
 counted in full because each header was
 verified atop its full substrate, with no separate substrate-free
 measurement available for downstream headers). The CI WP steps for
@@ -3265,6 +3276,120 @@ frama-c -wp -wp-rte \
 The `Typed+Cast` control is the same command with the model changed;
 it is wired as `.github/workflows/f4-control.yml`
 (`workflow_dispatch` only, gates nothing).
+
+## data/bitset.h (in-place contracts, interposition driver)
+
+### Summary
+
+| Property               | Value                                          |
+|------------------------|-------------------------------------------------|
+| **Status**             | Verified (with documented residuals)            |
+| **Baseline commit**    | 95526a9 (Canon-C CI #1259, surface complete) → enforced 6cb78da (CI #1260) at 158 → ratcheted 4241a10 (CI #1265) to 163 after the F2/F5 fixes → re-confirmed 16d0f0b (CI #1266). Report-only chronology: #1249 (221), #1256 (218), #1257 (172), #1258 (163 own-66), #1259 (158) |
+| **Functions**          | 32 contracted and proved, all in place in `data/bitset.h` |
+| **Proof obligations**  | 4839 / 5002 discharged automatically (96.74%)   |
+| **Unproved**           | 163 (2 handler + 32 option_usize inheritance + 58 core substrate + 71 bitset-own; VERIFY-020; **0 Failed, 0 Invalid, 0 Stepout**) |
+| **Prover setup**       | Alt-Ergo 2.6.3 + Z3 4.15.2 + CVC5 1.2.1        |
+| **Frama-C version**    | 29.0 (Copper)                                   |
+| **WP flags**           | `-wp -wp-rte -wp-split -wp-timeout 120 -wp-model Typed+Cast` |
+| **CI enforcement**     | Yes — pinned `4839 / 5002` + zero Failed/Invalid/Stepout + exact count 163 + by-name roll-call over all 163 (set equality, both directions) |
+| **MC/DC coverage**     | 97.01% (130/134 condition outcomes — see MCDC-012) |
+| **CI artifact**        | `wp-proof-bitset` (full per-goal breakdown)     |
+| **Job runtime**        | ~2h50m                                          |
+
+bitset is the **fifth driver-verified module** and the **third
+data/-layer module**, and it is the first that is not Shape B.
+
+### Not a Shape-B driver: interposition
+
+`data/bitset.h` is a plain non-macro header. Its 32 functions carry
+their ACSL **in place**, like `borrow.h` and `diag.h`, and its
+conditions attribute to `data/bitset.h` itself in the MC/DC table — so
+it has no cover TU and needs none.
+
+`vmacros/vdrivers/bitset_verify.h` exists for one reason:
+`bitset.h` self-instantiates `option_usize` (finding F3) so frama-c can
+be handed the header directly, but that instantiation is
+**uncontracted**, and `bitset_find_*_option` call into it. The driver
+`#include`s a *contracted* `option_usize` first so those call sites have
+specifications to discharge against. It contracts none of bitset's
+functions. The 32-goal option arm is therefore **inheritance**, as in
+deque — not a fresh instantiation as in vec. See `docs/vmacros.md`.
+
+### Model: Typed+Cast
+
+Forced by `bitset_as_bytes` / `_as_cbytes` / `_as_borrowed_bytes`,
+which hand `bs->words` (a `u64*`) to byte-view constructors. Goal names
+carry the `typed_cast_` prefix throughout. An earlier draft of this arc
+predicted plain Typed; corrected before the first run.
+
+### The 71 own residuals
+
+Derived by the job rather than hardcoded, and summing exactly:
+
+| n | class |
+|---:|---|
+| 26 | array framing on and / or / xor / not — writing `words[w]` leaves `words[0..w-1]` alone, which WP does not frame for free |
+| 22 | Group 1 single-bit family + init |
+| 9 | clear_all / set_all frames over symbolic mem_zero / mem_set ranges |
+| 6 | P4 Typed+Cast bridge at the three as_bytes sites |
+| 8 | queries and finds |
+| **71** | smallest own-residual set of any driver-verified module (vec 196, pool 119, region 114, arena 91, deque 67) |
+
+The job prints an `UNCLASSIFIED` line naming any stray if the class list
+ever stops partitioning — added after the first derived version summed
+to 77 (prefix collision: `bitset_set_` also matches `bitset_set_all_`)
+and the second to 68 (`test_*` and `xor_call_*` matched no class). Both
+errors were invisible to reading and obvious to arithmetic.
+
+### The specification-strength cap (F4)
+
+`bits_popcount`, `bits_ctz` and `bits_clz` are specified at RANGE
+strength only — `0 <= \result <= 64` — by a written decision in bits.h.
+`bitset_count` therefore cannot claim `\result <= bs->capacity` (only
+`<= 64 * word_count`); `bitset_is_full` delegates and is capped
+transitively; `find_*` cannot claim minimality, and the `_option`
+wrappers inherit the cap a second time.
+
+The cap is exactly one word wide. `\result == BITSET_NPOS || \result <
+capacity` IS proved, straight from the explicit guard. This is a new
+residual shape for the campaign — see `docs/decision-families.md`
+Shape 5 — because every prior ceiling was prover weakness, and this one
+is upstream specification weakness.
+
+### DO NOT SIMPLIFY: `bitset_pad`
+
+```
+capacity % 64 == 0 || (words[wc-1] >> (capacity % 64)) == 0
+```
+
+The disjunct is redundant for the LOGIC and load-bearing for the
+PROVER. `% 64` bounds the shift exponent syntactically in [0,63];
+replacing it with `bitset_rem(bs)` requires the solver to derive the
+bound from `bitset_sized` first, and until it does the term is
+`x / 2^k` with k free — memory blow-up, which `-wp-timeout` cannot
+bound because a timeout bounds time, not resident memory. Experiment
+E1 tried exactly this and took the CI runner down twice (CI #1254).
+
+The same lesson recurred on a **precondition** at F5: deleting
+`requires bs == \null || bs->words != \null`, verified redundant
+beforehand, cost five `assert_rte_mem_access` goals. Full account in
+VERIFY-020.
+
+### Reproduction
+
+```
+frama-c -c11 -cpp-extra-args="-I. -DCANON_NO_REQUIRE -DCANON_BITS_FORCE_FALLBACK \
+                             -DCANON_CHECKED_FORCE_FALLBACK" \
+  vmacros/vdrivers/bitset_verify.h \
+  -wp -wp-rte -wp-split -wp-timeout 120 -wp-model Typed+Cast \
+  -wp-prover alt-ergo,z3,cvc5
+```
+
+See `docs/deviations.md` (VERIFY-020) for the full residual
+classification and the five findings F1–F5, and MCDC-012 for the
+coverage-stream record.
+
+---
 
 ## Triple-prover rationale
 

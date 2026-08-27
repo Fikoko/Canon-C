@@ -255,7 +255,9 @@ and confirmed; the other two Shape-B modules (`deque`, `fold`) still get
 their own confirming run.
 
 **Cover TUs needed (Shape-B): five —** `option` (✅ landed), `result`
-(✅ landed), `vec` (✅ landed), `deque`, `fold`. The nine Shape-A modules already surface in the MC/DC table via
+(✅ landed), `vec` (✅ landed), `deque` (✅ landed), `fold`. `bitset` is
+verified but needs none: it is a non-macro header measured directly (see
+the interposition note under data/ below). The nine Shape-A modules already surface in the MC/DC table via
 their `_impl.h` bodies and get **no** cover TU. `fold` is the one algo module
 absent from the table (its siblings all appear), which is why it is the only
 Shape-B entry in the algo layer.
@@ -267,13 +269,43 @@ Shape-B entry in the algo layer.
 | `option_verify.h` | `semantics/option/` | B (confirmed)  | ✅ `vmacros/coverage/option_cover.c` (landed, 96.7%, MCDC-006) |
 | `result_verify.h` | `semantics/result/` | B (confirmed)  | ✅ `vmacros/coverage/result_cover.c` (landed, 100%, 28/28, MCDC-007) |
 
-### data/ (3)
+### data/ (4)
 
-| Driver             | Verifies module  | Shape            | Cover TU (MC/DC)                 |
-|--------------------|------------------|------------------|---------------------------------|
-| `vec_verify.h`     | `data/vec/`      | B (confirmed)    | ✅ `vmacros/coverage/vec_cover.c` (landed, 98.1%, 155/158, MCDC-010) |
-| `deque_verify.h`   | `data/deque/`    | B (confirmed)    | ✅ `vmacros/coverage/deque_cover.c` (landed, 100%, 82/82, MCDC-011) |
-| `hashmap_verify.h` | `data/hashmap/`  | A (confirmed)    | — already covered via `hashmap_impl.h` |
+| Driver              | Verifies module  | Shape            | Cover TU (MC/DC)                 |
+|---------------------|------------------|------------------|---------------------------------|
+| `vec_verify.h`      | `data/vec/`      | B (confirmed)    | ✅ `vmacros/coverage/vec_cover.c` (landed, 98.1%, 155/158, MCDC-010) |
+| `deque_verify.h`    | `data/deque/`    | B (confirmed)    | ✅ `vmacros/coverage/deque_cover.c` (landed, 100%, 82/82, MCDC-011) |
+| `bitset_verify.h`   | `data/bitset.h`  | **Interposition** — see below | — not a cover TU; `bitset.h` is measured directly (130/134, MCDC-012) |
+| `hashmap_verify.h`  | `data/hashmap/`  | A (confirmed)    | — already covered via `hashmap_impl.h` |
+
+#### A third kind of driver: interposition (bitset, VERIFY-020)
+
+`bitset_verify.h` is in `vmacros/vdrivers/` but is **not a Shape-B
+driver**, and reading it as one would be wrong in both directions.
+
+`data/bitset.h` is a plain non-macro header. Its 32 functions carry
+their ACSL **in place**, like `borrow.h` and `diag.h`, and its
+conditions attribute to `data/bitset.h` itself in the MC/DC table — so
+it needs no cover TU and gets none.
+
+What it does need is one thing a Shape-B driver also provides, for a
+different reason. `bitset.h` self-instantiates `option_usize` (finding
+F3, fixed at 19febec) so that frama-c can be handed the header
+directly. But the header's own instantiation is **uncontracted**, and
+`bitset_find_*_option` call into it. The driver's entire job is to
+`#include` a *contracted* `option_usize` first, so the wrappers' call
+sites have specifications to discharge against. It contracts none of
+bitset's functions.
+
+The consequence for the residual accounting is worth stating: the
+32-goal `option_usize` arm in VERIFY-020 is **inheritance**, exactly as
+in deque, not a fresh instantiation as in vec — the instantiation-identity
+rule's third data point, and the first where the inherited generic
+arrives through a driver that exists solely to supply it.
+
+**A driver in `vdrivers/` therefore answers "what does WP need in this
+translation unit?", not "is this module Shape B?"** Those two questions
+had the same answer for the first four drivers and do not here.
 
 ### algo/ (9)
 
@@ -627,6 +659,7 @@ routing alone.
 | result   | `result_verify.h`  | semantics/ | ✅ Verified 185/215 (VERIFY-015, enforced CI #1090; report-only #1089) | ✅ `result_cover.c` — landed, 100% (28/28), MCDC-007 (CI #1089); attribution confirmed | Second driver; first union-typed module (union-model hypothesis, VERIFY-015); first clean Shape-B audit; Shape B (confirmed) |
 | vec      | `vec_verify.h`     | data/      | ✅ Verified 5271/5467 (VERIFY-018, enforced CI #1154; ratcheted CI #1187 Commit 9/9b, CI #1202 API-001, and CI #1247/43a46b1 for the F4 closure measured at CI #1246/c427548; baseline CI #1152; report-only #1150–#1151) | ✅ `vec_cover.c` — landed, 98.1% (155/158), MCDC-010 (CI #1146); attribution confirmed (third variant: direct instantiation, conditions on the cover TU) | Third driver; first data/-layer module; first Typed+Cast driver; STRUCTS/FUNCTIONS split (F3) landed first; new macro-body-loop residual class (g) forward-flagged for deque; F4 closed by contract at CI #1247 (198 → 196, fresh-result arm 22 → 20); Shape B (confirmed) |
 | deque    | `deque_verify.h`   | data/      | ✅ Verified 1601/1668 (VERIFY-019, enforced CI #1238; baseline #1234; name-stable #1237; re-confirmed #1239–#1240) | ✅ `deque_cover.c` — landed, 100% (82/82), MCDC-011 (CI #1234); attribution confirmed (third variant: direct instantiation) | Fourth driver; second data/-layer module; first data/-layer driver on plain Typed; STRUCTS/FUNCTIONS split (F3 checklist) landed first at CI #1225; **zero core-substrate inheritance** — first inherited surface smaller than its predecessor's; class (g) withdrawn (a ring shifts nothing); memory-model invariant (VERIFY-019-M); closed VERIFY-018 F4 by elimination — confirming fix landed in `vec_verify.h`, measured CI #1246 (c427548) and ratcheted CI #1247 (43a46b1), vec 198 → 196; Shape B (confirmed) |
+| bitset   | `bitset_verify.h`  | data/      | ✅ Verified 4839/5002 (VERIFY-020, enforced CI #1260 at 158; ratcheted CI #1265 to 163 after F2/F5; re-confirmed CI #1266; report-only #1249–#1259) | — not a cover TU; `data/bitset.h` measured directly, 97.0% (130/134), MCDC-012 | Fifth driver, third data/-layer module; **interposition driver, not Shape B** — contracts none of bitset's functions, exists only to supply a contracted `option_usize`; contracts live in `data/bitset.h` in place; smallest own-residual set in the project (71); F4 specification-strength inheritance (new residual shape); E1/F5 both instances of a logically-redundant clause being load-bearing for the prover |
 | hashmap  | `hashmap_verify.h` | data/      | Not started  | — (Shape A; via `_impl.h`)          | Already in MC/DC table         |
 | map      | `map_verify.h`     | algo/      | Not started  | — (Shape A; via `_impl.h`)          | Distinct in/out types          |
 | filter   | `filter_verify.h`  | algo/      | Not started  | — (Shape A; via `_impl.h`)          |                                |
@@ -638,8 +671,9 @@ routing alone.
 | unique   | `unique_verify.h`  | algo/      | Not started  | — (Shape A; via `_impl.h`)          |                                |
 | reverse  | `reverse_verify.h` | algo/      | Not started  | — (Shape A; via `_impl.h`)          |                                |
 
-The `vmacros/` tree now holds three driver + cover-TU pairs (`option`,
-`result`, `vec`). Update each remaining row's WP status as its driver is
+The `vmacros/` tree now holds four driver + cover-TU pairs (`option`,
+`result`, `vec`, `deque`) and one interposition driver with no cover TU
+(`bitset`). Update each remaining row's WP status as its driver is
 written, and the Cover-TU column as each Shape-B cover TU lands (and as
 provisional Shape classifications are confirmed by the per-module
 attribution debug run); record each module's generated-vs-scaffolding

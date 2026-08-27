@@ -273,6 +273,22 @@ each was established after a specific failure:
   written into the job. It is advisory — real violations do not fail the
   build — but a change in it is visible in the log rather than silent.
 
+  **This earned its keep at CI #1262.** The bitset arc's VERIFY-020 F1
+  guard, `require_msg(capacity <= CANON_USIZE_MAX - 63u, ...)`, tripped
+  rule 12.1 (explicit operator precedence) and moved the count 53 → 54.
+  Nothing failed — advisory findings do not fail the build — and the
+  commit that introduced it had claimed to be pin-neutral, having
+  measured MC/DC and reasoned about WP while never considering MISRA at
+  all. The echoed count is the only reason it was noticed. Parenthesised
+  at fad155a to match `core/memory.h:343`/`:381`, which already wrote the
+  bracketed form; back to 53 at CI #1263 and unmoved since.
+
+  The general lesson is not about parentheses. A claim that a change is
+  "pin-neutral" has to **enumerate** the pins — this project has four
+  gating analysis surfaces (WP, MC/DC, MISRA, clang-tidy) across 21 of
+  its 29 CI jobs, and naming a number from memory instead of reading the
+  workflow got it wrong twice in consecutive commits.
+
 ---
 
 ## Where the records live
