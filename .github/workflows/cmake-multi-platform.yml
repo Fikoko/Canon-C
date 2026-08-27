@@ -4803,7 +4803,8 @@ jobs:
             # THE LIST WAS GENERATED, NOT TRANSCRIBED. Hand-copying 158 names is
             # exactly the mechanical-error class this arc kept tripping on. The
             # array below was produced by script from #1259 output and its arm
-            # partition verified arithmetically -- 2 + 32 + 58 + 66 = 158, no
+            # partition verified arithmetically -- 2 + 32 + 58 + 66 = 158
+            # when written; 71 own / 163 total since #1264. No
             # duplicates, nothing unclassified -- before being written here.
             CHECKS=(
               # ARM C — contract.h handler pair. Definition-presence only.
@@ -5143,17 +5144,54 @@ jobs:
             # false since Group 3 landed at #1259. ALL 32 functions are
             # contracted and the job IS pinned. Replaced with what the 66
             # actually are.
-            echo "    All 32 bitset functions are contracted (Groups 1-3 complete),"
-            echo "    so none of the 66 is pending work. They are:"
-            echo "      ~25  array framing on and / or / xor / not -- writing"
-            echo "           words[w] leaves words[0..w-1] alone, which WP does"
-            echo "           not frame for free"
-            echo "       18  Group 1: init, clear_padding, set, clear, toggle, assign"
-            echo "        9  clear_all / set_all frames over symbolic mem_zero /"
-            echo "           mem_set ranges"
-            echo "        6  P4 Typed+Cast bridge at the three as_bytes sites"
-            echo "           (u64* range validity does not transport to (u8*))"
-            echo "      rest singletons on the queries and finds" 
+            # DE-HARDCODED at CI #1267. This printed a fixed "66" and a fixed
+            # class breakdown. At #1264 AND #1266 the job printed
+            # "bitset-own: 71" and then, two lines later, "none of the 66 is
+            # pending work". The ratchet commit SAID it had fixed this; it had
+            # not. The edit was made, then lost when the file was restored
+            # after a near-miss on frama-c-deque's array, and the post-restore
+            # check only re-verified the CHECKS count and the two pins. The
+            # commit message asserted something about the tree that was not in
+            # the tree -- the same defect class the message was about.
+            # Counts are DERIVED now; only the class names are prose.
+            echo "    All 32 bitset functions are contracted (Groups 1-3"
+            echo "    complete), so none of the ${OWN} is pending work. By class:"
+            CLS_SUM=0
+            CLASSES=(
+              "array framing on and/or/xor/not:bitset_(and|or|xor|not)_(loop_invariant|live_assigns|live_ensures|assert_rte|call)" \
+                       "Group 1 single-bit family + init:bitset_(init|clear_padding|set|clear|toggle|test|assign)_(null|live|normal|exit|terminates|exits|assigns|ensures|requires|assert|call|loop|variant)" \
+                       "clear_all/set_all frames over mem_zero/mem_set:bitset_(clear_all|set_all)_" \
+                       "P4 Typed+Cast bridge at the three as_bytes sites:bitset_as_(bytes|cbytes|borrowed_bytes)_" \
+                       "queries and finds:bitset_(count|is_empty|is_full|is_disjoint|find_)"
+            )
+            for cls in "${CLASSES[@]}"; do
+              NAME="${cls%%:*}"; RE="${cls#*:}"
+              C=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_${RE}" \
+                    wp_bitset_output.txt || true)
+              printf "      %3s  %s\n" "${C}" "${NAME}"
+              CLS_SUM=$((CLS_SUM + C))
+            done
+            # SELF-BALANCING. The first version of this breakdown summed to 77
+            # (prefix collision: bitset_set_ swallowed bitset_set_all_, and
+            # bitset_clear_ swallowed clear_all_ and clear_padding_ -- the
+            # SAME bug the roll-call hit at #1252, third occurrence in this
+            # job), then to 68 once anchored (test_* and xor_call_* fell
+            # through no class at all). Both were found by summing, not by
+            # reading. So the block now sums itself and names the remainder;
+            # a class list that stops partitioning says so instead of
+            # quietly under-reporting.
+            OTHER=$((OWN - CLS_SUM))
+            if [ "${OTHER}" -ne 0 ]; then
+              printf "      %3s  UNCLASSIFIED -- the class list no longer partitions\n" "${OTHER}"
+              grep -oE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_bitset_[A-Za-z0-9_]+" \
+                wp_bitset_output.txt | awk '{print $3}' | sort -u > /tmp/bs_own.txt
+              : > /tmp/bs_cls.txt
+              for cls in "${CLASSES[@]}"; do
+                grep -oE "^typed_cast_${cls#*:}[A-Za-z0-9_]*" /tmp/bs_own.txt >> /tmp/bs_cls.txt || true
+              done
+              sort -u /tmp/bs_cls.txt -o /tmp/bs_cls.txt
+              comm -23 /tmp/bs_own.txt /tmp/bs_cls.txt | sed 's/^/           /'
+            fi 
           fi
           echo ""
           echo "==============================================="
@@ -5178,11 +5216,13 @@ jobs:
               echo "        ${EXPECTED_UNPROVED} residuals verified BY NAME in both"
               echo "        directions (set equality). Arms: 2 handler + 32"
               echo "        option_usize (inheritance) + 58 core substrate +"
-              echo "        66 bitset-own."
+              echo "        ${OWN} bitset-own."
               echo ""
-              echo "        66 own is the SMALLEST own-residual set of any"
+              echo "        ${OWN} own is the smallest own-residual set of any"
               echo "        driver-verified module in the project: vec 196,"
               echo "        pool 119, region 114, arena 91, deque 67."
+              echo "        (66 until F2/F5 at #1264 -- VERIFY-020 F5 records"
+              echo "        why removing a redundant precondition cost five.)"
               echo ""
               echo "        A residual that starts PROVING turns this job RED."
               echo "        That is good news arriving as a red run, by design."
