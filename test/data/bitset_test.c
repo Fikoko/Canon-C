@@ -555,18 +555,22 @@ static void test_f1_capacity_overflow_guard(void)
  * — a declared-but-never-initialised Bitset. It is not a synthetic poke at
  * private state.
  *
- * THIS BATTERY IS ALSO THE COVERAGE-SIDE EVIDENCE FOR FINDING F2.
- * The eleven functions below check `!bs || !bs->words` and return safely.
- * bitset_set / bitset_clear / bitset_toggle / bitset_test check only `!bs`,
- * then guard the index with require_msg — which is ((void)0) under
+ * THIS BATTERY WAS THE COVERAGE-SIDE EVIDENCE FOR FINDING F2, AND NOW
+ * RECORDS ITS FIX.
+ * bitset_set / bitset_clear / bitset_toggle / bitset_test used to check only
+ * `!bs`, then guard the index with require_msg — which is ((void)0) under
  * -DCANON_NO_REQUIRE, the flag BOTH the coverage job and the WP job use. On
- * this very object those four would dereference words == NULL. They are
- * therefore DELIBERATELY ABSENT from this function, and their absence is the
- * finding, not an omission. Structurally this is deque's F1, except bitset's
- * asymmetry is WITHIN one family rather than between two.
+ * this very object those four dereferenced words == NULL. They were
+ * therefore DELIBERATELY ABSENT from this function, and THAT ABSENCE WAS THE
+ * FINDING. Structurally it was deque's F1, except bitset's asymmetry was
+ * WITHIN one family rather than between two.
  *
- * Do not "complete" this battery by adding the four. That would be UB in the
- * configuration being measured. See VERIFY-020 F2 for the disposition. */
+ * The old comment here said: do not "complete" this battery by adding the
+ * four, that would be UB in the configuration being measured. The fix is
+ * what makes completing it legal, so the four are now present at the end,
+ * and this test is the evidence that the UB is gone rather than the evidence
+ * that it exists. bitset_assign joins them: it delegates to set / clear and
+ * so was exposed transitively, which the original scoping of F2 missed. */
 static void test_uninitialised_bitset(void)
 {
     Bitset b = {0};          /* non-NULL, words == NULL, capacity == 0 */
@@ -589,6 +593,14 @@ static void test_uninitialised_bitset(void)
     /* views: empty, not a NULL-deref */
     EXPECT(bitset_as_bytes(&b).len  == 0);
     EXPECT(bitset_as_cbytes(&b).len == 0);
+
+    /* ── The five F2 functions, previously omitted because they were UB here.
+     * Each must be a silent no-op / false, exactly like the eleven above. */
+    bitset_set(&b, 0);              /* was: OOB write through words[0] */
+    bitset_clear(&b, 0);
+    bitset_toggle(&b, 0);
+    bitset_assign(&b, 0, true);     /* delegates to set / clear */
+    EXPECT(bitset_test(&b, 0) == false);
 }
 
 /* ── MCDC-012: the two remaining drivable outcomes ───────────────────────────

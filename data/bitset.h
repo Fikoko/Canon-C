@@ -610,27 +610,30 @@ static inline void bitset_close(borrowed(Bitset*) bs) {
  *
  * Performance: O(1)
  */
-/* `requires bs->words != \null` is finding F2, stated as its own clause and
-   NOT folded into bitset_mut. set / clear / toggle / test check only `!bs`,
-   while clear_all / set_all / not / count / is_empty / find_* all check
-   `!bs || !bs->words`. On a zero-initialized `Bitset b = {0}` the index guard
-   below fails and — under -DCANON_NO_REQUIRE, the flag this very WP job uses
-   — compiles out, leaving a dereference of words == NULL. Structurally this
-   is deque's F1 (peek_* guarded by require_msg where pop_* checks at
-   runtime), except that bitset's asymmetry is WITHIN one family rather than
-   between two, which makes it more surprising to a caller. Kept as a
-   separate clause so that if the implementation grows the runtime check,
-   exactly one line moves. */
-/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
-    requires bs == \null || bs->words != \null;
-    requires bs == \null || i < bs->capacity;
+/* VERIFY-020 F2 — FIXED. set / clear / toggle / test used to check only
+   `!bs`, while clear_all / set_all / not / count / is_empty / find_* checked
+   `!bs || !bs->words`. On a zero-initialised `Bitset b = {0}` the index guard
+   below failed and — under -DCANON_NO_REQUIRE, the flag the WP and coverage
+   jobs both use — compiled out, leaving a dereference of words == NULL.
+   The whole family now guards uniformly, and `bs->words == \null` is a
+   HANDLED case in the contract rather than a caller obligation.
+
+   The old comment predicted "exactly one line moves". That was wrong twice
+   over. Dropping the precondition means the null behavior must widen and
+   the surviving requires must admit words == \null, so it is five lines per
+   contract, not one. And the scope was five functions, not four: assign
+   carries the same contract and is fixed transitively through set / clear.
+   The count was caught by an assertion, not by reading. */
+/*@ requires bs == \null || bs->words == \null
+             || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words == \null || i < bs->capacity;
 
     behavior null:
-      assumes bs == \null;
+      assumes bs == \null || bs->words == \null;
       assigns \nothing;
 
     behavior live:
-      assumes bs != \null;
+      assumes bs != \null && bs->words != \null;
       assigns bs->words[bitset_word_l(i)];
       ensures bitset_bit_set(bs, i);
       ensures \forall integer k;
@@ -643,7 +646,7 @@ static inline void bitset_close(borrowed(Bitset*) bs) {
     disjoint behaviors;
 */
 static inline void bitset_set(borrowed(Bitset*) bs, usize i) {
-    if (!bs) { return; }
+    if (!bs || !bs->words) { return; }
     require_msg(i < bs->capacity, "bitset_set: index out of range");
     bs->words[bitset_word_of(i)] |= bitset_mask_of(i);
 }
@@ -659,16 +662,16 @@ static inline void bitset_set(borrowed(Bitset*) bs, usize i) {
  *
  * Performance: O(1)
  */
-/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
-    requires bs == \null || bs->words != \null;
-    requires bs == \null || i < bs->capacity;
+/*@ requires bs == \null || bs->words == \null
+             || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words == \null || i < bs->capacity;
 
     behavior null:
-      assumes bs == \null;
+      assumes bs == \null || bs->words == \null;
       assigns \nothing;
 
     behavior live:
-      assumes bs != \null;
+      assumes bs != \null && bs->words != \null;
       assigns bs->words[bitset_word_l(i)];
       ensures !bitset_bit_set(bs, i);
       ensures \forall integer k;
@@ -681,7 +684,7 @@ static inline void bitset_set(borrowed(Bitset*) bs, usize i) {
     disjoint behaviors;
 */
 static inline void bitset_clear(borrowed(Bitset*) bs, usize i) {
-    if (!bs) { return; }
+    if (!bs || !bs->words) { return; }
     require_msg(i < bs->capacity, "bitset_clear: index out of range");
     bs->words[bitset_word_of(i)] &= ~bitset_mask_of(i);
 }
@@ -697,16 +700,16 @@ static inline void bitset_clear(borrowed(Bitset*) bs, usize i) {
  *
  * Performance: O(1)
  */
-/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
-    requires bs == \null || bs->words != \null;
-    requires bs == \null || i < bs->capacity;
+/*@ requires bs == \null || bs->words == \null
+             || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words == \null || i < bs->capacity;
 
     behavior null:
-      assumes bs == \null;
+      assumes bs == \null || bs->words == \null;
       assigns \nothing;
 
     behavior live:
-      assumes bs != \null;
+      assumes bs != \null && bs->words != \null;
       assigns bs->words[bitset_word_l(i)];
       ensures bitset_bit_set(bs, i) <==> !\old(bitset_bit_set(bs, i));
       ensures \forall integer k;
@@ -719,7 +722,7 @@ static inline void bitset_clear(borrowed(Bitset*) bs, usize i) {
     disjoint behaviors;
 */
 static inline void bitset_toggle(borrowed(Bitset*) bs, usize i) {
-    if (!bs) { return; }
+    if (!bs || !bs->words) { return; }
     require_msg(i < bs->capacity, "bitset_toggle: index out of range");
     bs->words[bitset_word_of(i)] ^= bitset_mask_of(i);
 }
@@ -736,14 +739,14 @@ static inline void bitset_toggle(borrowed(Bitset*) bs, usize i) {
 /* Single-clause, no behaviors: \result is false for NULL and the conjunction
    says so directly. Same posture as deque_int_is_full's "true for NULL,
    exactly as is_empty is. Stated, not smoothed over." */
-/*@ requires bs == \null || bitset_view(bs);
-    requires bs == \null || bs->words != \null;
-    requires bs == \null || i < bs->capacity;
+/*@ requires bs == \null || bs->words == \null || bitset_view(bs);
+    requires bs == \null || bs->words == \null || i < bs->capacity;
     assigns \nothing;
-    ensures \result <==> (bs != \null && bitset_bit_set(bs, i));
+    ensures \result <==>
+        (bs != \null && bs->words != \null && bitset_bit_set(bs, i));
 */
 static inline bool bitset_test(borrowed(const Bitset*) bs, usize i) {
-    if (!bs) { return false; }
+    if (!bs || !bs->words) { return false; }
     require_msg(i < bs->capacity, "bitset_test: index out of range");
     return (bs->words[bitset_word_of(i)] & bitset_mask_of(i)) != 0u;
 }
@@ -762,16 +765,16 @@ static inline bool bitset_test(borrowed(const Bitset*) bs, usize i) {
 /* Pure delegation to set / clear, so this should discharge from their
    contracts with no new reasoning — a cheap check that the two are stated
    strongly enough to compose. */
-/*@ requires bs == \null || (bitset_mut(bs) && bitset_pad(bs));
-    requires bs == \null || bs->words != \null;
-    requires bs == \null || i < bs->capacity;
+/*@ requires bs == \null || bs->words == \null
+             || (bitset_mut(bs) && bitset_pad(bs));
+    requires bs == \null || bs->words == \null || i < bs->capacity;
 
     behavior null:
-      assumes bs == \null;
+      assumes bs == \null || bs->words == \null;
       assigns \nothing;
 
     behavior live:
-      assumes bs != \null;
+      assumes bs != \null && bs->words != \null;
       assigns bs->words[bitset_word_l(i)];
       ensures bitset_bit_set(bs, i) <==> value;
       ensures \forall integer k;
@@ -903,8 +906,14 @@ static inline void bitset_set_all(borrowed(Bitset*) bs) {
    capacity, and clear_padding restores it afterwards. That is why the
    postcondition asserts bitset_pad while the invariant does not.
    ──────────────────────────────────────────────────────────────────────────── */
-/*@ requires bs == \null || bitset_mut(bs);
-    requires bs == \null || bs->words != \null;
+/* VERIFY-020 F5. The line `requires bs == \null || bs->words != \null` stood
+   here until F2. It FORBADE exactly what the null behavior below claims to
+   handle and what the code guards at runtime, so the null behavior was
+   VACUOUS -- WP could never enter it. A leftover from the Group-1 contract
+   template, carried in when bitset_not was contracted as the Group-2 probe.
+   Found by scanning every contract for the signature "requires words != null
+   AND a null behavior assuming words == null"; bitset_not was the only hit. */
+/*@ requires bs == \null || bs->words == \null || bitset_mut(bs);
 
     behavior null:
       assumes bs == \null || bs->words == \null;
