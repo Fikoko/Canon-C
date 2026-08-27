@@ -392,7 +392,26 @@ static void test_as_bytes(void)
 
     bytes_t bv = bitset_as_bytes(&bs);
     EXPECT(bv.len == 8); /* 1 word * 8 bytes */
-    /* bv.ptr is always non-NULL here — bs.words is a stack array */
+
+    /* VERIFY-020 F2 fallout. This used to carry a bare comment saying
+     * "bv.ptr is always non-NULL here, bs.words is a stack array" --
+     * an unchecked human assertion, and clang-analyzer disagreed the moment
+     * F2 landed. bitset_as_bytes returns bytes_empty() (ptr == NULL) when
+     * words == NULL. On that path the OLD bitset_set dereferenced words
+     * unconditionally, so the analyzer's null-deref report landed inside
+     * data/bitset.h -- non-user code, suppressed by -header-filter. With the
+     * F2 guard, bitset_set returns early instead, the path survives into
+     * THIS file, and the deref of bv.ptr[0] is reported where it is visible.
+     *
+     * The finding was always reachable. Fixing the UB moved the report from
+     * a suppressed location to a reported one -- the same shape as the
+     * MISRA per-line masking note: a count that rises after cleanup can be
+     * surfacing rather than regression.
+     *
+     * str_view_test, stringbuf_test and slice_test all assert this before
+     * indexing a view. bitset_test was the outlier. */
+    EXPECT(bv.ptr != NULL);
+    if (bv.ptr == NULL) { return; }
 
     /* Setting a bit should be visible in the byte view */
     bitset_set(&bs, 0);
