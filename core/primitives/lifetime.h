@@ -270,8 +270,38 @@ typedef u64 region_id_t;
  *
  * What is claimed, and what is deliberately not:
  *
- *   assigns counter_        — true, and the correction of the historical
- *                             `assigns \nothing`.
+ *   assigns  — NOT WRITTEN, and not writable. `counter_` is a
+ *                             function-local static, so it does not exist in
+ *                             the file scope where a function contract is
+ *                             parsed: Frama-C reports "unbound logic variable
+ *                             counter_" and refuses the whole specification.
+ *                             The three available responses were:
+ *                               (1) `assigns \nothing` — FALSE, and precisely
+ *                                   the historical defect this arc exists to
+ *                                   correct. Rejected outright.
+ *                               (2) hoist `counter_` to file scope under
+ *                                   __FRAMAC__ — makes the clause writable by
+ *                                   verifying a DIFFERENT program than the one
+ *                                   that ships. Rejected: the project verifies
+ *                                   the shipped source, never a copy.
+ *                               (3) write no clause. WP then assumes the
+ *                                   weakest frame (\everything), which is
+ *                                   sound and claims nothing false.
+ *                             (3) is taken. The absence is deliberate and is
+ *                             the honest position: the tool cannot express the
+ *                             true frame here, so no frame is claimed. The
+ *                             effect is witnessed at runtime instead, by
+ *                             test_counter_advances in
+ *                             test/core/primitives/lifetime_test.c.
+ *
+ *                             This is a SPECIFICATION-STRENGTH limit, the same
+ *                             family as VERIFY-020 F4 — a ceiling in what can
+ *                             be stated rather than in what a prover can
+ *                             discharge. Predicted as a naming problem in the
+ *                             prereg (ARM B); the prediction was right that
+ *                             this is where run 0 would break and wrong about
+ *                             why. Recorded as a refutation.
+ *
  *   \result != REGION_ID_STATIC
  *                           — the property with teeth. Handing out 0 would
  *                             mark the owner as static-lifetime, so every
@@ -291,7 +321,6 @@ typedef u64 region_id_t;
  */
 #if defined(__FRAMAC__) && (CANON_LIFETIME_ATOMIC_LEVEL_ == 4)
 /*@
-  assigns counter_;
   ensures \result != REGION_ID_STATIC;
 */
 #endif

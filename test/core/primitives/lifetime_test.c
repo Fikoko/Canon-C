@@ -65,7 +65,15 @@
  * comment records that this is an observation, not a guarantee.
  * ============================================================================ */
 
-#define CANON_LIFETIME_DEBUG
+/* The CI matrix builds this file BOTH ways: the ordinary suite leaves
+ * CANON_LIFETIME=off, so the test must switch the machinery on itself; the
+ * lifetime-debug job configures with CANON_LIFETIME=debug, which adds
+ * CANON_LIFETIME_DEBUG project-wide via add_compile_definitions. An
+ * unconditional #define collides with the command-line one under -Werror
+ * (GCC -Werror, Clang -Wmacro-redefined, MSVC C4005). */
+#ifndef CANON_LIFETIME_DEBUG
+#  define CANON_LIFETIME_DEBUG
+#endif
 #include "core/primitives/lifetime.h"
 
 #include <stdio.h>

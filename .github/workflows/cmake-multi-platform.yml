@@ -5303,8 +5303,11 @@ jobs:
   #          pointer-to-integer cast, so it should hold under Typed AND
   #          Typed+Cast. If it proves only under Typed+Cast, that reasoning
   #          is wrong and the entry says so.
-  #   ARM B  assigns counter_ — expected to be where run 0 breaks, on NAME
-  #          RESOLUTION (Frama-C hoists function-local statics), not on proof.
+  #   ARM B  assigns counter_ — predicted to be where run 0 breaks. CONFIRMED
+  #          at CI #1267 that it broke there; REFUTED on the reason. Not a
+  #          naming problem: a function-local static is not in scope where a
+  #          function contract is parsed, so the clause is not writable at all
+  #          without changing the shipped program. No frame is now claimed.
   #   ARM C  INHERITED = 0. Closure is <stdbool.h> + types.h, and types.h
   #          pulls only <stddef.h> <stdint.h> <stdbool.h>. No contract.h, so
   #          not even the 2-goal handler pair every residual-carrying header
@@ -5374,12 +5377,17 @@ jobs:
             echo "      success over an empty obligation set."
             exit 1
           fi
-          if ! grep -q 'assigns[[:space:]]*counter_' /tmp/gate_pp.i; then
-            echo "FAIL: the ACSL assigns clause is missing from the"
-            echo "      preprocessed unit. See above."
-            exit 1
-          fi
-          echo "  contract present in preprocessed unit — both clauses."
+          # NOT checked: an `assigns` clause. There is none, deliberately.
+          # `counter_` is a function-local static and so is not in scope where
+          # a function contract is parsed — Frama-C reports "unbound logic
+          # variable counter_" and rejects the whole specification. Writing
+          # `assigns \nothing` instead would be FALSE and is the historical
+          # defect this arc corrects; hoisting the variable under __FRAMAC__
+          # would verify a different program than the one that ships. So no
+          # frame is claimed, WP assumes \everything, and the effect is
+          # witnessed by test_counter_advances instead. See VERIFY-021 ARM B,
+          # recorded as a refuted prediction.
+          echo "  contract present in preprocessed unit (ensures clause)."
       - name: "WP: core/primitives/lifetime.h (VERIFY-021, report-only)"
         run: |
           eval $(opam env --switch=frama-c)
