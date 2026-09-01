@@ -243,6 +243,19 @@ canon_c_test(
     FUZZABLE
 )
 
+# lifetime_test exercises the SEQUENTIAL properties of the token generator —
+# the ones VERIFY-021's ACSL contract claims. It defines CANON_LIFETIME_DEBUG
+# itself rather than taking it from the build, so it runs in the ordinary
+# ctest suite; the concurrent behaviour of the same counter is covered
+# separately by test/concurrency/lifetime_token_test.c, which is deliberately
+# NOT a ctest. Not FUZZABLE: the only input is a pointer the function casts
+# but never dereferences, so there is no byte stream to fuzz.
+canon_c_test(
+    NAME     lifetime_test
+    SRC      test/core/primitives/lifetime_test.c
+    INCLUDES core/primitives .
+)
+
 # ---------------------------------------------------------------------------
 # core/ tests                          — uncomment when ready (v1.3.0)
 # ---------------------------------------------------------------------------

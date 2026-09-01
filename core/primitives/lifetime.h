@@ -122,8 +122,24 @@
  * See docs/thread-safety.md for the concurrency contract.
  *
  * 0 is reserved as REGION_ID_STATIC ("no owner" / static lifetime).
- * A valid owner will never have ID 0: no stack or heap object has
- * address 0 on any conforming C99 implementation.
+ *
+ * A valid owner never has ADDRESS 0 on any conforming C99 implementation --
+ * but that is a fact about the address, and the id is not the address. The
+ * id is `counter ^ address`, which is 0 whenever the counter happens to
+ * equal the address, and the counter walks 1, 2, 3, ... So the id CAN be 0
+ * where the address cannot, and the address argument does not establish
+ * what it was previously written here to establish.
+ *
+ * How reachable that is depends entirely on the address map. On a hosted
+ * 64-bit target the counter would have to walk to a stack or heap address
+ * (order 1e14 calls) and it is infeasible. On a small target with objects
+ * low in RAM it is a few thousand calls and is ordinary. Canon-C targets
+ * the second kind of machine.
+ *
+ * The explicit guard at the end of canon_lifetime_next_id_ is therefore
+ * load-bearing, not defensive belt-and-braces, and it is what discharges
+ * the `\result != REGION_ID_STATIC` postcondition. Corrected 2026-09; the
+ * superseded wording claimed the property followed from addresses alone.
  */
 typedef u64 region_id_t;
 
@@ -231,15 +247,54 @@ typedef u64 region_id_t;
 #endif
 
 /*
- * No ACSL contract, deliberately.
+ * Contract, and the configuration that checks it.
  *
- * This block is excluded from every verified configuration — all WP jobs run
- * with CANON_LIFETIME off — so a contract here would be unchecked decoration.
- * Until 2026-08 two of the eleven private copies carried `assigns \nothing`,
- * which is FALSE: the function writes the counter. That the falsehood
- * survived unnoticed is itself the argument for not replacing it with
- * another unchecked annotation. The honest statement is this comment.
+ * Until 2026-09 this block carried no ACSL, deliberately: no verified
+ * configuration translated it, so a contract here would have been unchecked
+ * decoration — and two of the eleven superseded private copies proved the
+ * point by carrying `assigns \nothing`, which is FALSE (the function writes
+ * the counter) and survived precisely because nothing checked it.
+ *
+ * That reasoning is unchanged. What changed is the premise: the token
+ * generator is the project's last unverified INSTRUMENT, so rather than
+ * annotate an untranslated block, a configuration that translates it was
+ * added — `frama-c-lifetime`, running with CANON_LIFETIME_DEBUG on and
+ * CANON_LIFETIME_NO_ATOMICS forcing level 4.
+ *
+ * Levels 1-3 are excluded and stay excluded. WP has no concurrency model
+ * for atomic_fetch_add_explicit, __atomic_fetch_add or
+ * _InterlockedIncrement64, so the contract is gated on level 4 and asserts
+ * nothing about the other three. The atomic ladder's correctness argument
+ * remains the prose one in docs/thread-safety.md; this contract does not
+ * extend to it and must not be read as if it did.
+ *
+ * What is claimed, and what is deliberately not:
+ *
+ *   assigns counter_        — true, and the correction of the historical
+ *                             `assigns \nothing`.
+ *   \result != REGION_ID_STATIC
+ *                           — the property with teeth. Handing out 0 would
+ *                             mark the owner as static-lifetime, so every
+ *                             borrow over it would stop expiring: the
+ *                             instrument would fail OPEN. The guard below is
+ *                             what makes this hold, and it holds independently
+ *                             of how the memory model interprets the
+ *                             pointer-to-integer cast.
+ *
+ *   Distinctness of ids is NOT claimed and is not claimable here: it is a
+ *   property over a SEQUENCE of calls, and a WP contract speaks about one.
+ *   Injectivity is not merely unproved but FALSE by construction — the
+ *   REGION_ID_STATIC guard maps the xor-cancelling case onto 1, which is
+ *   also reachable directly, so two distinct owners can receive id 1. The
+ *   collision rate is negligible; the fact is recorded because the
+ *   instrument's users should not assume a property it does not have.
  */
+#if defined(__FRAMAC__) && (CANON_LIFETIME_ATOMIC_LEVEL_ == 4)
+/*@
+  assigns counter_;
+  ensures \result != REGION_ID_STATIC;
+*/
+#endif
 static inline region_id_t canon_lifetime_next_id_(const void* owner_) {
 #if CANON_LIFETIME_ATOMIC_IDS && (CANON_LIFETIME_ATOMIC_LEVEL_ == 1)
     static _Atomic region_id_t counter_ = 1;
@@ -262,7 +317,10 @@ static inline region_id_t canon_lifetime_next_id_(const void* owner_) {
     counter_++;
 #endif
     region_id_t id_ = c_ ^ (region_id_t)(uintptr_t)owner_;
-    /* REGION_ID_STATIC (0) is reserved; never hand it out. */
+    /* REGION_ID_STATIC (0) is reserved; never hand it out. Reachable when
+       c_ == (uintptr_t)owner_ -- a few thousand calls on a low-address
+       target, infeasible on hosted 64-bit. Discharges the postcondition;
+       breaks injectivity, since 1 is also produced directly. */
     if (id_ == REGION_ID_STATIC) { id_ = (region_id_t)1; }
     return id_;
 }
