@@ -2015,6 +2015,57 @@ the five `frama-c-{slice,memory,arena,pool,region}` steps.
 
 ---
 
+## VERIFY-013: No Deviation to Record (error.h, and why this entry exists at all)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | VERIFY-013 |
+| **Date**       | 2026-09-02 (id allocated at the time of the error.h run; entry written later, see below) |
+| **Baseline commit** | error.h has been 65/65 with zero residuals since its verification run |
+| **Scope**      | `semantics/error.h` — 4 functions, 65 obligations, **65 proved, 0 unproved, 0 residuals** |
+| **Category**   | Formal verification completeness |
+| **Enforcement**| `frama-c-error` pins 65/65 |
+
+**Description**: there is no deviation here. That is the entire content, and it
+is the reason this entry did not exist for as long as it didn't.
+
+This file records DEVIATIONS. Every other entry names something that had to be
+conceded: timeouts (VERIFY-003), manually discharged goals (VERIFY-002, -006),
+a memory-model override (VERIFY-005), libc boundary limits (VERIFY-007, -008),
+inherited substrate (VERIFY-009 through -011), function-pointer dispatch
+(VERIFY-014, -015). `error.h` conceded nothing. 65 obligations, 65 proved,
+nothing weakened, nothing inherited, nothing pending. It is the only module in
+the project in that position.
+
+So the id was allocated in sequence and no entry was written, because by this
+file's own standard there was nothing to write. **That judgement was right and
+is not being reversed.** What was wrong was the encoding: with no entry, twelve
+references across `verification.md`, `traceability.md` and
+`decision-families.md` — including a Reference-column cell in the WP accounting
+table, whose one job is to point somewhere — cited a document that did not
+exist. A dangling link in a traceability chain is a defect independent of
+whether the target deserved to be written, and it survived every release since
+error.h was verified.
+
+Two fixes were available: rewrite the twelve citations to read "n/a — clean, no
+deviation", or write the entry the citations already claim exists. The second
+is taken, because the id is in circulation in shipped releases, because
+"error.h is VERIFY-013 clean" is the natural way the prose already reads, and
+because "this module deviated in no way" turns out to be worth one paragraph in
+a file where every other module needed several.
+
+**Found by** a one-off sweep for referenced-but-undefined ids, run on
+2026-09-02 alongside the VERIFY-021 work, which also surfaced a two-week-old
+staleness in `design-decisions.md` (lifetime.h described as "typedefs only"
+after the token generator landed in that header at CI #1243–#1245). Neither
+defect was in code or in a proof; both were in the assurance argument ABOUT
+them. Nothing checks that argument mechanically today, and the sweep was not
+retained as tooling — noted here so the next person knows this class of defect
+is currently found by looking, and how long one of them survived.
+
+**What this entry does not claim**: that error.h is trivially correct or that
+its 65/65 required no work. Only that once proved, it left nothing behind.
+
 ## VERIFY-014: Function-Pointer-Dispatch and Inherited Residuals (option, first driver-verified module)
 
 | Field          | Value |
