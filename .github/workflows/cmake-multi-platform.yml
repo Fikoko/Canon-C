@@ -5508,6 +5508,59 @@ jobs:
           echo "      falsified contract. Nothing is pinned. Two more"
           echo "      name-identical runs before ENFORCE=1."
           echo "==============================================="
+      - name: "WP goal-level detail (diagnostic, never fails)"
+        # Added after run 0 (CI #1271), which reported
+        #   Proved goals: 4/4 — Terminating 1, Unreachable 1, Qed 2
+        # and gave no way to tell WHICH program point WP called unreachable.
+        # That mattered and was not answerable from the artifact: if the
+        # unreachable point is the REGION_ID_STATIC guard, it contradicts
+        # MCDC-013, whose justification row disposes of that same branch as
+        # reachable-but-undriveable. Coverage saying "cannot drive it here"
+        # and WP saying "cannot reach it at all" are different claims, and
+        # two instruments disagreeing about one branch is a finding.
+        #
+        # The main step above is left untouched so its parse of the pinned
+        # Proved line stays byte-stable. This is a separate invocation whose
+        # only job is to name the goals. It never fails: a diagnostic that
+        # can break the build invites being deleted the first time it is
+        # inconvenient.
+        if: always()
+        run: |
+          eval $(opam env --switch=frama-c)
+          set +e
+          frama-c -wp -wp-rte \
+            -wp-model Typed \
+            -wp-prover alt-ergo,z3,cvc5 \
+            -wp-timeout 120 \
+            -wp-split \
+            -wp-verbose 2 \
+            -cpp-extra-args=" \
+              -I core/primitives \
+              -I core \
+              -I . \
+              -DCANON_LIFETIME_DEBUG \
+              -DCANON_LIFETIME_NO_ATOMICS \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            core/primitives/lifetime.h > wp_lifetime_goals.txt 2>&1
+          set -e
+          echo "==============================================="
+          echo "  Goal-level detail — VERIFY-021 open item"
+          echo "==============================================="
+          grep -iE "unreachable|terminat|smoke|Goal |assert|ensures" \
+            wp_lifetime_goals.txt || echo "  (no goal lines matched — read the artifact)"
+          echo ""
+          echo "  Read the Unreachable goal against MCDC-013's justification"
+          echo "  row before promoting this job to ENFORCE=1. If it names the"
+          echo "  REGION_ID_STATIC guard, one of the two entries is wrong."
+          echo "==============================================="
+      - name: Upload WP goal detail (lifetime.h)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wp-goals-lifetime
+          path: wp_lifetime_goals.txt
+          retention-days: 90
       - name: Upload WP proof output (lifetime.h)
         if: always()
         uses: actions/upload-artifact@v6
