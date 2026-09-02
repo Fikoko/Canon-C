@@ -174,6 +174,46 @@ Two further properties hold on **every** level and are not defects:
 - Tokens are **not** unique across time. An address may be reused after an
   owner dies; the counter term makes reuse unlikely rather than impossible.
 
+### What is machine-checked, and what stays prose (VERIFY-021)
+
+As of 2026-09-02 **ladder level 4 is machine-checked**. `frama-c-lifetime`
+runs WP with `CANON_LIFETIME_DEBUG` + `CANON_LIFETIME_NO_ATOMICS`, and
+`canon_lifetime_next_id_` provably never returns `REGION_ID_STATIC` on that
+path. Handing out 0 would mark the owner as static-lifetime, so borrows over
+it would stop expiring: the instrument would fail OPEN. That is the property
+worth proving about a generator, and it is now proved.
+
+**Levels 1–3 carry no machine-checked claim, and are excluded permanently.**
+WP has no concurrency model for `atomic_fetch_add_explicit`,
+`__atomic_fetch_add` or `_InterlockedIncrement64`. The contract in
+`lifetime.h` is `#if`-gated on `CANON_LIFETIME_ATOMIC_LEVEL_ == 4` so it
+cannot silently acquire authority over the other three. Everything this
+document says about levels 1–3 remains a prose argument, unchanged in status
+by VERIFY-021.
+
+Note the asymmetry plainly, because it is easy to quote the wrong way round:
+**the verified path is the only one that is NOT race-free.** Level 4 is the
+fallback with the documented data race above. Verification followed the
+tool's reach, not the risk. A reader who takes "lifetime.h is verified" to
+mean the threaded paths are covered has it exactly backwards.
+
+Two things VERIFY-021 does NOT claim:
+
+- **No frame.** The contract has no `assigns` clause, because one cannot be
+  written: `counter_` is a function-local static and is not in scope where a
+  function contract is parsed. `assigns \nothing` would be FALSE — it is the
+  historical defect, carried by two of the eleven superseded copies — and
+  hoisting the variable would verify a different program than the one that
+  ships. WP therefore assumes `\everything` and emits a
+  `[wp:pedantic-assigns]` warning, which is retained rather than suppressed.
+- **Not distinctness.** Token distinctness is a property over a SEQUENCE of
+  calls; a WP contract speaks about one. It is not merely unproved but false
+  in the strict sense — the `REGION_ID_STATIC` guard maps the xor-cancelling
+  case onto 1, which is also produced directly, so two distinct owners can
+  receive id 1. The rate is negligible and this is not a defect, but the two
+  bullets above about per-TU counters and reuse across time are the operative
+  statement, not an aspiration toward uniqueness.
+
 ### What CI checks, and what it deliberately does not
 
 `test/concurrency/lifetime_token_test.c` is the library's only concurrent

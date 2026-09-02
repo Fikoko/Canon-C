@@ -359,6 +359,26 @@ IS proved. An unqualified "capped by bits.h" would understate what the
 contracts do deliver, which is why the width is stated rather than the
 dependency.
 
+**Shape 6 (one instance — recorded, not yet a family) —
+Execution-dead, proof-load-bearing.** A branch unreachable on the host
+that MEASURES it, live on the host that RUNS it, and required by the
+PROOF. lifetime.h's `REGION_ID_STATIC` guard (VERIFY-021 L1,
+MCDC-013): it fires when the call counter equals the owner's address,
+which needs order 1e14 calls on the hosted x86-64 CI runner and a few
+thousand on a low-address embedded target — the machine Canon-C
+actually targets. Coverage therefore takes a justification row while
+WP relies on the same branch to discharge
+`\result != REGION_ID_STATIC`.
+
+This is the converse axis to VERIFY-020 E1/F5, where a clause
+redundant for the LOGIC turned out to be load-bearing for the PROVER.
+Here the redundancy is in EXECUTION rather than logic, and the
+platform — not the invariant — is what makes it dead. The defining
+feature, and the reason it is not folded into the invariant-dead
+disposition, is that the branch is **not dead in the shipped
+configuration**; it is dead only where it is observed. One instance is
+not a family, and this stays a note until a second appears.
+
 The canonical references for VERIFY- entry *structure* (status box,
 per-category goal lists, manual proof arguments, CI wrapper
 enforcement) are the entries themselves in `docs/verification.md` and

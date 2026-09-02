@@ -3738,6 +3738,148 @@ contracts none of bitset's functions and is not a Shape-B driver.
 
 ---
 
+## VERIFY-021: An Instrument Verified, and a Frame Clause That Cannot Be Written (lifetime.h, ladder level 4 only)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | VERIFY-021 |
+| **Date**       | 2026-09-02 |
+| **Baseline commit** | Canon-C CI #1271 (307307c). Run 0 only, report-only. Prior attempts: #1269 (build), #1270 (build), #1271-a (ACSL rejected, ARM B) |
+| **Scope**      | `core/primitives/lifetime.h`, `canon_lifetime_next_id_` only, under `CANON_LIFETIME_DEBUG` + `CANON_LIFETIME_NO_ATOMICS` (ladder level 4) — 4 obligations, 0 unproved |
+| **Category**   | Formal verification completeness |
+| **Enforcement**| **NOT ENFORCED.** Report-only at ENFORCE=0. Failed/Invalid/Stepout gate unconditionally; the residual count does not. Promotion requires three name-identical runs |
+
+**Description**: this is an **instrument-integrity** entry, not a module arc,
+and it must not be read as one. It verifies the lifetime token GENERATOR. It
+says nothing about whether client code obeys the borrow discipline — that is a
+typestate property over all callers, WP proves contracts on functions, and it
+remains issue #7's territory. `lifetime.h` was the last unverified instrument
+in a project whose entire argument rests on measurement discipline.
+
+4 of 4 obligations discharged, 0 unproved, 0 Failed/Invalid/Stepout.
+
+### Why a configuration, not a contract
+
+Until 2026-09 the header carried no ACSL, deliberately, on written grounds:
+every WP job ran with `CANON_LIFETIME` off, so a contract would have been
+unchecked decoration. Two of the eleven superseded private copies had carried
+`assigns \nothing` — FALSE, the function writes the counter — and it survived
+unnoticed for exactly that reason.
+
+That argument was correct and is **not overturned here. It is satisfied.** The
+fix for an unchecked annotation is a configuration that checks it. Job
+`frama-c-lifetime` is that configuration.
+
+Levels 1–3 are excluded **permanently**: WP has no concurrency model for
+`atomic_fetch_add_explicit`, `__atomic_fetch_add` or `_InterlockedIncrement64`.
+The contract is `#if`-gated on `CANON_LIFETIME_ATOMIC_LEVEL_ == 4` so it cannot
+silently acquire authority over the other three. The ladder's correctness
+argument remains the prose one in `docs/thread-safety.md`.
+
+**The roadmap row reads "verified at level 4 only" and must never be shortened
+to "verified".** Three of the four ladder paths — including every path a
+threaded build actually takes — carry no machine-checked claim whatsoever.
+
+### F1 — a frame clause that cannot be written (ARM B, refuted on its reason)
+
+The prereg predicted run 0 would break on `assigns counter_`, and that the
+cause would be NAMING: Frama-C hoists function-local statics, so the mangled
+name would fix it. **Confirmed on where it broke. Refuted on why.**
+
+Frama-C reported `unbound logic variable counter_` and rejected the entire
+specification. The cause is not a name to look up. `counter_` is a
+function-local static and therefore does not exist in the file scope where a
+FUNCTION CONTRACT is parsed. There is no spelling that works. Three responses
+were available:
+
+1. `assigns \nothing` — FALSE, and precisely the historical defect this arc
+   exists to correct. Rejected outright.
+2. Hoist `counter_` to file scope under `__FRAMAC__` — makes the clause
+   writable by verifying a DIFFERENT program than the one that ships.
+   Rejected: the project verifies shipped source, never a copy. This is the
+   same rule that forbids a driver reimplementing its subject.
+3. Write no frame clause. WP assumes `\everything`, which is sound and claims
+   nothing false.
+
+(3) is taken. WP's own `[wp:pedantic-assigns]` warning — "No 'assigns'
+specification ... Callers assumptions might be imprecise" — is retained in the
+uploaded artifact rather than suppressed. It is the tool's record of exactly
+the position documented here, and suppressing it would hide the one honest
+signal that a frame is missing.
+
+This is a **specification-strength ceiling**, the same family as VERIFY-020 F4:
+a limit on what can be STATED, not on what a prover can DISCHARGE. F4's ceiling
+came from a callee's deliberately weak contract; F1's comes from ACSL's scoping
+rules meeting C's storage classes. Same family, different source. The effect is
+witnessed at runtime instead, by `test_counter_advances`.
+
+### What is claimed
+
+`ensures \result != REGION_ID_STATIC` — the property with teeth. Handing out 0
+marks the owner as static-lifetime, so every borrow over it stops expiring: the
+instrument fails **OPEN**, the worst failure mode an instrument has.
+
+**Distinctness is NOT claimed and is not claimable.** It is a property over a
+SEQUENCE of calls; a WP contract speaks about one. See L2 below — it is not
+merely unproved but false.
+
+### Prediction scorecard (registered before run 0)
+
+| Arm | Prediction | Outcome |
+|---|---|---|
+| A | `\result != REGION_ID_STATIC` proves under Typed AND Typed+Cast | **CONFIRMED under Typed.** The guard is total, so the postcondition holds independently of how the model interprets the pointer-to-integer cast. Typed+Cast control not yet run |
+| B | assigns clause breaks run 0, on naming | **Confirmed on where, REFUTED on why.** See F1 |
+| C | 0 inherited residuals | **Weakly confirmed only.** With 0 TOTAL residuals the run cannot discriminate "inherited nothing" from "inherited goals that all proved." Not refuted; not discriminating either. Recorded as weak on purpose |
+| D | 2–10 total goals, 0 Failed/Invalid/Stepout | **CONFIRMED (4).** Note the contract shrank after ARM B, so the range was set against a two-clause contract and scored against a one-clause one — a caveat on the confirmation, not a defence of it |
+| E | No new residual class | **Vacuously held** (0 residuals). No information |
+
+Three of five arms carry caveats. That is the honest reading of a run this
+small, and the entry is written to prevent "5/5 goals, all arms confirmed"
+being quoted from it.
+
+### Open item — the unidentified `Unreachable` goal
+
+The 4 goals decompose as `Terminating 1, Unreachable 1, Qed 2`. Only two are
+ordinary obligations. **Which program point WP called unreachable has not been
+determined**, and it must be before ENFORCE=1: if it is the `REGION_ID_STATIC`
+guard's TRUE leg, it contradicts the MCDC-013 justification row below, which
+disposes of that same branch as reachable-but-undriveable. Two instruments
+giving opposite verdicts on one branch is a finding, not a formality. Capture
+with `-wp-verbose 2` on run 1.
+
+### L1 — a rationale that reasoned about the wrong quantity
+
+The header justified "a valid owner will never have ID 0" from the fact that no
+object has address 0. But the id is `counter ^ address`, not the address. It is
+0 exactly when the two coincide, and the counter walks 1, 2, 3, …
+
+| target | counter value needed | verdict |
+|---|---|---|
+| hosted x86-64 (stack ~`0x7ffc…`, heap ~`0x5653…`) | ~1e14 calls | infeasible |
+| low-RAM embedded, object at `0x0800` | ~2e3 calls | ordinary |
+
+Canon-C targets the second. Measured: over 4096 calls where the address equals
+the counter, the guard's TRUE leg fires 4096/4096. **The code was always
+correct** — the guard catches it. Only the justification was wrong, and it
+justified a property of `owner_` while the value at risk was `c_ ^ owner_`.
+Found by attempting the proof, not by reading the file.
+
+### L2 — the generator is not injective, by construction
+
+The guard maps the xor-cancelling case onto 1, and 1 is also produced directly
+when `counter ^ address == 1`. Demonstrated: owner `0x7` at call 7 and owner
+`0x8` at call 9 both receive id 1. The rate is negligible and **this is not a
+defect**. It is recorded because a reader may otherwise assume uniqueness, and
+because it fixes the boundary of what the contract can say.
+
+### Relation to the composition result
+
+**None, and the entry should not be cited in that argument.** The include
+closure is `<stdbool.h>` + `types.h`, which pulls only `<stddef.h>`,
+`<stdint.h>`, `<stdbool.h>`. No `contract.h`, so not even the 2-goal handler
+pair every residual-carrying header has inherited. There is nothing composed
+here and nothing to measure about composition.
+
 ## MCDC-001: Coverage Flags Methodology
 
 | Field          | Value |
@@ -6223,3 +6365,66 @@ are exactly the checks a MISRA project should want to keep.
 
 **Mitigation**: per-site inline suppressions; rule 2.3 stays live for genuinely
 unused typedefs.
+
+## MCDC-013: One Outcome Platform-Dead, and a Denominator That Grew (lifetime.h)
+
+| Field          | Value |
+|----------------|-------|
+| **ID**         | MCDC-013 |
+| **Date**       | 2026-09-02 |
+| **Baseline commit** | Canon-C CI #1271 (307307c) |
+| **Scope**      | `core/primitives/lifetime.h` — 2 condition outcomes, 1 covered (50.00%), 1 justified; 5/5 executable lines (100.00%) |
+| **Category**   | Structural coverage completeness |
+| **Enforcement**| Measured in the aggregate MC/DC table; one justification row below |
+
+**Description**: `canon_lifetime_next_id_` contains exactly one condition,
+`if (id_ == REGION_ID_STATIC)`. Its FALSE leg is covered 100079 times by
+`lifetime_test.c`; its TRUE leg is not covered and takes a justification row.
+
+### The aggregate goes DOWN, and that is correct
+
+`lifetime_test.c` defines `CANON_LIFETIME_DEBUG` itself, so the generator now
+compiles in the coverage build, which does not set `CANON_LIFETIME`. Code that
+previously contributed NOTHING to the denominator now contributes 2 outcomes
+with 1 covered:
+
+| | outcomes | covered | % |
+|---|---:|---:|---:|
+| before | 2012 | 1795 | 89.215 |
+| after  | 2014 | 1796 | 89.176 |
+
+**The headline number falls by 0.04 points because coverage got more honest,
+not less complete.** The branch was always there and always uncovered; it was
+merely invisible, compiled out of every measured TU. Recorded explicitly so
+nobody later "fixes" the regression by removing the test.
+
+The enforced gate is BRANCH coverage at 80%; MC/DC is report-only. Verified
+that this does not approach the threshold.
+
+### Justification row — the `REGION_ID_STATIC` guard, TRUE leg
+
+Fires only when `c_ == (uintptr_t)owner_`: the call counter equal to the
+owner's address. **Not dead by invariant** — dead by ADDRESS MAP, which makes
+it a different kind of justification from MCDC-012's J1–J4, and the difference
+is the reason this row is written out rather than cross-referenced.
+
+On the hosted x86-64 runner it needs order 1e14 calls and is unreachable within
+any feasible budget. On a low-address embedded target it needs a few thousand
+and is ordinary. **The branch is live code on the deployment target and dead
+only on the machine that measures it.**
+
+Driving it would require an injectable counter, i.e. reimplementing the
+generator in the test — verifying a copy, which the project does not do. The
+one-source-of-truth rule in `docs/vmacros.md` governs.
+
+**Cross-stream, and an open question.** The proof stream needs this same branch
+to be REACHABLE: it is what discharges `\result != REGION_ID_STATIC` in
+VERIFY-021. So coverage calls it undriveable while WP relies on it. That is
+consistent — undriveable on one host is not unreachable in the model — but see
+VERIFY-021's open item: **if WP's unidentified `Unreachable` goal turns out to
+be this branch, the two streams contradict each other and this row must be
+rewritten.** Flagged rather than assumed.
+
+This inverts VERIFY-020 E1/F5, where a clause redundant for the LOGIC was
+load-bearing for the PROVER. Here a branch dead in EXECUTION on the measuring
+host is load-bearing for the PROOF.

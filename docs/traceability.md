@@ -56,6 +56,17 @@
 | **Scope**          | Library headers + Shape-B cover TUs — test files excluded    |
 | **Test binaries**  | 54 (50 test binaries + 4 Shape-B cover TUs `option_cover`, `result_cover`, `vec_cover`, `deque_cover`; contract_test excluded from the coverage build — confirmed against #1240, which reports "Found 54 data files in build") |
 
+> **Coverage moved by VERIFY-021 (2026-09-02), and DOWNWARD.** MC/DC is now
+> **1796/2014 (89.176%)**, from 1795/2012 (89.215%). `lifetime_test.c` defines
+> `CANON_LIFETIME_DEBUG` itself, so `canon_lifetime_next_id_` compiles in the
+> coverage build — which does not set `CANON_LIFETIME` — and brings 2 condition
+> outcomes into the denominator with 1 covered. The percentage falls by 0.04
+> because the measurement got more honest, not less complete: the branch was
+> always there and always uncovered, merely compiled out of every measured TU.
+> Recorded explicitly so nobody later "fixes" the regression by deleting the
+> test. Lines 5/5 in the header. The enforced gate is BRANCH coverage at 80%
+> and is untouched; MC/DC remains report-only. See MCDC-013.
+>
 > **Coverage vs. proof provenance (2026-08-27).** This card describes the
 > **coverage** measurement, last moved by the bitset arc at CI #1266
 > (MC/DC 1795/2012, branches 1592/1800, lines 2671/2769, functions
@@ -768,7 +779,15 @@ proved line 5231 / 5429 → 5271 / 5467.
 | vec        | 37        |              5467 | 5271 (96.41%) | 196      | VERIFY-018   |
 | deque      | 24        |              1668 | 1601 (95.98%) | 67       | VERIFY-019   |
 | bitset     | 32        |              5002 | 4839 (96.74%) | 163      | VERIFY-020   |
-| **Total**  | **371**   | **37307**         | **36379 (97.51%)**| **928**  |              |
+| lifetime.h | 1         |                 4 | 4 (100.00%)  | 0        | VERIFY-021 ⚠ |
+| **Total**  | **372**   | **37311**         | **36383 (97.51%)**| **928**  |              |
+
+⚠ `lifetime.h` is **report-only and not enforced** (run 0, CI #1271); it is
+excluded from the enforced-pin claim below and must not be counted toward it
+until three name-identical runs promote it. Its scope is also narrower than
+every other row: ladder **level 4 only**, one `ensures` clause, no `assigns`
+(VERIFY-021 F1). Zero residuals here means zero goals left over from four,
+not a module cleared.
 
 All figures are the enforced CI pins at HEAD (16d0f0b, CI #1266 — post the
 deque arc of CI #1225–#1240 and the vec F4 ratchet of CI #1246–#1247).
