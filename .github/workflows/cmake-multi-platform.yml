@@ -5255,7 +5255,7 @@ jobs:
           retention-days: 90
 
   # -------------------------------------------------------------------------
-  # core/primitives/lifetime.h — REPORT-ONLY (VERIFY-021)
+  # core/primitives/lifetime.h — ENFORCED as of CI #1275 (VERIFY-021)
   #
   # INSTRUMENT INTEGRITY, not ownership semantics. This job verifies the token
   # GENERATOR. It says nothing about whether client code obeys the borrow
@@ -5325,8 +5325,14 @@ jobs:
   # precedent, not a contrived driver: forcing it would mean an injectable
   # counter, i.e. verifying a copy.
   #
-  # PROMOTION: three consecutive name-identical runs before ENFORCE=1, as with
-  # every prior unit. Do not promote on run 0 however clean it looks.
+  # PROMOTION: done. #1271, #1273, #1274 name-identical (4/4, Terminating 1 /
+  # Unreachable 1 / Qed 2), enforced at #1275. The blocking open item is
+  # closed: -wp-print at #1274 showed the postcondition SPLIT ALONG THIS
+  # GUARD — goal (1/2) tagged Then, (2/2) tagged Else, both Qed-valid. WP
+  # proves the postcondition THROUGH the branch above and does not hold it
+  # unreachable, so the two streams AGREE: reachable in the model,
+  # undriveable on this host. The residual "Unreachable: 1" is some other
+  # point and is still unnamed — a curiosity, not a blocker.
   # -------------------------------------------------------------------------
   frama-c-lifetime:
     needs: build
@@ -5394,8 +5400,27 @@ jobs:
       - name: "WP: core/primitives/lifetime.h (VERIFY-021, report-only)"
         run: |
           eval $(opam env --switch=frama-c)
-          ENFORCE=0
+          # ENFORCED as of CI #1275. Three name-identical JOB results:
+          # #1271, #1273, #1274, all "Proved goals: 4 / 4" with the same
+          # Terminating 1 / Unreachable 1 / Qed 2 decomposition. #1273 and
+          # #1274 were cancelled at the WORKFLOW level after this job had
+          # finished (unrelated long WP jobs stopped to save minutes), so
+          # the evidence is job-level; #1275 is the first uncancelled run
+          # under enforcement. Enforcement was not set in the commit that
+          # first turned this job green — that was #1271. The open
+          # item that blocked promotion is closed: -wp-print at #1274 showed
+          # the postcondition SPLIT ALONG THE GUARD into goal (1/2) tagged
+          # Then and (2/2) tagged Else, both scheduled and both Qed-valid.
+          # WP therefore reasons about the case where the REGION_ID_STATIC
+          # guard fires and proves the postcondition through it — it does
+          # NOT hold that branch unreachable, so it does not contradict
+          # MCDC-013's justification row. The residual "Unreachable: 1" is
+          # some other point and remains unnamed; that is now a curiosity,
+          # not a blocker.
+          ENFORCE=1
           WP_MODEL=Typed
+          EXPECTED_TOTAL=4
+          EXPECTED_UNPROVED=0
           # Pre-registered, printed against observed. Not gating at ENFORCE=0.
           PREDICT_INHERITED=0
           PREDICT_OWN=0
@@ -5504,9 +5529,27 @@ jobs:
             grep -E "^\[wp\] \[(Timeout|Unknown)\]" wp_lifetime_output.txt || true
           fi
           echo ""
-          echo "REPORT-ONLY PASS: lifetime.h analysed at ladder level 4, no"
-          echo "      falsified contract. Nothing is pinned. Two more"
-          echo "      name-identical runs before ENFORCE=1."
+          if [ "${ENFORCE}" -eq 1 ]; then
+            if [ "${TOTAL_GOALS}" -ne "${EXPECTED_TOTAL}" ]; then
+              echo "FAIL: total goals ${TOTAL_GOALS}, pinned ${EXPECTED_TOTAL}."
+              echo "      A MOVED total is not automatically a regression --"
+              echo "      it may be a contract improvement -- but it is never"
+              echo "      silent. Re-measure, update the pin deliberately, and"
+              echo "      say why in VERIFY-021."
+              exit 1
+            fi
+            if [ "${UNPROVED_COUNT}" -ne "${EXPECTED_UNPROVED}" ]; then
+              echo "FAIL: unproved ${UNPROVED_COUNT}, pinned ${EXPECTED_UNPROVED}."
+              grep -E "^\\[wp\\] \\[(Timeout|Unknown)\\]" wp_lifetime_output.txt || true
+              exit 1
+            fi
+            echo "ENFORCED PASS: ${TOTAL_GOALS}/${TOTAL_GOALS}, 0 unproved,"
+            echo "      pinned exactly. Scope remains ladder level 4 only and"
+            echo "      one ensures clause -- see VERIFY-021 before quoting"
+            echo "      this as \"lifetime.h is verified\"."
+          else
+            echo "REPORT-ONLY PASS: nothing pinned."
+          fi
           echo "==============================================="
       - name: "WP goal-level detail (diagnostic, never fails)"
         # Added after run 0 (CI #1271): the summary reports
@@ -5556,10 +5599,40 @@ jobs:
           echo "  Goal-level detail — VERIFY-021 open item"
           echo "==============================================="
           echo "--- generated obligation files (names carry the goals) ---"
+          # Expect this to be EMPTY, and that is informative rather than a
+          # failure: -wp-out only writes a file for a goal that is sent to a
+          # PROVER, and Qed closes every goal in this unit first. Same reason
+          # -wp-print below lists only the two scheduled postcondition goals.
           find /tmp/wpout -type f | sed "s|/tmp/wpout/||" | sort || true
           echo ""
-          echo "--- goal text from -wp-print ---"
+          echo "--- goal text from -wp-print (scheduled goals only) ---"
           cat wp_lifetime_goals.txt || true
+          echo ""
+          echo "--- ALL goals, including the ones Qed closes silently ---"
+          # -wp-prover none generates every goal and proves none, so the
+          # Terminating and Unreachable obligations become visible instead of
+          # being absorbed into the summary counts. This is the only way to
+          # see them: they never reach a prover and so never reach -wp-out.
+          # Both belong to canon_lifetime_next_id_ -- it is the only function
+          # in the header. Never fails; if the flag is wrong the raw output
+          # is still uploaded.
+          set +e
+          frama-c -wp -wp-rte \
+            -wp-model Typed \
+            -wp-prover none \
+            -wp-print \
+            -wp-split \
+            -cpp-extra-args=" \
+              -I core/primitives \
+              -I core \
+              -I . \
+              -DCANON_LIFETIME_DEBUG \
+              -DCANON_LIFETIME_NO_ATOMICS \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            core/primitives/lifetime.h > wp_lifetime_allgoals.txt 2>&1
+          set -e
+          cat wp_lifetime_allgoals.txt || true
           echo ""
           echo "  Read the Unreachable goal against MCDC-013's justification"
           echo "  row before promoting to ENFORCE=1. If it names the"
@@ -5574,6 +5647,7 @@ jobs:
           name: wp-goals-lifetime
           path: |
             wp_lifetime_goals.txt
+            wp_lifetime_allgoals.txt
             wp_lifetime_obligations.tar.gz
           retention-days: 90
       - name: Upload WP proof output (lifetime.h)
