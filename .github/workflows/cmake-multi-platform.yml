@@ -5331,7 +5331,10 @@ jobs:
   frama-c-lifetime:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 15, not the 60 every other WP job carries. Run 0 (CI #1271) analysed
+    # 4 goals in seconds. A 60-minute ceiling on a unit this size would let
+    # a hang look like slowness for an hour before failing.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
