@@ -779,15 +779,15 @@ proved line 5231 / 5429 → 5271 / 5467.
 | vec        | 37        |              5467 | 5271 (96.41%) | 196      | VERIFY-018   |
 | deque      | 24        |              1668 | 1601 (95.98%) | 67       | VERIFY-019   |
 | bitset     | 32        |              5002 | 4839 (96.74%) | 163      | VERIFY-020   |
-| lifetime.h | 1         |                 4 | 4 (100.00%)  | 0        | VERIFY-021 ⚠ |
+| lifetime.h | 1         |                 4 | 4 (100.00%)  | 0        | VERIFY-021   |
 | **Total**  | **372**   | **37311**         | **36383 (97.51%)**| **928**  |              |
 
-⚠ `lifetime.h` is **report-only and not enforced** (run 0, CI #1271); it is
-excluded from the enforced-pin claim below and must not be counted toward it
-until three name-identical runs promote it. Its scope is also narrower than
-every other row: ladder **level 4 only**, one `ensures` clause, no `assigns`
-(VERIFY-021 F1). Zero residuals here means zero goals left over from four,
-not a module cleared.
+`lifetime.h` is enforced as of CI #1275 (name-identical at #1271, #1273,
+#1274), so it now belongs in the enforced-pin claim below. Its scope is still
+narrower than every other row and the row must not be read as equivalent to
+them: ladder **level 4 only**, one `ensures` clause, no `assigns` (VERIFY-021
+F1), and instrument integrity rather than a module. Zero residuals here means
+zero goals left over from four, not a module cleared.
 
 All figures are the enforced CI pins at HEAD (16d0f0b, CI #1266 — post the
 deque arc of CI #1225–#1240 and the vec F4 ratchet of CI #1246–#1247).

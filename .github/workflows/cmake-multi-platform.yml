@@ -5397,7 +5397,7 @@ jobs:
           # witnessed by test_counter_advances instead. See VERIFY-021 ARM B,
           # recorded as a refuted prediction.
           echo "  contract present in preprocessed unit (ensures clause)."
-      - name: "WP: core/primitives/lifetime.h (VERIFY-021, report-only)"
+      - name: "WP: core/primitives/lifetime.h (VERIFY-021, enforced)"
         run: |
           eval $(opam env --switch=frama-c)
           # ENFORCED as of CI #1275. Three name-identical JOB results:
@@ -5454,7 +5454,8 @@ jobs:
           echo ""
           echo "==============================================="
           echo "  WP (lifetime.h) exit status: ${WP_EXIT}"
-          echo "  MODE: report-only (ENFORCE=${ENFORCE})  MODEL: ${WP_MODEL}"
+          if [ "${ENFORCE}" -eq 1 ]; then MODE_LABEL=enforced; else MODE_LABEL=report-only; fi
+          echo "  MODE: ${MODE_LABEL} (ENFORCE=${ENFORCE})  MODEL: ${WP_MODEL}"
           echo "==============================================="
           PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_lifetime_output.txt || true)
           echo "  ${PROVED_LINE}"
@@ -5513,7 +5514,7 @@ jobs:
             exit 1
           fi
           echo ""
-          echo "  --- prediction scorecard (report-only, does not gate) ---"
+          echo "  --- prediction scorecard (never gates; the pins above do) ---"
           if [ "${TOTAL_GOALS}" -ge "${PREDICT_TOTAL_MIN}" ] && \
              [ "${TOTAL_GOALS}" -le "${PREDICT_TOTAL_MAX}" ]; then
             echo "  ARM D goal count:  CONFIRMED (${TOTAL_GOALS})"
@@ -5634,9 +5635,16 @@ jobs:
           set -e
           cat wp_lifetime_allgoals.txt || true
           echo ""
-          echo "  Read the Unreachable goal against MCDC-013's justification"
-          echo "  row before promoting to ENFORCE=1. If it names the"
-          echo "  REGION_ID_STATIC guard, one of the two entries is wrong."
+          echo "  RESOLVED at CI #1275, and the question was malformed."
+          echo "  -wp-prover none generates every goal and proves none. It"
+          echo "  lists TWO goals: the postcondition split Then/Else. So the"
+          echo "  Terminating and Unreachable entries in the summary are not"
+          echo "  generated obligations over program points -- there is no"
+          echo "  branch for them to name. They are structural entries in"
+          echo "  the WP property tally, discharged without an obligation."
+          echo "  This step is kept as a regression detector: if a future"
+          echo "  change makes WP emit a THIRD goal here, it shows up below"
+          echo "  before the pinned count catches it. See VERIFY-021."
           echo "==============================================="
           # keep the obligation tree in the artifact too
           tar czf wp_lifetime_obligations.tar.gz -C /tmp wpout 2>/dev/null || true

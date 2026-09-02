@@ -49,7 +49,7 @@ formally-verified primitive layer described in the README's
 | Last green     | CI #938 across all 16 configs (8 default × `build` + 8 lifetime-debug × `lifetime-debug`, ubuntu/windows/macos × Release/Debug × default/lifetime-debug) at v1.3.0 ship. Subsequent extensions tracked under their own entries (see OWN-002 for the post-v1.3.0 Arena/Pool migration). |
 | Scope          | All owning container types in `core/` and `data/`                 |
 | Build knob     | `CANON_LIFETIME=off` (default) or `CANON_LIFETIME=debug` — see `CMakeLists.txt` |
-| Verification   | Runtime-validated via `test/semantics/borrow_test.c` across all 16 configs. The non-macro substrate is now WP-verified end to end: `arena.h` (VERIFY-009), `pool.h` (VERIFY-010), `region.h` including `lifetime_assert_valid` (VERIFY-011), `lifetime.h` (N/A — typedefs only), and the non-macro surface of `semantics/borrow.h` (VERIFY-016, verified under the default `CANON_LIFETIME`-off configuration — the exact shipped ABI bodies). Macro-templated bodies remain runtime-only by construction (see §7). |
+| Verification   | Runtime-validated via `test/semantics/borrow_test.c` across all 16 configs. The non-macro substrate is now WP-verified end to end: `arena.h` (VERIFY-009), `pool.h` (VERIFY-010), `region.h` including `lifetime_assert_valid` (VERIFY-011), `lifetime.h` (VERIFY-021 — **at ladder level 4 only**; the "typedefs only" reading here predated the token generator landing in this header at CI #1243–#1245 and was already stale before VERIFY-021), and the non-macro surface of `semantics/borrow.h` (VERIFY-016, verified under the default `CANON_LIFETIME`-off configuration — the exact shipped ABI bodies). Macro-templated bodies remain runtime-only by construction (see §7). |
 | Cross-refs     | README sections *"Borrow lifetime — know when a borrowed value is still valid"*, *"What about compile-time ownership enforcement?"*, *"From shared vocabulary to compositional verification"*; `CMakeLists.txt` `CANON_LIFETIME` block; `docs/verification.md`, `docs/deviations.md`, `docs/traceability.md` (substrate VERIFY-NNN entries land here as headers get annotated); `RELEASES.md` plus the CI run history, which together serve as this project's change record in place of a CHANGELOG; OWN-002 (Arena/Pool restamp migration, shipped post-v1.3.0). |
 
 ### Phase chronology
@@ -393,8 +393,16 @@ the lifecycle functions in `core/arena.h` and `core/pool.h`, and the
 non-macro surface of `semantics/borrow.h` are all conventional C99
 inline functions amenable to WP, and all have now landed:
 arena.h under VERIFY-009, pool.h under VERIFY-010, region.h (including
-`lifetime_assert_valid`) under VERIFY-011, lifetime.h as N/A (three
-typedefs and a constant — nothing to prove), and borrow.h's 24
+`lifetime_assert_valid`) under VERIFY-011, lifetime.h under **VERIFY-021** — but at ladder
+level 4 only, and as an INSTRUMENT-INTEGRITY result rather than a module
+arc. This paragraph previously read "N/A (three typedefs and a constant
+— nothing to prove)", which stopped being true at CI #1243–#1245 when
+`canon_lifetime_next_id_` was consolidated into this header from eleven
+private copies; the description was stale for roughly two weeks before
+VERIFY-021 surfaced it. The claim now proved is
+`\result != REGION_ID_STATIC` on the non-atomic path; **levels 1–3 carry
+no machine-checked claim** and the correctness argument for them stays
+prose in docs/thread-safety.md, and borrow.h's 24
 non-macro functions under **VERIFY-016** (this is the cross-reference
 this paragraph promised). borrow.h's entry makes the §-boundary
 explicit from the verification side: the verified configuration is the

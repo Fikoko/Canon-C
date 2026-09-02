@@ -3744,10 +3744,10 @@ contracts none of bitset's functions and is not a Shape-B driver.
 |----------------|-------|
 | **ID**         | VERIFY-021 |
 | **Date**       | 2026-09-02 |
-| **Baseline commit** | Canon-C CI #1271 (307307c). Run 0 only, report-only. Prior attempts: #1269 (build), #1270 (build), #1271-a (ACSL rejected, ARM B) |
+| **Baseline commit** | Canon-C CI #1275. The `frama-c-lifetime` JOB reported an identical `Proved goals: 4 / 4` (Terminating 1 / Unreachable 1 / Qed 2) at #1271 (307307c), #1273 and #1274. Note #1273 and #1274 were cancelled at the WORKFLOW level after this job had already completed — unrelated long-running WP jobs were stopped to save runner minutes — so the three-run evidence is job-level, not whole-run. #1275 is the first uncancelled run under enforcement and is the citable baseline. Prior attempts: #1269 (build), #1270 (build), #1271-a (ACSL rejected, ARM B) |
 | **Scope**      | `core/primitives/lifetime.h`, `canon_lifetime_next_id_` only, under `CANON_LIFETIME_DEBUG` + `CANON_LIFETIME_NO_ATOMICS` (ladder level 4) — 4 obligations, 0 unproved |
 | **Category**   | Formal verification completeness |
-| **Enforcement**| **NOT ENFORCED.** Report-only at ENFORCE=0. Failed/Invalid/Stepout gate unconditionally; the residual count does not. Promotion requires three name-identical runs |
+| **Enforcement**| **ENFORCED at CI #1275.** Pinned total 4 and unproved 0; Failed/Invalid/Stepout gate unconditionally. Promoted after three name-identical job results (see baseline note on their cancelled parent runs) and after the blocking open item below was closed. Enforcement was NOT set in the commit that first turned the job green — that was #1271, five commits earlier |
 
 **Description**: this is an **instrument-integrity** entry, not a module arc,
 and it must not be read as one. It verifies the lifetime token GENERATOR. It
@@ -3827,7 +3827,7 @@ merely unproved but false.
 
 | Arm | Prediction | Outcome |
 |---|---|---|
-| A | `\result != REGION_ID_STATIC` proves under Typed AND Typed+Cast | **CONFIRMED under Typed.** The guard is total, so the postcondition holds independently of how the model interprets the pointer-to-integer cast. Typed+Cast control not yet run |
+| A | `\result != REGION_ID_STATIC` proves under Typed AND Typed+Cast | **CONFIRMED under Typed, and more precisely than predicted.** `-wp-split` decomposes it into exactly the two guard legs (Then / Else), both Qed-valid with no prover call — see below. The guard is total, so the postcondition holds independently of how the model interprets the pointer-to-integer cast. Typed+Cast control still not run |
 | B | assigns clause breaks run 0, on naming | **Confirmed on where, REFUTED on why.** See F1 |
 | C | 0 inherited residuals | **Weakly confirmed only.** With 0 TOTAL residuals the run cannot discriminate "inherited nothing" from "inherited goals that all proved." Not refuted; not discriminating either. Recorded as weak on purpose |
 | D | 2–10 total goals, 0 Failed/Invalid/Stepout | **CONFIRMED (4).** Note the contract shrank after ARM B, so the range was set against a two-clause contract and scored against a one-clause one — a caveat on the confirmation, not a defence of it |
@@ -3837,15 +3837,61 @@ Three of five arms carry caveats. That is the honest reading of a run this
 small, and the entry is written to prevent "5/5 goals, all arms confirmed"
 being quoted from it.
 
-### Open item — the unidentified `Unreachable` goal
+### The `Unreachable` goal — closed twice, and the second question was malformed
 
-The 4 goals decompose as `Terminating 1, Unreachable 1, Qed 2`. Only two are
-ordinary obligations. **Which program point WP called unreachable has not been
-determined**, and it must be before ENFORCE=1: if it is the `REGION_ID_STATIC`
-guard's TRUE leg, it contradicts the MCDC-013 justification row below, which
-disposes of that same branch as reachable-but-undriveable. Two instruments
-giving opposite verdicts on one branch is a finding, not a formality. Capture
-with `-wp-verbose 2` on run 1.
+**First question: is it the `REGION_ID_STATIC` guard?** If it were, WP would be
+calling unreachable the same branch MCDC-013 disposes of as
+reachable-but-undriveable, and one entry would be wrong.
+
+It is not. `-wp-print` at CI #1274 shows `-wp-split` decomposing the
+postcondition ALONG THAT GUARD:
+
+```
+Goal Post-condition (lifetime.h, line 324) (1/2):  Tags: Then.   Qed Valid
+Goal Post-condition (lifetime.h, line 324) (2/2):  Tags: Else.   Qed Valid
+```
+
+Both legs are scheduled and both discharged. WP **reasons about the case where
+the guard fires and proves the postcondition through it**, so it holds the
+branch reachable in the model. That is not merely the absence of a
+contradiction but positive cross-stream agreement: coverage says the branch
+cannot be DRIVEN on a hosted x86-64 runner, WP says it can be REACHED in the
+model, and both are true because they are different claims. The MCDC-013
+justification row stands, corroborated rather than asserted.
+
+**Second question: then which program point IS it?** This was recorded as an
+open curiosity and then closed at CI #1275, where the answer turned out to be
+that the question does not parse.
+
+`-wp-prover none` generates every goal and proves none — nothing can be
+absorbed by Qed before it is listed. It lists **two** goals: the same
+Then/Else postcondition pair. So the `Terminating: 1` and `Unreachable: 1`
+lines in the summary do **not** correspond to generated obligations over
+program points. There is no branch for them to name. They are structural
+entries in the WP property tally, discharged without an obligation ever being
+produced, and they appear in the `Proved goals: 4 / 4` count because that
+count tallies PROPERTIES rather than obligations.
+
+Three flags were spent before this was understood, and the sequence is worth
+recording because each failure was informative rather than wasted:
+
+| flag | outcome | what it established |
+|---|---|---|
+| `-wp-verbose 2` | repeated the category counts | verbosity does not enumerate goals |
+| `-wp-out` | wrote **no files** | it writes only for goals sent to a PROVER, and Qed closes every goal here first |
+| `-wp-prover none` | listed exactly 2 goals | the two entries are not obligations at all |
+
+The `-wp-out` result is the substantive one: an empty obligation directory on a
+unit that reports 4 proved goals is not a tooling failure, it is evidence that
+nothing reached a prover.
+
+The decomposition also sharpens ARM A beyond what was registered: the
+postcondition does not merely prove, it proves as exactly two Qed obligations
+corresponding to the two guard legs, with no prover call on either.
+
+The diagnostic step is retained under enforcement as a regression detector
+rather than deleted: if a future change makes WP emit a third goal here, it
+surfaces in the log before the pinned count fails the build.
 
 ### L1 — a rationale that reasoned about the wrong quantity
 
@@ -6417,13 +6463,25 @@ Driving it would require an injectable counter, i.e. reimplementing the
 generator in the test — verifying a copy, which the project does not do. The
 one-source-of-truth rule in `docs/vmacros.md` governs.
 
-**Cross-stream, and an open question.** The proof stream needs this same branch
-to be REACHABLE: it is what discharges `\result != REGION_ID_STATIC` in
-VERIFY-021. So coverage calls it undriveable while WP relies on it. That is
-consistent — undriveable on one host is not unreachable in the model — but see
-VERIFY-021's open item: **if WP's unidentified `Unreachable` goal turns out to
-be this branch, the two streams contradict each other and this row must be
-rewritten.** Flagged rather than assumed.
+**Cross-stream, and now corroborated rather than assumed.** The proof stream
+needs this same branch to be REACHABLE: it is what discharges
+`\result != REGION_ID_STATIC` in VERIFY-021. This row was first written with
+that consistency FLAGGED as unverified, because WP reported an unnamed
+`Unreachable` goal and, had it been this branch, the two streams would have
+contradicted each other.
+
+It is not. `-wp-print` at CI #1274 shows `-wp-split` decomposing the
+postcondition along this exact guard into goal (1/2) tagged `Then` and (2/2)
+tagged `Else`, both Qed-valid. WP proves the postcondition THROUGH the branch
+and holds it reachable in the model. CI #1275 closed the follow-up question
+too: `-wp-prover none` lists only those two goals, so the summary's
+`Unreachable: 1` is not an obligation over any program point and there is no
+branch it could have named.
+
+So the two instruments agree, and say different things because they are asking
+different questions: **undriveable on the measuring host, reachable in the
+model.** That is what makes a justification row the right disposition here
+rather than a test — and it is now evidence, not an argument.
 
 This inverts VERIFY-020 E1/F5, where a clause redundant for the LOGIC was
 load-bearing for the PROVER. Here a branch dead in EXECUTION on the measuring
