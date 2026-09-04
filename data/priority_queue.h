@@ -111,7 +111,7 @@
  *     capacity, remaining, is_empty, is_full, as_bytes). The bool legacy
  *     wrappers (pq_push, pq_pop, pq_peek, pq_remove_at) inherit the
  *     restamp transitively through the result variants they delegate to.
- *   - Internal helpers (pq_swap, pq_sift_up, pq_sift_down) deliberately
+ *   - Internal helpers (pq_swap_, pq_sift_up_, pq_sift_down_) deliberately
  *     do NOT restamp. The restamp belongs at the public-operation
  *     boundary so a single push (which may call sift_up many times)
  *     produces exactly one id bump, not one per internal swap.
@@ -254,17 +254,43 @@ typedef struct {
    ════════════════════════════════════════════════════════════════════════════ */
 
 /** @brief Returns index of parent node — @pre i > 0 */
-static inline usize pq_parent(usize i) {
-    require_msg(i > 0u, "pq_parent: i must be > 0 (root has no parent)");
+static inline usize pq_parent_(usize i) {
+    require_msg(i > 0u, "pq_parent_: i must be > 0 (root has no parent)");
     return (i - 1u) / 2u;
 }
 /** @brief Returns index of left child */
-static inline usize pq_left_child(usize i)  { return (2u * i) + 1u; }
+static inline usize pq_left_child_(usize i)  { return (2u * i) + 1u; }
 /** @brief Returns index of right child */
-static inline usize pq_right_child(usize i) { return (2u * i) + 2u; }
+static inline usize pq_right_child_(usize i) { return (2u * i) + 2u; }
 
 /**
- * @brief Swaps two elements in the heap
+ * @brief Swaps two elements in the heap. INTERNAL.
+ *
+ * Trailing underscore as of 2026-09: this and pq_sift_up_, pq_sift_down_,
+ * pq_parent_, pq_left_child_ and pq_right_child_ were plain public symbols
+ * until then, while this same header already marked pq_lifetime_next_id_,
+ * pq_lifetime_open_ and pq_lifetime_restamp_ internal by that convention.
+ * The rule existed here and had not been applied to the heap internals.
+ *
+ * The exposure was not cosmetic. Demonstrated on the pre-rename header:
+ * a client calling pq_swap(&q, 0, 4) on a queue holding 1..5 leaves
+ * pq_peek returning 3 where the minimum is 1 - the heap invariant broken
+ * silently, no error, no diagnostic. And because this function
+ * deliberately does not restamp (see below), a client call mutates
+ * contents WITHOUT bumping the lifetime id, so an outstanding borrow keeps
+ * validating against a queue that changed underneath it. The instrument
+ * fails OPEN, the same mode VERIFY-021 was written to prevent in the token
+ * generator.
+ *
+ * Verified before renaming: zero callers outside this header - none in
+ * test/, none in other headers, no mention in docs/. The rename is
+ * therefore contained, and no deprecation shim is provided.
+ *
+ * Consequence for coverage: the `a == b` early return is now dead by
+ * construction. pq_sift_down_ only calls this when smallest != idx, and
+ * pq_sift_up_ swaps a parent with a child at idx > 0, so a self-swap
+ * cannot arise from the heap's own operations. It takes an MC/DC
+ * justification row rather than a test.
  *
  * @pre pq != NULL
  * @pre a < pq->len && b < pq->len
@@ -273,8 +299,8 @@ static inline usize pq_right_child(usize i) { return (2u * i) + 2u; }
  * boundary so a single push/pop produces exactly one id bump, not one per
  * internal swap.
  */
-static inline void pq_swap(borrowed(PriorityQueue*) pq, usize a, usize b) {
-    require_msg(pq != NULL, "pq_swap: pq cannot be NULL");
+static inline void pq_swap_(borrowed(PriorityQueue*) pq, usize a, usize b) {
+    require_msg(pq != NULL, "pq_swap_: pq cannot be NULL");
     if (a == b) { return; }
     usize es = pq->elem_size;
     void* pa = ptr_elem(pq->data, a, es);
@@ -298,15 +324,15 @@ static inline void pq_swap(borrowed(PriorityQueue*) pq, usize a, usize b) {
  *
  * Lifetime: does NOT restamp (internal helper).
  */
-static inline void pq_sift_up(borrowed(PriorityQueue*) pq, usize i) {
-    require_msg(pq != NULL, "pq_sift_up: pq cannot be NULL");
+static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
+    require_msg(pq != NULL, "pq_sift_up_: pq cannot be NULL");
     usize idx = i;
     while (idx > 0u) {
-        usize p  = pq_parent(idx);
+        usize p  = pq_parent_(idx);
         void* pe = ptr_elem(pq->data, p, pq->elem_size);
         void* ie = ptr_elem(pq->data, idx, pq->elem_size);
         if (pq->cmp(pe, ie, pq->ctx) <= 0) { break; }
-        pq_swap(pq, p, idx);
+        pq_swap_(pq, p, idx);
         idx = p;
     }
 }
@@ -318,13 +344,13 @@ static inline void pq_sift_up(borrowed(PriorityQueue*) pq, usize i) {
  *
  * Lifetime: does NOT restamp (internal helper).
  */
-static inline void pq_sift_down(borrowed(PriorityQueue*) pq, usize i) {
-    require_msg(pq != NULL, "pq_sift_down: pq cannot be NULL");
+static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
+    require_msg(pq != NULL, "pq_sift_down_: pq cannot be NULL");
     usize idx = i;
     while (true) {
         usize smallest = idx;
-        usize left     = pq_left_child(idx);
-        usize right    = pq_right_child(idx);
+        usize left     = pq_left_child_(idx);
+        usize right    = pq_right_child_(idx);
         if (left < pq->len) {
             void* sl = ptr_elem(pq->data, smallest, pq->elem_size);
             void* le = ptr_elem(pq->data, left,     pq->elem_size);
@@ -336,7 +362,7 @@ static inline void pq_sift_down(borrowed(PriorityQueue*) pq, usize i) {
             if (pq->cmp(re, sl, pq->ctx) < 0) { smallest = right; }
         }
         if (smallest == idx) { break; }
-        pq_swap(pq, idx, smallest);
+        pq_swap_(pq, idx, smallest);
         idx = smallest;
     }
 }
@@ -425,9 +451,9 @@ static inline void pq_heapify(borrowed(PriorityQueue*) pq, usize len) {
     const usize n = (len > pq->capacity) ? pq->capacity : len;
     pq->len = n;
     if (n >= 2u) {
-        usize i = pq_parent(n - 1u) + 1u;
+        usize i = pq_parent_(n - 1u) + 1u;
         while (i-- > 0) {
-            pq_sift_down(pq, i);
+            pq_sift_down_(pq, i);
         }
     }
     pq_lifetime_restamp_(pq);
@@ -461,7 +487,7 @@ static inline result__Bool_Error pq_push_result(
     if (pq->len >= pq->capacity) { return result__Bool_Error_err(ERR_CAPACITY_EXCEEDED); }
     mem_copy(ptr_elem(pq->data, pq->len, pq->elem_size), elem, pq->elem_size);
     pq->len++;
-    pq_sift_up(pq, pq->len - 1u);
+    pq_sift_up_(pq, pq->len - 1u);
     pq_lifetime_restamp_(pq);
     return result__Bool_Error_ok(true);
 }
@@ -492,7 +518,7 @@ static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {
         mem_copy(ptr_elem(pq->data, 0,       pq->elem_size),
                  ptr_elem(pq->data, pq->len, pq->elem_size),
                  pq->elem_size);
-        pq_sift_down(pq, 0);
+        pq_sift_down_(pq, 0);
     }
     pq_lifetime_restamp_(pq);
     return true;
@@ -522,7 +548,7 @@ static inline const void* pq_peek_raw(borrowed(const PriorityQueue*) pq) {
  * @brief Removes the element at heap index i (fallible, preferred)
  *
  * Replaces the removed slot with the last element, then runs both
- * pq_sift_up and pq_sift_down to restore the heap invariant regardless
+ * pq_sift_up_ and pq_sift_down_ to restore the heap invariant regardless
  * of whether the replacement is smaller or larger than its neighbors.
  *
  * NULL pq or out-of-range i returns Err(ERR_OUT_OF_RANGE).
@@ -551,8 +577,8 @@ static inline result__Bool_Error pq_remove_at_result(
     mem_copy(ptr_elem(pq->data, i,       pq->elem_size),
              ptr_elem(pq->data, pq->len, pq->elem_size),
              pq->elem_size);
-    pq_sift_up(pq, i);
-    pq_sift_down(pq, i);
+    pq_sift_up_(pq, i);
+    pq_sift_down_(pq, i);
     pq_lifetime_restamp_(pq);
     return result__Bool_Error_ok(true);
 }

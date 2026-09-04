@@ -935,25 +935,20 @@ static void test_null_arguments(void)
     }
 }
 
-/* L278 true leg. Written for disposition (b) above -- DELETE THIS TEST if
- * pq_swap is renamed to pq_swap_, since the leg then becomes dead by
- * construction and takes a justification row instead. */
-static void test_self_swap_is_a_noop(void)
-{
-    static int    buf[8];
-    PriorityQueue q;
-    int           k, before = -999, after = -998;
-
-    pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
-    for (k = 3; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
-
-    EXPECT(pq_peek(&q, &before));
-    pq_swap(&q, 1u, 1u);                           /* a == b: early return */
-    EXPECT(pq_peek(&q, &after));
-    EXPECT(before == after);
-    EXPECT(pq_len(&q) == 3u);
-}
-
+/* test_self_swap_is_a_noop was here and has been REMOVED.
+ *
+ * It covered L278's `a == b` leg by calling pq_swap(&q, 1, 1) from client
+ * code. That is no longer possible: pq_swap became pq_swap_ (internal) in
+ * the same change, on the header's own trailing-underscore convention, and
+ * the leg is now dead by construction -- pq_sift_down_ only swaps when
+ * smallest != idx, pq_sift_up_ swaps a parent with a child at idx > 0.
+ *
+ * Deleted rather than adapted: reaching it now would mean calling an
+ * internal symbol from a test purely to move a coverage number, which is
+ * the contrived-driver pattern the project rejects. It takes a
+ * justification row instead. Expected MC/DC after this change: 81/82 with
+ * one justified outcome, not 82/82.
+ */
 
 int main(void)
 {
@@ -962,7 +957,6 @@ int main(void)
     test_remove_last_element();
     test_heapify_single();
     test_null_arguments();
-    test_self_swap_is_a_noop();
 
     test_pq_cbytes_accessor();
     (void)pq_suppress_unused;
