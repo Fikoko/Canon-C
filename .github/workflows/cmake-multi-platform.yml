@@ -5667,6 +5667,171 @@ jobs:
           retention-days: 90
 
   # -------------------------------------------------------------------------
+  # data/priority_queue.h — REPORT-ONLY (VERIFY-0NN, first pass)
+  #
+  # Shape: verified IN PLACE, no cover TU and no driver. The 40 non-macro
+  # functions carry the contracts; DEFINE_PRIORITY_QUEUE's 17 typed wrappers
+  # are PARKED, on the borrow.h and diag.h precedent (docs/vmacros.md).
+  #
+  # SCOPE, declared before the run rather than discovered in the residuals:
+  # the STRUCTURAL invariant only — validity, bounds, len <= capacity, exact
+  # accessor results, and the len arithmetic of push/pop/remove.
+  #
+  # HEAP ORDER IS NOT CLAIMED AND CANNOT BE. pq_sift_up_ and pq_sift_down_
+  # decide every swap by calling pq->cmp(a, b, ctx), an indirect call through
+  # a caller-supplied function pointer. Frama-C 29 has no `calls` clause and
+  # \valid_function is unimplemented, so "parent <= child" would be a
+  # statement about an uninterpreted function. Not a timeout; no budget
+  # touches it. Same ceiling as option's 32 and result's 28 dispatch
+  # residuals — met here for the first time in a container whose CORRECTNESS
+  # ARGUMENT depends on it, since vec and deque are ordered by insertion and
+  # never needed the comparator. A priority queue's whole point is the
+  # ordering, and the ordering is the part that cannot be specified.
+  # Heap order is covered by the runtime suite instead: every pop sequence in
+  # priority_queue_test.c asserts ascending order, including through the
+  # byte-wise swap path for elements over CANON_MEM_SWAP_MAX.
+  #
+  # PRE-REGISTERED PREDICTIONS (scored, not gating at ENFORCE=0):
+  #   ARM A  Run 0 does NOT come back clean. The contracts are a first pass
+  #          written without a local Frama-C, so ACSL syntax or name
+  #          resolution is the likely failure — the lifetime.h ARM B pattern.
+  #   ARM B  The behavior-local `assigns` on pq_push_result is the most
+  #          fragile construct here. If anything is rejected outright, expect
+  #          it there or on pq_pop_raw's `complete behaviors`.
+  #   ARM C  ptr_elem's void* arithmetic forces Typed+Cast, class (h). The
+  #          job runs Typed first so the need is DEMONSTRATED rather than
+  #          assumed; switching model without showing why is what
+  #          VERIFY-019-M exists to prevent.
+  #   ARM D  OWN RESIDUALS BREAK THE DESCENDING TREND UPWARD. The series is
+  #          196 -> 119 -> 114 -> 91 -> 67 -> 71. A heap with two sift loops,
+  #          an uninterpretable comparator and void* element arithmetic
+  #          should exceed 71. Registered before the run precisely because
+  #          it is the prediction most likely to be wrong in an interesting
+  #          way.
+  #   ARM E  Inherited surface is the widest yet: ptr, compare, memory,
+  #          slice, ownership, error, option, result. compare.h is 208/208
+  #          with ZERO residuals, so this is the first module to compose over
+  #          a perfectly clean header — the arm should contribute nothing,
+  #          and if it contributes anything the closure is not what this
+  #          comment says.
+  #
+  # ENFORCE=0 ON PURPOSE. Nothing is pinned until run 0 is recorded. Do not
+  # set ENFORCE=1 in the same commit that first turns this job green.
+  # -------------------------------------------------------------------------
+  frama-c-priority-queue:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/framac-setup
+      - name: "Gate tripwire: contracts are in the analysed unit"
+        # A job that can pass while proving nothing is worse than no job.
+        # Proves the ACSL survives preprocessing BEFORE WP runs; the
+        # goal-count floor below catches the residual case.
+        run: |
+          set -e
+          gcc -std=c99 -I data -I core -I core/primitives -I semantics -I . \
+              -D__FRAMAC__ -DCANON_NO_REQUIRE -DNDEBUG -E -C \
+              -o /tmp/pq_pp.i - <<'PROBE'
+          #include "data/priority_queue.h"
+          int main(void) { return 0; }
+          PROBE
+          # Backslash-free probes on purpose: grep reads the \r in
+          # "\\result" as an escape, so a probe containing it fails on a
+          # CORRECTLY contracted header. Caught locally, before this job ran.
+          for clause in "predicate pq_wf" "requires pq_wf(pq)" \
+                        "behavior accepted" "complete behaviors"; do
+            if ! grep -q "$clause" /tmp/pq_pp.i; then
+              echo "FAIL: '$clause' is absent from the preprocessed unit."
+              echo "      The __FRAMAC__ gate did not open, so WP would"
+              echo "      analyse an unannotated header and report success"
+              echo "      over an empty obligation set."
+              exit 1
+            fi
+          done
+          echo "  contracts present in preprocessed unit (4 probes)."
+      - name: "WP: data/priority_queue.h (VERIFY-0NN, report-only)"
+        run: |
+          eval $(opam env --switch=frama-c)
+          ENFORCE=0
+          WP_MODEL=Typed
+          set +e
+          frama-c -wp -wp-rte \
+            -wp-model ${WP_MODEL} \
+            -wp-prover alt-ergo,z3,cvc5 \
+            -wp-timeout 120 \
+            -wp-split \
+            -cpp-extra-args=" \
+              -I data \
+              -I core \
+              -I core/primitives \
+              -I semantics \
+              -I . \
+              -DCANON_NO_REQUIRE \
+              -DNDEBUG" \
+            data/priority_queue.h 2>&1 | tee wp_pq_output.txt
+          WP_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo ""
+          echo "==============================================="
+          echo "  WP (priority_queue.h) exit: ${WP_EXIT}"
+          echo "  MODE: report-only (ENFORCE=${ENFORCE})  MODEL: ${WP_MODEL}"
+          echo "==============================================="
+          PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_pq_output.txt || true)
+          if [ -z "${PROVED_LINE}" ]; then
+            echo "ARM A CONFIRMED: WP produced no summary — frama-c aborted"
+            echo "      before running. Almost certainly ACSL syntax or an"
+            echo "      unresolved name. The kernel messages follow; this is"
+            echo "      the predicted run-0 outcome, not a surprise."
+            grep -E "^\[(kernel|wp)" wp_pq_output.txt | head -40 || true
+            exit 1
+          fi
+          echo "  ${PROVED_LINE}"
+          TOTAL=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \K\d+' | head -1 || true)
+          if [ -z "${TOTAL}" ] || [ "${TOTAL}" -lt 1 ]; then
+            echo "FAIL: WP ran over ZERO goals — a vacuous pass, not a clean"
+            echo "      one, despite the gate probe succeeding."
+            exit 1
+          fi
+          TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_pq_output.txt || true)
+          UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_pq_output.txt || true)
+          FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]"  wp_pq_output.txt || true)
+          INVALID_COUNT=$(grep -cE "^\[wp\] \[Invalid\]" wp_pq_output.txt || true)
+          UNPROVED=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
+          echo "  Total goals: ${TOTAL}"
+          echo "  Timeouts:    ${TIMEOUT_COUNT}"
+          echo "  Unknown:     ${UNKNOWN_COUNT}"
+          echo "  Failed:      ${FAILED_COUNT}"
+          echo "  Unproved (T+U): ${UNPROVED}   <- ARM D: > 71 predicted"
+          if [ "${INVALID_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "      REFUTED with a counter-example. Never pinnable, and"
+            echo "      gated even in report-only."
+            grep -E "^\[wp\] \[Invalid\]" wp_pq_output.txt
+            exit 1
+          fi
+          if [ "${FAILED_COUNT}" -ne 0 ]; then
+            echo "NOTE: ${FAILED_COUNT} Failed goal(s). On a FIRST PASS this"
+            echo "      most likely means a contract is wrong rather than the"
+            echo "      code — these were written without a local Frama-C."
+            echo "      Listed for triage; not gated at ENFORCE=0, unlike"
+            echo "      Invalid, which is a refutation rather than a gap."
+            grep -E "^\[wp\] \[Failed\]" wp_pq_output.txt | head -30
+          fi
+          echo ""
+          echo "REPORT-ONLY: nothing pinned. Record run 0 against ARMs A-E"
+          echo "      in VERIFY-0NN before interpreting any of it."
+          echo "==============================================="
+      - name: Upload WP proof output (priority_queue.h)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wp-proof-priority-queue
+          path: wp_pq_output.txt
+          retention-days: 90
+
+  # -------------------------------------------------------------------------
   # 6. MC/DC coverage — GCC 14 -fcondition-coverage (Linux only)
   #
   #    -DCANON_CHECKED_FORCE_FALLBACK and -DCANON_BITS_FORCE_FALLBACK are

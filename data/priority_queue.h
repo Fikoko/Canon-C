@@ -254,13 +254,83 @@ typedef struct {
    ════════════════════════════════════════════════════════════════════════════ */
 
 /** @brief Returns index of parent node — @pre i > 0 */
+/* ════════════════════════════════════════════════════════════════════════════
+ * ACSL: structural invariant and scope (VERIFY-0NN, first pass — UNVERIFIED)
+ *
+ * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
+ * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
+ * elem_size > 0. Plus exact results for the accessors, and the len arithmetic
+ * of push/pop/remove.
+ *
+ * WHAT IS NOT CLAIMED, AND CANNOT BE: HEAP ORDER. pq_sift_up_ and
+ * pq_sift_down_ decide every swap by calling pq->cmp(a, b, ctx) — an indirect
+ * call through a CALLER-SUPPLIED function pointer. Frama-C 29 has no `calls`
+ * clause and `\valid_function` is unimplemented, so WP cannot reason about
+ * the callee at all. "parent <= child" is therefore a statement about an
+ * uninterpreted function, and asserting it would be asserting something the
+ * prover cannot connect to the code.
+ *
+ * This is not a timeout and no budget touches it. It is the same ceiling that
+ * produced option's 32 and result's 28 dispatch residuals, met here for the
+ * first time in a container whose CORRECTNESS ARGUMENT depends on it — vec and
+ * deque are ordered by insertion, so their specs never needed the comparator.
+ * A priority queue's whole point is the ordering, and the ordering is the part
+ * that cannot be specified.
+ *
+ * Recorded as a specification-strength ceiling, VERIFY-020 F4 family, declared
+ * before the run rather than discovered in the residual count.
+ *
+ * The heap order is covered instead by the runtime suite: every pop sequence
+ * in priority_queue_test.c asserts ascending order, including through the
+ * byte-wise swap path for elements over CANON_MEM_SWAP_MAX.
+ * ════════════════════════════════════════════════════════════════════════════ */
+#ifdef __FRAMAC__
+/*@
+  predicate pq_wf(PriorityQueue* pq) =
+       \valid(pq)
+    && pq->elem_size > 0
+    && pq->capacity  > 0
+    && pq->len <= pq->capacity
+    && pq->cmp != \null
+    && \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+
+  // The slot index i is inside the live prefix.
+  predicate pq_in_use(PriorityQueue* pq, integer i) = 0 <= i < pq->len;
+*/
+#endif
+
+#ifdef __FRAMAC__
+/*@
+  requires i > 0;
+  requires i <= (usize)(-1);
+  assigns \nothing;
+  ensures \result == (i - 1) / 2;
+  ensures \result < i;
+*/
+#endif
 static inline usize pq_parent_(usize i) {
     require_msg(i > 0u, "pq_parent_: i must be > 0 (root has no parent)");
     return (i - 1u) / 2u;
 }
 /** @brief Returns index of left child */
+#ifdef __FRAMAC__
+/*@
+  requires 2 * i + 1 <= (usize)(-1);   // no unsigned wrap
+  assigns \nothing;
+  ensures \result == 2 * i + 1;
+  ensures \result > i;
+*/
+#endif
 static inline usize pq_left_child_(usize i)  { return (2u * i) + 1u; }
 /** @brief Returns index of right child */
+#ifdef __FRAMAC__
+/*@
+  requires 2 * i + 2 <= (usize)(-1);   // no unsigned wrap
+  assigns \nothing;
+  ensures \result == 2 * i + 2;
+  ensures \result > i;
+*/
+#endif
 static inline usize pq_right_child_(usize i) { return (2u * i) + 2u; }
 
 /**
@@ -299,6 +369,19 @@ static inline usize pq_right_child_(usize i) { return (2u * i) + 2u; }
  * boundary so a single push/pop produces exactly one id bump, not one per
  * internal swap.
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq_wf(pq);
+  requires pq_in_use(pq, a);
+  requires pq_in_use(pq, b);
+  assigns ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+  ensures pq_wf(pq);
+  // NOT claimed: that the two elements exchanged contents. Stating it needs
+  // a ghost model of the byte ranges and is out of scope for this pass;
+  // the runtime suite checks it, including the >256-byte path where the
+  // whole element (pad[0] AND pad[511]) is verified to have moved.
+*/
+#endif
 static inline void pq_swap_(borrowed(PriorityQueue*) pq, usize a, usize b) {
     require_msg(pq != NULL, "pq_swap_: pq cannot be NULL");
     if (a == b) { return; }
@@ -324,6 +407,17 @@ static inline void pq_swap_(borrowed(PriorityQueue*) pq, usize a, usize b) {
  *
  * Lifetime: does NOT restamp (internal helper).
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq_wf(pq);
+  requires i < pq->len;
+  assigns ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+  ensures pq_wf(pq);
+  // NOT claimed: heap order. Every swap decision here is pq->cmp(...), an
+  // indirect call through a caller-supplied pointer that WP cannot
+  // interpret. See the scope block above pq_parent_.
+*/
+#endif
 static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
     require_msg(pq != NULL, "pq_sift_up_: pq cannot be NULL");
     usize idx = i;
@@ -344,6 +438,18 @@ static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
  *
  * Lifetime: does NOT restamp (internal helper).
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq_wf(pq);
+  assigns ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+  ensures pq_wf(pq);
+  // Termination: idx strictly increases (pq_left_child_ and pq_right_child_
+  // both return > i) and is bounded by pq->len, so the while(true) loop
+  // terminates. Whether WP discharges that without an explicit loop variant
+  // is a question for run 0.
+  // NOT claimed: heap order, same reason as pq_sift_up_.
+*/
+#endif
 static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
     require_msg(pq != NULL, "pq_sift_down_: pq cannot be NULL");
     usize idx = i;
@@ -398,6 +504,27 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
  *
  * Performance: O(1)
  */
+#ifdef __FRAMAC__
+/*@
+  requires \valid(pq);
+  requires buffer != \null;
+  requires capacity  > 0;
+  requires elem_size > 0;
+  requires cmp != \null;
+  requires capacity * elem_size <= (usize)(-1);   // the product must not wrap;
+                                                  // pq_init does NOT check this
+                                                  // and a caller can overflow it
+  requires \valid((char*)buffer + (0 .. capacity * elem_size - 1));
+  assigns *pq;
+  ensures pq->data      == buffer;
+  ensures pq->len       == 0;
+  ensures pq->capacity  == capacity;
+  ensures pq->elem_size == elem_size;
+  ensures pq->cmp       == cmp;
+  ensures pq->ctx       == ctx;
+  ensures pq_wf(pq);
+*/
+#endif
 static inline void pq_init(
     borrowed(PriorityQueue*) pq,
     borrowed(void*)          buffer,
@@ -479,6 +606,36 @@ static inline void pq_heapify(borrowed(PriorityQueue*) pq, usize len) {
  *
  * Performance: O(log n)
  */
+#ifdef __FRAMAC__
+/*@
+  behavior rejected:
+    assumes pq == \null || elem == \null;
+    assigns \nothing;
+  behavior full:
+    assumes pq != \null && elem != \null && pq->len >= pq->capacity;
+    requires \valid_read(pq);
+    assigns \nothing;
+  behavior accepted:
+    assumes pq != \null && elem != \null && pq->len < pq->capacity;
+    requires pq_wf(pq);
+    requires \valid_read((char*)elem + (0 .. pq->elem_size - 1));
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures pq->len == \old(pq->len) + 1;
+    ensures pq_wf(pq);
+  complete behaviors;
+  disjoint behaviors;
+  // Behavior-local `assigns` because the three exits differ: two guards
+  // return before touching anything, only the third writes. A single
+  // function-level frame would have to over-approximate to the write path
+  // and would then be true but useless on the guard paths; `assigns
+  // \nothing` at function level would be FALSE, which is the exact defect
+  // VERIFY-021 F1 corrected in lifetime.h. Whether WP accepts per-behavior
+  // frames cleanly here is a question for run 0.
+  // NOT claimed: that the pushed element equals *elem afterwards, nor that
+  // heap order is restored. The first needs a byte-range ghost model; the
+  // second needs pq->cmp, which WP cannot interpret.
+*/
+#endif
 static inline result__Bool_Error pq_push_result(
     borrowed(PriorityQueue*)  pq,
     borrowed(const void*)     elem)
@@ -510,6 +667,26 @@ static inline result__Bool_Error pq_push_result(
  *
  * Performance: O(log n)
  */
+#ifdef __FRAMAC__
+/*@
+  behavior empty:
+    assumes pq == \null || pq->len == 0;
+    assigns \nothing;
+    ensures \result == \false;
+  behavior nonempty:
+    assumes pq != \null && pq->len > 0;
+    requires pq_wf(pq);
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures \result == \true;
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
+  complete behaviors;
+  disjoint behaviors;
+  // `out` is written when non-null; not stated, because naming a frame over
+  // a void* of runtime-determined width needs a cast the Typed model will
+  // not interpret. Expected residual, class (h).
+*/
+#endif
 static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {
     if (!pq || (pq->len == 0u)) { return false; }
     if (out != NULL) { mem_copy(out, ptr_elem(pq->data, 0, pq->elem_size), pq->elem_size); }
@@ -539,6 +716,22 @@ static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {
  *
  * Performance: O(1)
  */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior empty:
+    assumes pq == \null || pq->len == 0;
+    ensures \result == \null;
+  behavior nonempty:
+    assumes pq != \null && pq->len > 0;
+    requires \valid_read(pq);
+    requires pq->len <= pq->capacity && pq->elem_size > 0;
+    requires \valid_read((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    ensures \result == (char*)pq->data;    // slot 0 is the top
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline const void* pq_peek_raw(borrowed(const PriorityQueue*) pq) {
     if (!pq || (pq->len == 0u)) { return NULL; }
     return ptr_elem_const(pq->data, 0, pq->elem_size);
@@ -618,26 +811,100 @@ static inline bool pq_remove_at(borrowed(PriorityQueue*) pq, usize i) {
    ════════════════════════════════════════════════════════════════════════════ */
 
 /** @brief Returns current element count. NULL pq returns 0. */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior null:
+    assumes pq == \null;
+    ensures \result == 0;
+  behavior live:
+    assumes pq != \null;
+    requires \valid_read(pq);
+    ensures \result == pq->len;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline usize pq_len(borrowed(const PriorityQueue*) pq) {
     return pq ? pq->len : 0u;
 }
 
 /** @brief Returns maximum element capacity. NULL pq returns 0. */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior null:
+    assumes pq == \null;
+    ensures \result == 0;
+  behavior live:
+    assumes pq != \null;
+    requires \valid_read(pq);
+    ensures \result == pq->capacity;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline usize pq_capacity(borrowed(const PriorityQueue*) pq) {
     return pq ? pq->capacity : 0u;
 }
 
 /** @brief Returns number of remaining free slots. NULL pq returns 0. */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior null:
+    assumes pq == \null;
+    ensures \result == 0;
+  behavior live:
+    assumes pq != \null;
+    requires \valid_read(pq);
+    requires pq->len <= pq->capacity;      // the structural invariant, needed
+                                           // so the subtraction cannot wrap
+    ensures \result == pq->capacity - pq->len;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline usize pq_remaining(borrowed(const PriorityQueue*) pq) {
     return pq ? (pq->capacity - pq->len) : 0u;
 }
 
 /** @brief Returns true if the queue has no elements. NULL pq returns true. */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior null:
+    assumes pq == \null;
+    ensures \result == \true;             // a null queue reads as empty
+  behavior live:
+    assumes pq != \null;
+    requires \valid_read(pq);
+    ensures \result <==> (pq->len == 0);
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_is_empty(borrowed(const PriorityQueue*) pq) {
     return !pq || (pq->len == 0u);
 }
 
 /** @brief Returns true if the queue is at capacity. NULL pq returns false. */
+#ifdef __FRAMAC__
+/*@
+  assigns \nothing;
+  behavior null:
+    assumes pq == \null;
+    ensures \result == \false;            // and NOT as full: the two
+                                           // null answers are deliberately
+                                           // not complements
+  behavior live:
+    assumes pq != \null;
+    requires \valid_read(pq);
+    ensures \result <==> (pq->len == pq->capacity);
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_is_full(borrowed(const PriorityQueue*) pq) {
     return pq && (pq->len >= pq->capacity);
 }
