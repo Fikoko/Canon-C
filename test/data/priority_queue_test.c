@@ -797,6 +797,12 @@ static void test_large_elements(void)
     prev = -1;
     for (i = 0u; i < 5u; i++) {
         PqBig out;
+        /* Poisoned, not zeroed. -O2 raises -Wmaybe-uninitialized here
+         * because GCC cannot see that pq_pop writes through the pointer,
+         * but zero-init would make the checks below pass vacuously if pop
+         * ever stopped writing: out.key == 0 beats prev == -1 on the first
+         * iteration. 0xAA fails every assertion instead. */
+        memset(&out, 0xAA, sizeof out);
         EXPECT(pq_pop(&q, &out));
         EXPECT(out.key > prev);                    /* heap order held */
         EXPECT(out.pad[0]   == (unsigned char)out.key);
@@ -812,7 +818,7 @@ static void test_pop_discarding_value(void)
 {
     static int    buf[8];
     PriorityQueue q;
-    int           k;
+    int           k = -999;
 
     pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
     for (k = 3; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
@@ -834,7 +840,8 @@ static void test_remove_last_element(void)
 {
     static int    buf[8];
     PriorityQueue q;
-    int           k, seen[4], i;
+    int           k, i;
+    int           seen[4];
 
     pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
     for (k = 4; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
@@ -844,6 +851,7 @@ static void test_remove_last_element(void)
     EXPECT(pq_len(&q) == 3u);
 
     /* Whatever was removed, the remainder must still be a heap. */
+    seen[0] = seen[1] = seen[2] = seen[3] = -999;   /* poisoned, see above */
     for (i = 0; i < 3; i++) { EXPECT(pq_pop(&q, &seen[i])); }
     EXPECT(seen[0] < seen[1]);
     EXPECT(seen[1] < seen[2]);
@@ -855,7 +863,7 @@ static void test_heapify_single(void)
 {
     static int    buf[4];
     PriorityQueue q;
-    int           k;
+    int           k = -999;
 
     buf[0] = 42;
     pq_init(&q, buf, 4u, sizeof(int), cmp_int_asc, NULL);
@@ -934,7 +942,7 @@ static void test_self_swap_is_a_noop(void)
 {
     static int    buf[8];
     PriorityQueue q;
-    int           k, before, after;
+    int           k, before = -999, after = -998;
 
     pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
     for (k = 3; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
