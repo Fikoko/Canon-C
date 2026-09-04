@@ -761,8 +761,201 @@ static void test_pq_cbytes_accessor(void)
     }
 }
 
+typedef struct { unsigned char pad[512]; int key; } PqBig;
+
+static int cmp_pqbig(const void* a, const void* b, void* ctx)
+{
+    int ka, kb;
+    (void)ctx;
+    ka = ((const PqBig*)a)->key;
+    kb = ((const PqBig*)b)->key;
+    return (ka > kb) - (ka < kb);
+}
+
+/* L282 false leg + L288 both legs. */
+static void test_large_elements(void)
+{
+    static PqBig  buf[8];
+    PriorityQueue q;
+    unsigned      i;
+    int           prev;
+
+    EXPECT(sizeof(PqBig) > CANON_MEM_SWAP_MAX);   /* else this test is vacuous */
+
+    pq_init(&q, buf, 8u, sizeof(PqBig), cmp_pqbig, NULL);
+
+    /* Descending insertion forces sift_up to swap on every push. */
+    for (i = 5u; i >= 1u; i--) {
+        PqBig e;
+        memset(&e, 0, sizeof e);
+        e.key    = (int)i;
+        e.pad[0] = (unsigned char)i;
+        e.pad[511] = (unsigned char)(i * 3u);      /* far end of the element */
+        EXPECT(pq_push(&q, &e));
+    }
+
+    prev = -1;
+    for (i = 0u; i < 5u; i++) {
+        PqBig out;
+        EXPECT(pq_pop(&q, &out));
+        EXPECT(out.key > prev);                    /* heap order held */
+        EXPECT(out.pad[0]   == (unsigned char)out.key);
+        EXPECT(out.pad[511] == (unsigned char)(out.key * 3)); /* whole element moved */
+        prev = out.key;
+    }
+    EXPECT(pq_is_empty(&q));
+}
+
+/* L489 false leg: popping to discard. A real API use -- draining a queue
+ * without wanting the values -- that the suite never exercised. */
+static void test_pop_discarding_value(void)
+{
+    static int    buf[8];
+    PriorityQueue q;
+    int           k;
+
+    pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
+    for (k = 3; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
+
+    EXPECT(pq_pop(&q, NULL));                      /* discard the minimum */
+    EXPECT(pq_len(&q) == 2u);
+    EXPECT(pq_peek(&q, &k));
+    EXPECT(k == 2);                                /* heap re-established */
+
+    EXPECT(pq_pop(&q, NULL));
+    EXPECT(pq_pop(&q, NULL));
+    EXPECT(pq_is_empty(&q));
+    EXPECT(!pq_pop(&q, NULL));                     /* empty, still no crash */
+}
+
+/* L545 true leg. Removing the LAST element is the branch that skips the
+ * sift entirely; tested on its merits, not for the coverage number. */
+static void test_remove_last_element(void)
+{
+    static int    buf[8];
+    PriorityQueue q;
+    int           k, seen[4], i;
+
+    pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
+    for (k = 4; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
+
+    /* Index len-1 is the last slot: the memmove/sift is skipped. */
+    EXPECT(pq_remove_at(&q, pq_len(&q) - 1u));
+    EXPECT(pq_len(&q) == 3u);
+
+    /* Whatever was removed, the remainder must still be a heap. */
+    for (i = 0; i < 3; i++) { EXPECT(pq_pop(&q, &seen[i])); }
+    EXPECT(seen[0] < seen[1]);
+    EXPECT(seen[1] < seen[2]);
+    EXPECT(pq_is_empty(&q));
+}
+
+/* L427 false leg: heapify with n < 2, where the sift loop never runs. */
+static void test_heapify_single(void)
+{
+    static int    buf[4];
+    PriorityQueue q;
+    int           k;
+
+    buf[0] = 42;
+    pq_init(&q, buf, 4u, sizeof(int), cmp_int_asc, NULL);
+    pq_heapify(&q, 1u);                            /* n == 1: nothing to sift */
+    EXPECT(pq_len(&q) == 1u);
+    EXPECT(pq_peek(&q, &k));
+    EXPECT(k == 42);
+
+    pq_heapify(&q, 0u);                            /* n == 0: the L424 path */
+    EXPECT(pq_is_empty(&q));
+}
+
+/* Nine null-argument legs across eight accessors. Grouped because they are
+ * one property -- every accessor tolerates NULL and reports the empty
+ * answer rather than trapping -- not eight unrelated cases. */
+static void test_null_arguments(void)
+{
+    bytes_t  b;
+    cbytes_t cb;
+    PriorityQueue q;
+    static int buf[4];
+
+    EXPECT(pq_len(NULL)       == 0u);              /* L596 */
+    EXPECT(pq_capacity(NULL)  == 0u);              /* L601 */
+    EXPECT(pq_remaining(NULL) == 0u);              /* L606 */
+    EXPECT(pq_is_empty(NULL));                     /* L611 */
+    EXPECT(!pq_is_full(NULL));                     /* L616 */
+
+    pq_heapify(NULL, 4u);                          /* L420: must not trap */
+
+    b = pq_as_bytes(NULL);                         /* L628 leg 1 */
+    EXPECT(b.len == 0u);
+    cb = pq_as_cbytes(NULL);
+    EXPECT(cb.len == 0u);
+
+    /* L628/L636 leg 2: non-NULL queue with NULL data. Reached through a
+     * zeroed struct rather than by poking a live queue, so the test does
+     * not depend on the layout staying as it is. */
+    memset(&q, 0, sizeof q);
+    b = pq_as_bytes(&q);
+    EXPECT(b.len == 0u);
+    cb = pq_as_cbytes(&q);
+    EXPECT(cb.len == 0u);
+
+    /* And the non-empty case, so the check is a discrimination and not
+     * merely "everything returns empty". */
+    pq_init(&q, buf, 4u, sizeof(int), cmp_int_asc, NULL);
+    {
+        int k = 7;
+        EXPECT(pq_push(&q, &k));
+    }
+    b = pq_as_bytes(&q);
+    EXPECT(b.len == sizeof(int));
+
+    /* L580, both legs of pq_peek's guard. !top comes from an empty queue
+     * (pq_peek_raw returns NULL); !out from a caller passing no destination.
+     * The second is a plausible mistake -- "is there a top?" written as
+     * pq_peek(&q, NULL) instead of !pq_is_empty(&q) -- and must return
+     * false rather than dereference. */
+    {
+        PriorityQueue empty_q;
+        int           dst = 0;
+        static int    ebuf[4];
+        pq_init(&empty_q, ebuf, 4u, sizeof(int), cmp_int_asc, NULL);
+        EXPECT(!pq_peek(&empty_q, &dst));          /* !top  */
+        EXPECT(!pq_peek(&q, NULL));                /* !out  */
+        EXPECT(pq_peek(&q, &dst));                 /* both non-null */
+        EXPECT(dst == 7);
+    }
+}
+
+/* L278 true leg. Written for disposition (b) above -- DELETE THIS TEST if
+ * pq_swap is renamed to pq_swap_, since the leg then becomes dead by
+ * construction and takes a justification row instead. */
+static void test_self_swap_is_a_noop(void)
+{
+    static int    buf[8];
+    PriorityQueue q;
+    int           k, before, after;
+
+    pq_init(&q, buf, 8u, sizeof(int), cmp_int_asc, NULL);
+    for (k = 3; k >= 1; k--) { EXPECT(pq_push(&q, &k)); }
+
+    EXPECT(pq_peek(&q, &before));
+    pq_swap(&q, 1u, 1u);                           /* a == b: early return */
+    EXPECT(pq_peek(&q, &after));
+    EXPECT(before == after);
+    EXPECT(pq_len(&q) == 3u);
+}
+
+
 int main(void)
 {
+    test_large_elements();
+    test_pop_discarding_value();
+    test_remove_last_element();
+    test_heapify_single();
+    test_null_arguments();
+    test_self_swap_is_a_noop();
+
     test_pq_cbytes_accessor();
     (void)pq_suppress_unused;
 
