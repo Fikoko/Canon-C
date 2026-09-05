@@ -264,11 +264,19 @@ typedef struct {
  *
  * WHAT IS NOT CLAIMED, AND CANNOT BE: HEAP ORDER. pq_sift_up_ and
  * pq_sift_down_ decide every swap by calling pq->cmp(a, b, ctx) — an indirect
- * call through a CALLER-SUPPLIED function pointer. Frama-C 29 has no `calls`
- * clause and `\valid_function` is unimplemented, so WP cannot reason about
- * the callee at all. "parent <= child" is therefore a statement about an
- * uninterpreted function, and asserting it would be asserting something the
- * prover cannot connect to the code.
+ * call through a CALLER-SUPPLIED function pointer. WP reasons about an
+ * indirect call only through a `calls` clause that enumerates its possible
+ * targets (it says so in the run-0 log: "no 'calls' specification ...
+ * Assuming that they can call 'pq_sift_down_'"), and `\valid_function` is
+ * unimplemented. The base layer's comparator is any function the caller
+ * chooses, so no finite target list exists to write; without one WP treats
+ * the call as an unknown callee — possibly non-terminating, assigning
+ * everything, possibly recursive. "parent <= child" is therefore a statement
+ * about an uninterpreted function, and asserting it would be asserting
+ * something the prover cannot connect to the code. (The DEFINE_PRIORITY_QUEUE
+ * typed wrappers DO have an enumerable comparator set — the algo_cmp_* family
+ * — so a `calls` clause is writable for them; that is a separate, later pass
+ * and does not lift the ceiling on the base layer.)
  *
  * This is not a timeout and no budget touches it. It is the same ceiling that
  * produced option's 32 and result's 28 dispatch residuals, met here for the
@@ -682,9 +690,12 @@ static inline result__Bool_Error pq_push_result(
     ensures pq_wf(pq);
   complete behaviors;
   disjoint behaviors;
-  // `out` is written when non-null; not stated, because naming a frame over
-  // a void* of runtime-determined width needs a cast the Typed model will
-  // not interpret. Expected residual, class (h).
+  // `out` is written when non-null; not stated in this pass. Naming the
+  // frame needs `((char*)out)[0 .. pq->elem_size - 1]`, a cast the job's
+  // Typed+Cast model DOES interpret (class (h) is a Typed+Cast class by
+  // definition — it does not exist under plain Typed). Left for commit 2,
+  // where it should split the nonempty behavior on `out != \null` so the
+  // frame is true on both exits. Until then: expected residual, class (h).
 */
 #endif
 static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {

@@ -5721,7 +5721,12 @@ jobs:
   frama-c-priority-queue:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 240 to match vec (5,467 goals, ~3h08m at CI #1247) and deque. Run 0
+    # at CI #1281 was cancelled by the 90-minute cap with 3,742 goals
+    # scheduled and 97 residuals logged, most of them Typed-model cast
+    # artefacts (see VERIFY-022, run 0). Under Typed+Cast the residue
+    # should be far smaller, but the budget is sized for the worst case.
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
@@ -5751,11 +5756,20 @@ jobs:
             fi
           done
           echo "  contracts present in preprocessed unit (4 probes)."
-      - name: "WP: data/priority_queue.h (VERIFY-0NN, report-only)"
+      - name: "WP: data/priority_queue.h (VERIFY-022, report-only, Typed+Cast)"
         run: |
           eval $(opam env --switch=frama-c)
           ENFORCE=0
-          WP_MODEL=Typed
+          # Typed+Cast, NOT Typed. The closure includes ptr.h, compare.h,
+          # slice.h and memory.h, all verified at home under Typed+Cast and
+          # all cast-originating (sint8* <-> uint8* at every byte-view site).
+          # deque could run on plain Typed only because its closure excludes
+          # every such header (VERIFY-019 "Model: Typed, not Typed+Cast");
+          # that exemption does not apply here. Run 0 (CI #1281) ran Typed
+          # and produced 56 substrate residuals that prove at home, all at
+          # cast sites -- recorded in VERIFY-022 as the model's negative
+          # control, not as a result about priority_queue.
+          WP_MODEL=Typed+Cast
           set +e
           frama-c -wp -wp-rte \
             -wp-model ${WP_MODEL} \
@@ -5780,48 +5794,159 @@ jobs:
           echo "==============================================="
           PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_pq_output.txt || true)
           if [ -z "${PROVED_LINE}" ]; then
-            echo "ARM A CONFIRMED: WP produced no summary — frama-c aborted"
-            echo "      before running. Almost certainly ACSL syntax or an"
-            echo "      unresolved name. The kernel messages follow; this is"
-            echo "      the predicted run-0 outcome, not a surprise."
+            echo "ARM 0 (run-0 style abort): WP produced no summary."
+            echo "      Either frama-c aborted before running (ACSL syntax or"
+            echo "      an unresolved name) or the job was cancelled by the"
+            echo "      time budget. The kernel messages follow."
             grep -E "^\[(kernel|wp)" wp_pq_output.txt | head -40 || true
             exit 1
           fi
           echo "  ${PROVED_LINE}"
           TOTAL=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \K\d+' | head -1 || true)
           if [ -z "${TOTAL}" ] || [ "${TOTAL}" -lt 1 ]; then
-            echo "FAIL: WP ran over ZERO goals — a vacuous pass, not a clean"
+            echo "FAIL: WP ran over ZERO goals -- a vacuous pass, not a clean"
             echo "      one, despite the gate probe succeeding."
             exit 1
           fi
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_pq_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_pq_output.txt || true)
-          FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]"  wp_pq_output.txt || true)
+          FAILED_COUNT=$(grep -cE  "^\[wp\] \[Failed\]"  wp_pq_output.txt || true)
           INVALID_COUNT=$(grep -cE "^\[wp\] \[Invalid\]" wp_pq_output.txt || true)
+          STEPOUT_COUNT=$(grep -cE "^\[wp\] \[Stepout\]" wp_pq_output.txt || true)
           UNPROVED=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
           echo "  Total goals: ${TOTAL}"
           echo "  Timeouts:    ${TIMEOUT_COUNT}"
           echo "  Unknown:     ${UNKNOWN_COUNT}"
           echo "  Failed:      ${FAILED_COUNT}"
-          echo "  Unproved (T+U): ${UNPROVED}   <- ARM D: > 71 predicted"
+          echo "  Invalid:     ${INVALID_COUNT}"
+          echo "  Stepout:     ${STEPOUT_COUNT}"
+          echo "  Unproved (T+U): ${UNPROVED}"
+          # Failed / Invalid / Stepout are NOT residual verdicts. Invalid and
+          # Stepout gate even in report-only (same rule as the deque and
+          # region jobs); Failed is listed for triage on a first pass.
           if [ "${INVALID_COUNT}" -ne 0 ]; then
-            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID — a contract is"
+            echo "FAIL: ${INVALID_COUNT} goal(s) INVALID -- a contract is"
             echo "      REFUTED with a counter-example. Never pinnable, and"
             echo "      gated even in report-only."
             grep -E "^\[wp\] \[Invalid\]" wp_pq_output.txt
             exit 1
           fi
+          if [ "${STEPOUT_COUNT}" -ne 0 ]; then
+            echo "FAIL: ${STEPOUT_COUNT} goal(s) hit a prover STEP limit -- a"
+            echo "      verdict this project has never observed. Deliberately"
+            echo "      NOT pooled into the residual count; decide whether to"
+            echo "      pool it and update the definition before pinning."
+            grep -E "^\[wp\] \[Stepout\]" wp_pq_output.txt
+            exit 1
+          fi
           if [ "${FAILED_COUNT}" -ne 0 ]; then
             echo "NOTE: ${FAILED_COUNT} Failed goal(s). On a FIRST PASS this"
             echo "      most likely means a contract is wrong rather than the"
-            echo "      code — these were written without a local Frama-C."
-            echo "      Listed for triage; not gated at ENFORCE=0, unlike"
-            echo "      Invalid, which is a refutation rather than a gap."
+            echo "      code -- these were written without a local Frama-C."
+            echo "      Listed for triage; not gated at ENFORCE=0."
             grep -E "^\[wp\] \[Failed\]" wp_pq_output.txt | head -30
           fi
           echo ""
-          echo "REPORT-ONLY: nothing pinned. Record run 0 against ARMs A-E"
-          echo "      in VERIFY-0NN before interpreting any of it."
+          echo "  --- ARM A: positive control -- did -wp-model Typed+Cast take effect? ---"
+          # Same discipline as VERIFY-019-M / f4-control.yml: a null result
+          # is evidence only when the instrument is known to have changed.
+          CAST_RESID=$(grep -cE "^\[wp\] \[(Timeout|Unknown)\] typed_cast_" wp_pq_output.txt || true)
+          PLAIN_RESID=$(grep -E "^\[wp\] \[(Timeout|Unknown)\] typed_" wp_pq_output.txt | grep -vc "typed_cast_" || true)
+          echo "  typed_cast_ prefixed unproved goals: ${CAST_RESID}"
+          echo "  plain typed_ prefixed unproved goals: ${PLAIN_RESID}  (predicted 0)"
+          if [ "${UNPROVED}" -gt 0 ] && [ "${CAST_RESID}" -eq 0 ]; then
+            echo "FAIL: residuals exist but none is typed_cast_ prefixed --"
+            echo "      the model flag did not take effect. Every ARM below"
+            echo "      is VOID; do not record this run against any of them."
+            exit 1
+          fi
+          echo ""
+          echo "  --- ARM B: inheritance -- Inh(pq) == Residual(memory.h TU), mod prefix ---"
+          # Predicted BEFORE this run (VERIFY-022): priority_queue's core
+          # closure is memory.h's translation unit (contract, checked, ptr,
+          # slice, memory) plus compare.h and error.h. compare and error have
+          # EMPTY home residual sets. By the set-union identity the inherited
+          # set is memory.h's pinned 43, exactly, with the same prefix.
+          #
+          # The baseline is read from the frama-c-memory job's CHECKS array
+          # in THIS workflow file at run time -- there is no second copy of
+          # the list to drift out of step (the fix VERIFY-016/§7 named for
+          # the arena-32 differential gate).
+          WF=".github/workflows/cmake-multi-platform.yml"
+          MEM_START=$(grep -n '^  frama-c-memory:' "${WF}" | head -1 | cut -d: -f1)
+          # first CHECKS=( after the job header, up to its closing paren, then stop
+          awk -v s="${MEM_START}" 'NR>=s && /CHECKS=\(/ {f=1} f {print} f && /^ *\)/ {exit}' "${WF}" \
+            | grep -o '"typed_cast_[^"]*"' | tr -d '"' | sort -u > /tmp/mem_checks.txt
+          MEM_N=$(wc -l < /tmp/mem_checks.txt)
+          if [ "${MEM_N}" -ne 43 ]; then
+            echo "FAIL: parsed ${MEM_N} names from frama-c-memory's CHECKS,"
+            echo "      expected 43. The extraction is broken; ARM B is VOID."
+            exit 1
+          fi
+          grep -E "^\[wp\] \[(Timeout|Unknown)\] " wp_pq_output.txt \
+            | awk '{print $3}' | sort -u > /tmp/pq_resid.txt
+          # completeness: every memory.h residual re-appears
+          comm -23 /tmp/mem_checks.txt /tmp/pq_resid.txt > /tmp/armb_missing.txt
+          # soundness of context: no substrate goal that proves at home is
+          # residual here. Substrate = anything that is not pq's own and not
+          # the fresh result(bool, Error) instantiation.
+          comm -13 /tmp/mem_checks.txt /tmp/pq_resid.txt \
+            | grep -vE '^typed_cast_pq_' \
+            | grep -vE '^typed_cast_result__Bool_Error_' > /tmp/armb_extra.txt || true
+          MISSING_N=$(wc -l < /tmp/armb_missing.txt)
+          EXTRA_N=$(wc -l < /tmp/armb_extra.txt)
+          INH_N=$(comm -12 /tmp/mem_checks.txt /tmp/pq_resid.txt | wc -l)
+          echo "  memory.h names present:   ${INH_N} / 43"
+          echo "  memory.h names MISSING:   ${MISSING_N}   (predicted 0 -- completeness)"
+          [ "${MISSING_N}" -gt 0 ] && sed 's/^/      /' /tmp/armb_missing.txt
+          echo "  substrate goals EXTRA:    ${EXTRA_N}   (predicted 0 -- soundness of context)"
+          [ "${EXTRA_N}" -gt 0 ] && sed 's/^/      /' /tmp/armb_extra.txt | head -60
+          echo ""
+          echo "  --- ARM C: fresh result(bool, Error) arm, UNcontracted ---"
+          # Pre-registered as a CLASS, not a count: the instantiation is the
+          # shipped CANON_RESULT(bool, Error) with no ACSL attached, so only
+          # -wp-rte goals exist for it. Firm sub-prediction: get_ok and
+          # get_err each carry an unproved assert_rte_mem_access, because
+          # nothing states \valid(out) -- the VERIFY-018 F4 shape, met a
+          # third time. Everything else in this arm should be
+          # rte_function_pointer on the dispatch combinators (map, map_err,
+          # and_then, or_else, eq x2 -- 6 sites) or union-read mem_access.
+          RES_N=$(grep -cE '^typed_cast_result__Bool_Error_' /tmp/pq_resid.txt || true)
+          GET_OK=$(grep -cE  '^typed_cast_result__Bool_Error_get_ok_assert_rte_mem_access( |$)'  /tmp/pq_resid.txt || true)
+          GET_ERR=$(grep -cE '^typed_cast_result__Bool_Error_get_err_assert_rte_mem_access( |$)' /tmp/pq_resid.txt || true)
+          echo "  result arm residuals:     ${RES_N}"
+          echo "  get_ok/get_err mem_access: ${GET_OK}/${GET_ERR}   (predicted 1/1)"
+          grep -E '^typed_cast_result__Bool_Error_' /tmp/pq_resid.txt | sed 's/^/      /' || true
+          echo ""
+          echo "  --- ARM D: priority_queue's own residuals ---"
+          # Pre-registered CLASSES (VERIFY-022): (b) rte_function_pointer at
+          # the three pq->cmp sites and whatever WP emits after an unknown
+          # callee ('assigns everything', non-termination) -- the ceiling the
+          # header banner declares; (h) the pop_raw/peek out-frame; plus
+          # loop-related goals once commit 2 adds loop annotations (none in
+          # this run -- the loops are unannotated and WP assumes 'assigns
+          # everything', which produces NO named goal). No count predicted.
+          OWN_N=$(grep -cE '^typed_cast_pq_' /tmp/pq_resid.txt || true)
+          echo "  pq_* residuals:           ${OWN_N}"
+          grep -E '^typed_cast_pq_' /tmp/pq_resid.txt | sed 's/^/      /' || true
+          echo ""
+          echo "  --- ARM E: the arms must sum to the total ---"
+          # VERIFY-019's bookkeeping lesson: #1234's arms matched by
+          # cancellation. Sum before interpreting.
+          ARM_SUM=$((INH_N + EXTRA_N + RES_N + OWN_N))
+          echo "  ${INH_N} inherited + ${EXTRA_N} extra-substrate + ${RES_N} result + ${OWN_N} own = ${ARM_SUM}"
+          echo "  observed unproved (T+U):                                  ${UNPROVED}"
+          if [ "${ARM_SUM}" -ne "${UNPROVED}" ]; then
+            echo "  MISMATCH: a residual matched no arm (or two). Listing:"
+            cat /tmp/mem_checks.txt /tmp/armb_extra.txt > /tmp/covered.txt
+            grep -E '^typed_cast_(pq|result__Bool_Error)_' /tmp/pq_resid.txt >> /tmp/covered.txt || true
+            sort -u /tmp/covered.txt > /tmp/covered_s.txt
+            comm -23 /tmp/pq_resid.txt /tmp/covered_s.txt | sed 's/^/      /'
+          fi
+          echo ""
+          echo "REPORT-ONLY: nothing pinned. Record this run against ARMs A-E"
+          echo "      in VERIFY-022 before interpreting any of it. Do NOT"
+          echo "      promote until name-stable across repeated runs."
           echo "==============================================="
       - name: Upload WP proof output (priority_queue.h)
         if: always()
