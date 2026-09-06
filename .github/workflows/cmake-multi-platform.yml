@@ -5680,8 +5680,8 @@ jobs:
           retention-days: 90
 
   # -------------------------------------------------------------------------
-  # data/priority_queue.h — REPORT-ONLY (VERIFY-022; run 0 at CI #1281
-  # cancelled at 90 min, run 1 at CI #1282 complete, commit 2 pending run 2)
+  # data/priority_queue.h — REPORT-ONLY (VERIFY-022; runs 0-4 at CI #1281-#1285,
+  # commit 5 = calls-clause comparator boundary + every function contracted, run 5 pending)
   #
   # Shape: verified IN PLACE, no cover TU and no driver. The 40 non-macro
   # functions carry the contracts; DEFINE_PRIORITY_QUEUE's 17 typed wrappers
@@ -5949,42 +5949,92 @@ jobs:
           # (~20). VERIFY-023 closes the first in ptr.h; commit 3 closes the
           # second in pq_wf.
           #
-          # RUN 3 (CI #1284): 143 own. The < 90 prediction was REFUTED --
-          # the second refutation in a row on this arm, which means the
-          # CLASSIFICATION was wrong, not just the number. What closed (27)
-          # was everything BEFORE the first pq->cmp call in each sift
-          # function, plus pq_swap_ 12 -> 1. What did not close was
-          # everything AFTER it: WP has no assigns for the unknown callee,
-          # so from that statement onward pq->data / len / elem_size are
-          # unknown and every later obligation fails whatever ptr_elem now
-          # says. The comparator call is an INFORMATION HORIZON. Run 2's
-          # "41 cmp-ceiling" was a grep for function-pointer goal NAMES;
-          # the true cascade is ~99. Same misattribution shape VERIFY-023
-          # just found in VERIFY-009/-010, made by me, two runs running.
-          # Also: 4 heapify goals REGRESSED (0 -> 4) because commit 3 added
-          # a conjunct to pq_wf that heapify's requires did not carry.
+          # RUNS 2-4 (CI #1283/#1284/#1285): 170, 143, 144 own. Three count
+          # predictions (< 60, < 90, < 130) REFUTED in a row, each because a
+          # cause was inferred from a symptom and not traced in the log:
+          #   run 2  "ptr_elem opacity" -- partly right, mostly the cmp cascade
+          #   run 3  "41 cmp-ceiling"   -- a grep of goal NAMES; the cascade
+          #                               after the first pq->cmp call was ~99
+          #   run 4  "\\separated"      -- zero effect; the real cause of
+          #                               push_result's failures was the
+          #                               UNCONTRACTED result constructors at
+          #                               its return statements, and of
+          #                               pop_raw's the unconstrained `out`
+          # Run 4 also regressed heapify a second time from the same cause
+          # (a pq_wf conjunct added without following it into heapify's
+          # hand-copied requires). Commit 5 splits pq_wf_buf out so that
+          # cannot recur.
           #
-          # REGISTERED FOR RUN 4, two changes, predicted separately:
-          #   (a) heapify requires the pq_wf bound -> heapify back to 0 (-4).
-          #   (b) pq_wf gains \separated(pq, data range) -> the callee frames
-          #       on the data range can no longer be read as clobbering the
-          #       struct. Predicted to close push_result accepted_ensures x2
-          #       and accepted_assigns x1, pop_raw nonempty_assigns x2, and
-          #       sift assigns_exit/normal fragments -- own falls to 120-130.
-          #   No prediction is made about the cmp cascade: it will not move
-          #   until the comparator call is wrapped behind a purity contract,
-          #   which is a design decision for its own arc, not this one.
+          # NO COUNT IS PREDICTED FOR RUN 5. Counting is what kept going wrong.
+          # Instead, every remaining residual must land in one of the classes
+          # below, and the tally is printed per function so any function that
+          # does not reach the class it should is visible by name:
+          #
+          #   CEILING (the verified-configuration shape, lifetime.h precedent):
+          #     pq_cmp_*                       -- the comparator boundary. A
+          #        `calls` clause names compare.h's 24 built-in comparators
+          #        (VERIFY-005, 208/208, all `assigns \\nothing`), and pq_wf
+          #        requires pq->cmp to be one of them, so the wrapper's frame
+          #        and termination are THEOREMS, not a trusted axiom. The
+          #        verified claim narrows to the built-in family; a caller-
+          #        supplied comparator is outside it. Expected residual: 1 --
+          #        assert_rte_function_pointer, \\valid_function being
+          #        unimplemented in Frama-C 29. If assigns or terminates ALSO
+          #        appear here, the calls clause did not take and the axiom
+          #        alternative (documented in the header) is the fallback.
+          #   PROVER LIMIT:
+          #     pq_swap__call_mem_swap_requires_2 -- two element ranges are
+          #        disjoint because a != b, lifted through elem_size:
+          #        multiplication. 1 goal. Same class may appear at
+          #        remove_at_result's mem_copy (slot i vs slot len) and at
+          #        as_bytes/as_cbytes (len*es <= capacity*es). If those appear
+          #        they are THIS class, not a contract error; if they do not,
+          #        Alt-Ergo handled the monotonicity and the class is 1.
+          #   EVERYTHING ELSE: 0 per function. Every function in the header
+          #     now carries a contract. A residual outside the two classes
+          #     above is a contract error to read, not a number to record.
           OWN_N=$(grep -cE '^typed_cast_pq_' /tmp/pq_resid.txt || true)
-          PREDICT_OWN_MAX=130
-          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run 3: 143; run-4 prediction: < ${PREDICT_OWN_MAX})"
-          if [ "${OWN_N}" -lt "${PREDICT_OWN_MAX}" ]; then
-            echo "  run-4 own prediction:     CONFIRMED"
+          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run 3: 143; run 4: 144)"
+          CEIL_N=$(grep -cE '^typed_cast_pq_cmp__' /tmp/pq_resid.txt || true)
+          MULT_N=$(grep -cE '^typed_cast_pq_(swap__call_mem_swap_requires|remove_at_result_call_mem_copy_requires|as_c?bytes_call_c?bytes_from_requires)' /tmp/pq_resid.txt || true)
+          REST_N=$((OWN_N - CEIL_N - MULT_N))
+          echo "    comparator boundary (pq_cmp_):     ${CEIL_N}   (expected 1: \\valid_function only -- calls clause over the 24 built-ins)"
+          echo "    multiplication / range disjointness: ${MULT_N}   (expected 1-9, prover limit, named class)"
+          echo "    everything else:                   ${REST_N}   (expected 0 -- anything here is a contract to read)"
+          if [ "${REST_N}" -eq 0 ]; then
+            echo "  run-5 class prediction:   CONFIRMED -- every residual is in a named class"
           else
-            echo "  run-4 own prediction:     REFUTED -- record it, do not adjust it"
+            echo "  run-5 class prediction:   REFUTED -- ${REST_N} residual(s) outside both classes, listed by function:"
           fi
-          echo "  of which at pq->cmp sites (fn-pointer class):"
-          grep -cE '^typed_cast_pq_sift_(up|down)_.*(function_pointer|terminates|exits|loop_invariant|loop_variant|loop_assigns)' /tmp/pq_resid.txt || true
-          grep -E '^typed_cast_pq_' /tmp/pq_resid.txt | sed 's/^/      /' || true
+          echo "  --- per-function tally (own residuals) ---"
+          # Explicit names with anchored prefixes. pq_push is a prefix of
+          # pq_push_result, pq_pop of pq_pop_raw, pq_peek of pq_peek_raw,
+          # pq_remove_at of pq_remove_at_result, pq_swap of pq_swap_ -- the
+          # bitset job miscounted twice on exactly this shape (CI #1252), so
+          # each row subtracts the longer names that share its prefix.
+          tally() {  # $1 = label, $2 = regex to count, $3 = regex to exclude (may be empty)
+            if [ -n "$3" ]; then n=$(grep -E "$2" /tmp/pq_resid.txt | grep -vcE "$3" || true)
+            else n=$(grep -cE "$2" /tmp/pq_resid.txt || true); fi
+            [ "$n" -gt 0 ] && printf '    %4d  %s\n' "$n" "$1"
+            return 0
+          }
+          tally pq_cmp_            '^typed_cast_pq_cmp__'                 ''
+          tally pq_swap_           '^typed_cast_pq_swap__'                ''
+          tally pq_sift_up_        '^typed_cast_pq_sift_up_'              ''
+          tally pq_sift_down_      '^typed_cast_pq_sift_down_'            ''
+          tally pq_init            '^typed_cast_pq_init_'                 ''
+          tally pq_heapify         '^typed_cast_pq_heapify_'              ''
+          tally pq_push_result     '^typed_cast_pq_push_result_'          ''
+          tally pq_push            '^typed_cast_pq_push_'                 '^typed_cast_pq_push_result_'
+          tally pq_pop_raw         '^typed_cast_pq_pop_raw_'              ''
+          tally pq_pop             '^typed_cast_pq_pop_'                  '^typed_cast_pq_pop_raw_'
+          tally pq_peek_raw        '^typed_cast_pq_peek_raw_'             ''
+          tally pq_peek            '^typed_cast_pq_peek_'                 '^typed_cast_pq_peek_raw_'
+          tally pq_remove_at_result '^typed_cast_pq_remove_at_result_'   ''
+          tally pq_remove_at       '^typed_cast_pq_remove_at_'            '^typed_cast_pq_remove_at_result_'
+          tally pq_as_bytes        '^typed_cast_pq_as_bytes_'             ''
+          tally pq_as_cbytes       '^typed_cast_pq_as_cbytes_'            ''
+          tally accessors          '^typed_cast_pq_(len|capacity|remaining|is_empty|is_full|parent_|left_child_|right_child_|lifetime_)' ''
           echo ""
           echo "  --- ARM E: the arms must sum to the total ---"
           # VERIFY-019's bookkeeping lesson: #1234's arms matched by

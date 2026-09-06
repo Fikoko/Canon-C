@@ -45,8 +45,37 @@
  */
 #ifndef CANON_RESULT_BOOL_ERROR_DEFINED
     #define CANON_RESULT_BOOL_ERROR_DEFINED
-    /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
-    CANON_RESULT(bool, Error)
+    #ifdef __FRAMAC__
+        /* VERIFY-022 commit 5. Under WP the three constructors this header
+         * calls carry contracts, interposed exactly as vmacros/vdrivers/
+         * vec_verify.h does: type first, contracted prototypes, then the
+         * real function definitions. Without this, result__Bool_Error_ok /
+         * _err had NO assigns clause, WP took them as assigning everything,
+         * and every push_result / remove_at_result postcondition died at the
+         * `return` -- 6 goals at CI #1285 that commit 4 had misattributed to
+         * struct/buffer aliasing. Shapes copied from vec_verify.h; nothing
+         * invented. The shipped path (#else) is byte-identical to before. */
+        DEFINE_RESULT_TYPEDEF(bool, Error)
+        DEFINE_RESULT_STRUCT(bool, Error)
+        /*@ assigns \nothing;
+            ensures \result.is_ok == \true;
+            ensures \result.val.ok == v;
+        */
+        static inline result__Bool_Error result__Bool_Error_ok(bool v);
+        /*@ assigns \nothing;
+            ensures \result.is_ok == \false;
+            ensures \result.val.err == err;
+        */
+        static inline result__Bool_Error result__Bool_Error_err(Error err);
+        /*@ assigns \nothing;
+            ensures \result <==> r.is_ok;
+        */
+        static inline bool result__Bool_Error_is_ok(result__Bool_Error r);
+        DEFINE_RESULT_FUNCTIONS(static inline, bool, Error)
+    #else
+        /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
+        CANON_RESULT(bool, Error)
+    #endif
 #endif
 
 /**
@@ -266,9 +295,70 @@ typedef struct {
    Internal helpers
    ════════════════════════════════════════════════════════════════════════════ */
 
+/* ════════════════════════════════════════════════════════════════════════════
+ * pq_cmp_ — THE ONE PLACE THE QUEUE CALLS THE COMPARATOR.
+ *
+ * VERIFY-022 commit 5. Until now pq_sift_up_ and pq_sift_down_ called
+ * pq->cmp(...) directly at three sites. WP has no contract for an unknown
+ * callee, so from each such call onward it assumed EVERYTHING was assigned:
+ * pq->data, pq->len, pq->elem_size all unknown, and every later obligation
+ * in the function -- ptr_elem requires, pq_swap_ requires, loop invariant
+ * preservation, frames, termination -- failed regardless of its own merit.
+ * At CI #1285 that cascade was ~99 of 144 own residuals. The comparator call
+ * was an information horizon.
+ *
+ * TWO WAYS TO CLOSE IT WERE CONSIDERED, and the second was chosen:
+ *
+ *   (a) A TRUSTED AXIOM: contract this wrapper `assigns \nothing` and leave
+ *       its own goal unprovable as the permanent marker -- diag.h's stdio
+ *       axiom shape (VERIFY-017). Covers any comparator; proves nothing
+ *       about it.
+ *
+ *   (b) A VERIFIED CONFIGURATION: a `calls` clause naming compare.h's 24
+ *       built-in comparators, and a requires that pq->cmp is one of them.
+ *       All 24 are proved -- VERIFY-005, 208/208, zero residuals -- with
+ *       `assigns \nothing`, byte-form validity requires, and a bounded
+ *       result. This wrapper's frame and termination then follow from THEIR
+ *       contracts: a theorem, not an assumption. lifetime.h's shape,
+ *       "verified at level 4 only". The claim is narrower -- a caller-
+ *       supplied comparator is outside the verified configuration, though
+ *       the C code accepts it exactly as before -- and nothing is trusted.
+ *
+ * (b) is what is below. The one goal expected to remain unprovable is
+ * \valid_function(pq->cmp), unimplemented in Frama-C 29 -- the same single
+ * goal every function-pointer call in the project carries.
+ *
+ * NOT claimed: anything about the comparator's RESULT beyond -1..1. Heap
+ * order still cannot be stated here, and the runtime suite remains the
+ * evidence for ordering. This wrapper changes what WP knows about the queue
+ * AFTER a comparison, not what it knows about the comparison.
+ *
+ * Shipped code: three call sites change from pq->cmp(a, b, pq->ctx) to
+ * pq_cmp_(pq, a, b). static inline; identical machine code; no conditions
+ * added, so MC/DC's denominator does not move.
+ * ════════════════════════════════════════════════════════════════════════════ */
+#ifdef __FRAMAC__
+/*@
+  requires \valid_read(pq);
+  requires pq->cmp != \null;
+  requires pq_cmp_builtin(pq);
+  requires pq_cmp_fits(pq);
+  requires \valid_read((char*)a + (0 .. pq->elem_size - 1));
+  requires \valid_read((char*)b + (0 .. pq->elem_size - 1));
+  assigns \nothing;
+  ensures -1 <= \result <= 1;
+*/
+#endif
+static inline int pq_cmp_(const PriorityQueue* pq, const void* a, const void* b) {
+#ifdef __FRAMAC__
+    /*@ calls algo_cmp_u8, algo_cmp_u8_desc, algo_cmp_u16, algo_cmp_u16_desc, algo_cmp_u32, algo_cmp_u32_desc, algo_cmp_u64, algo_cmp_u64_desc, algo_cmp_i8, algo_cmp_i8_desc, algo_cmp_i16, algo_cmp_i16_desc, algo_cmp_i32, algo_cmp_i32_desc, algo_cmp_i64, algo_cmp_i64_desc, algo_cmp_usize, algo_cmp_usize_desc, algo_cmp_isize, algo_cmp_isize_desc, algo_cmp_f32, algo_cmp_f32_desc, algo_cmp_f64, algo_cmp_f64_desc; */
+#endif
+    return pq->cmp(a, b, pq->ctx);
+}
+
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
- * ACSL: structural invariant and scope (VERIFY-022, commit 4 — runs 1-3 at CI #1282/#1283/#1284 scored, see the job)
+ * ACSL: structural invariant and scope (VERIFY-022, commit 5 — runs 1-4 at CI #1282-#1285 scored, see the job)
  *
  * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
  * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
@@ -301,18 +391,84 @@ typedef struct {
  * Recorded as a specification-strength ceiling, VERIFY-020 F4 family, declared
  * before the run rather than discovered in the residual count.
  *
+ * COMMIT 5 UPDATE. The FRAME half of this ceiling -- "WP treats the call as
+ * an unknown callee, assigning everything" -- is closed for the verified
+ * configuration by pq_cmp_ (see its banner): a `calls` clause over the 24
+ * proved built-in comparators makes the call's purity a theorem. The ORDER
+ * half stands: the built-ins ensure only -1 <= \result <= 1, so "parent <=
+ * child" is still not statable. What changed is that WP now knows the queue
+ * is intact after a comparison; it still knows nothing about which way the
+ * comparison went.
+ *
  * The heap order is covered instead by the runtime suite: every pop sequence
  * in priority_queue_test.c asserts ascending order, including through the
  * byte-wise swap path for elements over CANON_MEM_SWAP_MAX.
  * ════════════════════════════════════════════════════════════════════════════ */
 #ifdef __FRAMAC__
 /*@
-  predicate pq_wf(PriorityQueue* pq) =
+  // pq_wf_buf: everything that holds of an INITIALISED queue regardless of
+  // len. Introduced in commit 5 because heapify -- which SETS len and so
+  // cannot require len <= capacity -- had its own copy of these conjuncts
+  // in its requires, and that copy lagged pq_wf in commits 3 AND 4 (the
+  // overflow bound, then \separated), regressing heapify 0 -> 4 -> 5. One
+  // definition, two names; heapify requires pq_wf_buf and ensures pq_wf.
+  // VERIFIED CONFIGURATION: the comparator is one of compare.h's 24 built-ins.
+  // Every one of them is proved (VERIFY-005, 208/208, zero residuals) with
+  // `assigns \nothing`, byte-form validity requires, and -1 <= \result <= 1.
+  // Restricting the proof to them lets pq_cmp_'s frame be a THEOREM rather
+  // than a trusted axiom. A caller-supplied comparator is OUTSIDE this
+  // configuration: the C code accepts it, the proof does not cover it. That
+  // is the lifetime.h shape -- "verified at level 4 only" -- not the diag.h
+  // trusted-axiom shape, and it is the stronger of the two.
+  predicate pq_cmp_builtin(PriorityQueue* pq) =
+       pq->cmp == algo_cmp_u8
+    || pq->cmp == algo_cmp_u8_desc
+    || pq->cmp == algo_cmp_u16
+    || pq->cmp == algo_cmp_u16_desc
+    || pq->cmp == algo_cmp_u32
+    || pq->cmp == algo_cmp_u32_desc
+    || pq->cmp == algo_cmp_u64
+    || pq->cmp == algo_cmp_u64_desc
+    || pq->cmp == algo_cmp_i8
+    || pq->cmp == algo_cmp_i8_desc
+    || pq->cmp == algo_cmp_i16
+    || pq->cmp == algo_cmp_i16_desc
+    || pq->cmp == algo_cmp_i32
+    || pq->cmp == algo_cmp_i32_desc
+    || pq->cmp == algo_cmp_i64
+    || pq->cmp == algo_cmp_i64_desc
+    || pq->cmp == algo_cmp_usize
+    || pq->cmp == algo_cmp_usize_desc
+    || pq->cmp == algo_cmp_isize
+    || pq->cmp == algo_cmp_isize_desc
+    || pq->cmp == algo_cmp_f32
+    || pq->cmp == algo_cmp_f32_desc
+    || pq->cmp == algo_cmp_f64
+    || pq->cmp == algo_cmp_f64_desc;
+
+  // Each built-in reads sizeof(T) bytes through a and b; the element must be
+  // at least that wide, or the comparator's own requires cannot be met.
+  predicate pq_cmp_fits(PriorityQueue* pq) =
+       ((pq->cmp == algo_cmp_u8 || pq->cmp == algo_cmp_u8_desc) ==> pq->elem_size >= sizeof(u8))
+    && ((pq->cmp == algo_cmp_u16 || pq->cmp == algo_cmp_u16_desc) ==> pq->elem_size >= sizeof(u16))
+    && ((pq->cmp == algo_cmp_u32 || pq->cmp == algo_cmp_u32_desc) ==> pq->elem_size >= sizeof(u32))
+    && ((pq->cmp == algo_cmp_u64 || pq->cmp == algo_cmp_u64_desc) ==> pq->elem_size >= sizeof(u64))
+    && ((pq->cmp == algo_cmp_i8 || pq->cmp == algo_cmp_i8_desc) ==> pq->elem_size >= sizeof(i8))
+    && ((pq->cmp == algo_cmp_i16 || pq->cmp == algo_cmp_i16_desc) ==> pq->elem_size >= sizeof(i16))
+    && ((pq->cmp == algo_cmp_i32 || pq->cmp == algo_cmp_i32_desc) ==> pq->elem_size >= sizeof(i32))
+    && ((pq->cmp == algo_cmp_i64 || pq->cmp == algo_cmp_i64_desc) ==> pq->elem_size >= sizeof(i64))
+    && ((pq->cmp == algo_cmp_usize || pq->cmp == algo_cmp_usize_desc) ==> pq->elem_size >= sizeof(usize))
+    && ((pq->cmp == algo_cmp_isize || pq->cmp == algo_cmp_isize_desc) ==> pq->elem_size >= sizeof(isize))
+    && ((pq->cmp == algo_cmp_f32 || pq->cmp == algo_cmp_f32_desc) ==> pq->elem_size >= sizeof(f32))
+    && ((pq->cmp == algo_cmp_f64 || pq->cmp == algo_cmp_f64_desc) ==> pq->elem_size >= sizeof(f64));
+
+  predicate pq_wf_buf(PriorityQueue* pq) =
        \valid(pq)
     && pq->elem_size > 0
     && pq->capacity  > 0
-    && pq->len <= pq->capacity
     && pq->cmp != \null
+    && pq_cmp_builtin(pq)
+    && pq_cmp_fits(pq)
     // commit 3: ptr_elem requires index <= CANON_USIZE_MAX / elem_size, and
     // run 2 showed ~20 residuals were exactly that obligation, unprovable
     // because the invariant did not carry the bound. With it, any index
@@ -331,6 +487,8 @@ typedef struct {
     // cause of push_result's accepted_ensures pair, pop_raw's nonempty
     // assigns pair, and the sift assigns fragments.
     && \separated(pq, (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+
+  predicate pq_wf(PriorityQueue* pq) = pq_wf_buf(pq) && pq->len <= pq->capacity;
 
   // The slot index i is inside the live prefix.
   predicate pq_in_use(PriorityQueue* pq, integer i) = 0 <= i < pq->len;
@@ -475,7 +633,7 @@ static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
         usize p  = pq_parent_(idx);
         void* pe = ptr_elem(pq->data, p, pq->elem_size);
         void* ie = ptr_elem(pq->data, idx, pq->elem_size);
-        if (pq->cmp(pe, ie, pq->ctx) <= 0) { break; }
+        if (pq_cmp_(pq, pe, ie) <= 0) { break; }
         pq_swap_(pq, p, idx);
         idx = p;
     }
@@ -520,12 +678,12 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
         if (left < pq->len) {
             void* sl = ptr_elem(pq->data, smallest, pq->elem_size);
             void* le = ptr_elem(pq->data, left,     pq->elem_size);
-            if (pq->cmp(le, sl, pq->ctx) < 0) { smallest = left; }
+            if (pq_cmp_(pq, le, sl) < 0) { smallest = left; }
         }
         if (right < pq->len) {
             void* sl = ptr_elem(pq->data, smallest, pq->elem_size);
             void* re = ptr_elem(pq->data, right,    pq->elem_size);
-            if (pq->cmp(re, sl, pq->ctx) < 0) { smallest = right; }
+            if (pq_cmp_(pq, re, sl) < 0) { smallest = right; }
         }
         if (smallest == idx) { break; }
         pq_swap_(pq, idx, smallest);
@@ -571,6 +729,42 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
   requires capacity  > 0;
   requires elem_size > 0;
   requires cmp != \null;
+  requires cmp == algo_cmp_u8
+    || cmp == algo_cmp_u8_desc
+    || cmp == algo_cmp_u16
+    || cmp == algo_cmp_u16_desc
+    || cmp == algo_cmp_u32
+    || cmp == algo_cmp_u32_desc
+    || cmp == algo_cmp_u64
+    || cmp == algo_cmp_u64_desc
+    || cmp == algo_cmp_i8
+    || cmp == algo_cmp_i8_desc
+    || cmp == algo_cmp_i16
+    || cmp == algo_cmp_i16_desc
+    || cmp == algo_cmp_i32
+    || cmp == algo_cmp_i32_desc
+    || cmp == algo_cmp_i64
+    || cmp == algo_cmp_i64_desc
+    || cmp == algo_cmp_usize
+    || cmp == algo_cmp_usize_desc
+    || cmp == algo_cmp_isize
+    || cmp == algo_cmp_isize_desc
+    || cmp == algo_cmp_f32
+    || cmp == algo_cmp_f32_desc
+    || cmp == algo_cmp_f64
+    || cmp == algo_cmp_f64_desc;
+  requires ((cmp == algo_cmp_u8 || cmp == algo_cmp_u8_desc) ==> elem_size >= sizeof(u8))
+    && ((cmp == algo_cmp_u16 || cmp == algo_cmp_u16_desc) ==> elem_size >= sizeof(u16))
+    && ((cmp == algo_cmp_u32 || cmp == algo_cmp_u32_desc) ==> elem_size >= sizeof(u32))
+    && ((cmp == algo_cmp_u64 || cmp == algo_cmp_u64_desc) ==> elem_size >= sizeof(u64))
+    && ((cmp == algo_cmp_i8 || cmp == algo_cmp_i8_desc) ==> elem_size >= sizeof(i8))
+    && ((cmp == algo_cmp_i16 || cmp == algo_cmp_i16_desc) ==> elem_size >= sizeof(i16))
+    && ((cmp == algo_cmp_i32 || cmp == algo_cmp_i32_desc) ==> elem_size >= sizeof(i32))
+    && ((cmp == algo_cmp_i64 || cmp == algo_cmp_i64_desc) ==> elem_size >= sizeof(i64))
+    && ((cmp == algo_cmp_usize || cmp == algo_cmp_usize_desc) ==> elem_size >= sizeof(usize))
+    && ((cmp == algo_cmp_isize || cmp == algo_cmp_isize_desc) ==> elem_size >= sizeof(isize))
+    && ((cmp == algo_cmp_f32 || cmp == algo_cmp_f32_desc) ==> elem_size >= sizeof(f32))
+    && ((cmp == algo_cmp_f64 || cmp == algo_cmp_f64_desc) ==> elem_size >= sizeof(f64));
   requires capacity <= CANON_USIZE_MAX / elem_size; // the product must not wrap;
                                                     // pq_init does NOT check this
                                                     // and a caller can overflow it.
@@ -640,17 +834,9 @@ static inline void pq_init(
     assigns \nothing;
   behavior live:
     assumes pq != \null;
-    requires \valid(pq);
-    requires pq->elem_size > 0;
-    requires pq->capacity  > 0;
-    requires pq->cmp != \null;
-    requires pq->capacity <= CANON_USIZE_MAX / pq->elem_size; // commit 4: the loop
-                                           // invariant asserts pq_wf, which gained
-                                           // this conjunct in commit 3; without it
-                                           // here the invariant could not be
-                                           // ESTABLISHED and heapify regressed 0 -> 4
-                                           // at CI #1284. My change, my miss.
-    requires \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    requires pq_wf_buf(pq);            // commit 5: was a hand-copied subset of
+                                       // pq_wf that lagged it twice (CI #1284,
+                                       // #1285). Now the same predicate.
     assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
     ensures pq->len == (len > pq->capacity ? pq->capacity : len);
     ensures pq_wf(pq);
@@ -710,17 +896,26 @@ static inline void pq_heapify(borrowed(PriorityQueue*) pq, usize len) {
   behavior rejected:
     assumes pq == \null || elem == \null;
     assigns \nothing;
+    ensures \result.is_ok == \false;
   behavior full:
     assumes pq != \null && elem != \null && pq->len >= pq->capacity;
     requires \valid_read(pq);
     assigns \nothing;
+    ensures \result.is_ok == \false;
   behavior accepted:
     assumes pq != \null && elem != \null && pq->len < pq->capacity;
     requires pq_wf(pq);
     requires \valid_read((char*)elem + (0 .. pq->elem_size - 1));
+    requires \separated((char*)elem + (0 .. pq->elem_size - 1), (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+                                       // commit 5: mem_copy requires the copied
+                                       // element not to overlap the slot it
+                                       // lands in. A caller passing a pointer
+                                       // INTO the queue's own buffer is outside
+                                       // the API.
     assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
     ensures pq->len == \old(pq->len) + 1;
     ensures pq_wf(pq);
+    ensures \result.is_ok == \true;
   complete behaviors;
   disjoint behaviors;
   // Behavior-local `assigns` because the three exits differ: two guards
@@ -772,21 +967,26 @@ static inline result__Bool_Error pq_push_result(
     assumes pq == \null || pq->len == 0;
     assigns \nothing;
     ensures \result == \false;
-  behavior nonempty:
-    assumes pq != \null && pq->len > 0;
+  behavior nonempty_discard:
+    assumes pq != \null && pq->len > 0 && out == \null;
     requires pq_wf(pq);
     assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
     ensures \result == \true;
     ensures pq->len == \old(pq->len) - 1;
     ensures pq_wf(pq);
+  behavior nonempty_out:
+    assumes pq != \null && pq->len > 0 && out != \null;
+    requires pq_wf(pq);
+    requires \valid((char*)out + (0 .. pq->elem_size - 1));
+    requires \separated((char*)out + (0 .. pq->elem_size - 1), pq, (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1], ((char*)out)[0 .. pq->elem_size - 1];
+    ensures \result == \true;
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
   complete behaviors;
   disjoint behaviors;
-  // `out` is written when non-null; not stated in this pass. Naming the
-  // frame needs `((char*)out)[0 .. pq->elem_size - 1]`, a cast the job's
-  // Typed+Cast model DOES interpret (class (h) is a Typed+Cast class by
-  // definition — it does not exist under plain Typed). Left for commit 2,
-  // where it should split the nonempty behavior on `out != \null` so the
-  // frame is true on both exits. Until then: expected residual, class (h).
+  // commit 5: the class-(h) `out` frame, stated. Split on out != \null so
+  // the frame is true on both exits (the run-1 note said to do exactly this).
 */
 #endif
 static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {
@@ -820,6 +1020,9 @@ static inline bool pq_pop_raw(borrowed(PriorityQueue*) pq, void* out) {
  */
 #ifdef __FRAMAC__
 /*@
+  requires pq == \null || \valid_read(pq);   // commit 5: the code reads
+                                              // pq->len whenever pq != NULL,
+                                              // including on the empty path
   assigns \nothing;
   behavior empty:
     assumes pq == \null || pq->len == 0;
@@ -856,6 +1059,33 @@ static inline const void* pq_peek_raw(borrowed(const PriorityQueue*) pq) {
  *
  * Performance: O(log n)
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq == \null || \valid_read(pq);
+  behavior rejected:
+    assumes pq == \null;
+    assigns \nothing;
+    ensures \result.is_ok == \false;
+  behavior out_of_range:
+    assumes pq != \null && i >= pq->len;
+    assigns \nothing;
+    ensures \result.is_ok == \false;
+  behavior removed:
+    assumes pq != \null && i < pq->len;
+    requires pq_wf(pq);
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
+    ensures \result.is_ok == \true;
+  complete behaviors;
+  disjoint behaviors;
+  // commit 5. The i == len early return and the copy-then-resift path are
+  // one behaviour here: both shrink len by one and preserve pq_wf. The
+  // mem_copy from slot len to slot i needs the two slots not to overlap,
+  // which is i != len -- true on that path -- lifted through elem_size.
+  // Whether the provers do that multiplication is a question for the run.
+*/
+#endif
 static inline result__Bool_Error pq_remove_at_result(
     borrowed(PriorityQueue*) pq,
     usize                    i)
@@ -886,16 +1116,84 @@ static inline result__Bool_Error pq_remove_at_result(
    ════════════════════════════════════════════════════════════════════════════ */
 
 /** @brief Inserts elem — returns true on success. Prefer pq_push_result(). */
+#ifdef __FRAMAC__
+/*@
+  behavior rejected:
+    assumes pq == \null || elem == \null;
+    assigns \nothing;
+    ensures \result == \false;
+  behavior full:
+    assumes pq != \null && elem != \null && pq->len >= pq->capacity;
+    requires \valid_read(pq);
+    assigns \nothing;
+    ensures \result == \false;
+  behavior accepted:
+    assumes pq != \null && elem != \null && pq->len < pq->capacity;
+    requires pq_wf(pq);
+    requires \valid_read((char*)elem + (0 .. pq->elem_size - 1));
+    requires \separated((char*)elem + (0 .. pq->elem_size - 1), (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures pq->len == \old(pq->len) + 1;
+    ensures pq_wf(pq);
+    ensures \result == \true;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_push(borrowed(PriorityQueue*) pq, borrowed(const void*) elem) {
     return result__Bool_Error_is_ok(pq_push_result(pq, elem));
 }
 
 /** @brief Removes and copies the top element into out. Prefer pq_pop_raw(). */
+#ifdef __FRAMAC__
+/*@
+  behavior empty:
+    assumes pq == \null || pq->len == 0;
+    assigns \nothing;
+    ensures \result == \false;
+  behavior nonempty_discard:
+    assumes pq != \null && pq->len > 0 && out == \null;
+    requires pq_wf(pq);
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures \result == \true;
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
+  behavior nonempty_out:
+    assumes pq != \null && pq->len > 0 && out != \null;
+    requires pq_wf(pq);
+    requires \valid((char*)out + (0 .. pq->elem_size - 1));
+    requires \separated((char*)out + (0 .. pq->elem_size - 1), pq, (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1], ((char*)out)[0 .. pq->elem_size - 1];
+    ensures \result == \true;
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_pop(borrowed(PriorityQueue*) pq, void* out) {
     return pq_pop_raw(pq, out);
 }
 
 /** @brief Copies the top element into out without removing it. Prefer pq_peek_raw(). */
+#ifdef __FRAMAC__
+/*@
+  requires pq == \null || \valid_read(pq);
+  behavior none:
+    assumes pq == \null || pq->len == 0 || out == \null;
+    assigns \nothing;
+    ensures \result == \false;
+  behavior some:
+    assumes pq != \null && pq->len > 0 && out != \null;
+    requires pq_wf(pq);
+    requires \valid((char*)out + (0 .. pq->elem_size - 1));
+    requires \separated((char*)out + (0 .. pq->elem_size - 1), (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    assigns ((char*)out)[0 .. pq->elem_size - 1];
+    ensures \result == \true;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_peek(borrowed(const PriorityQueue*) pq, void* out) {
     const void* top = pq_peek_raw(pq);
     if (!top || !out) { return false; }
@@ -904,6 +1202,24 @@ static inline bool pq_peek(borrowed(const PriorityQueue*) pq, void* out) {
 }
 
 /** @brief Removes element at index i — returns true on success. Prefer pq_remove_at_result(). */
+#ifdef __FRAMAC__
+/*@
+  requires pq == \null || \valid_read(pq);
+  behavior rejected:
+    assumes pq == \null || i >= pq->len;
+    assigns \nothing;
+    ensures \result == \false;
+  behavior removed:
+    assumes pq != \null && i < pq->len;
+    requires pq_wf(pq);
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures pq->len == \old(pq->len) - 1;
+    ensures pq_wf(pq);
+    ensures \result == \true;
+  complete behaviors;
+  disjoint behaviors;
+*/
+#endif
 static inline bool pq_remove_at(borrowed(PriorityQueue*) pq, usize i) {
     return result__Bool_Error_is_ok(pq_remove_at_result(pq, i));
 }
@@ -1024,6 +1340,26 @@ static inline bool pq_is_full(borrowed(const PriorityQueue*) pq) {
  *
  * Performance: O(1)
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq == \null || \valid_read(pq);
+  assigns \nothing;
+  behavior empty:
+    assumes pq == \null || pq->data == \null || pq->len == 0;
+    ensures \result.len == 0;
+  behavior live:
+    assumes pq != \null && pq->data != \null && pq->len > 0;
+    requires pq_wf(pq);
+    ensures \result.ptr == (u8*)pq->data;
+    ensures \result.len == pq->len * pq->elem_size;
+  complete behaviors;
+  disjoint behaviors;
+  // commit 5. bytes_from needs the len*elem_size prefix valid; pq_wf gives
+  // validity of capacity*elem_size and len <= capacity, so this is
+  // len*es <= capacity*es -- monotonicity of multiplication by a positive
+  // elem_size. Whether the provers close it is a question for the run.
+*/
+#endif
 static inline bytes_t pq_as_bytes(borrowed(PriorityQueue*) pq) {
     if (!pq || !pq->data || (pq->len == 0u)) { return bytes_empty(); }
     return bytes_from(pq->data, pq->len * pq->elem_size);
@@ -1032,6 +1368,26 @@ static inline bytes_t pq_as_bytes(borrowed(PriorityQueue*) pq) {
 /**
  * @brief Read-only twin of pq_as_bytes() — see API-001
  */
+#ifdef __FRAMAC__
+/*@
+  requires pq == \null || \valid_read(pq);
+  assigns \nothing;
+  behavior empty:
+    assumes pq == \null || pq->data == \null || pq->len == 0;
+    ensures \result.len == 0;
+  behavior live:
+    assumes pq != \null && pq->data != \null && pq->len > 0;
+    requires pq_wf(pq);
+    ensures \result.ptr == (const u8*)pq->data;
+    ensures \result.len == pq->len * pq->elem_size;
+  complete behaviors;
+  disjoint behaviors;
+  // commit 5. bytes_from needs the len*elem_size prefix valid; pq_wf gives
+  // validity of capacity*elem_size and len <= capacity, so this is
+  // len*es <= capacity*es -- monotonicity of multiplication by a positive
+  // elem_size. Whether the provers close it is a question for the run.
+*/
+#endif
 static inline cbytes_t pq_as_cbytes(borrowed(const PriorityQueue*) pq) {
     if (!pq || !pq->data || (pq->len == 0u)) { return cbytes_empty(); }
     return cbytes_from(pq->data, pq->len * pq->elem_size);
