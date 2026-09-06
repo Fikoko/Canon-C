@@ -268,7 +268,7 @@ typedef struct {
 
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
- * ACSL: structural invariant and scope (VERIFY-022, commit 3 — runs 1-2 at CI #1282/#1283 scored, see the job)
+ * ACSL: structural invariant and scope (VERIFY-022, commit 4 — runs 1-3 at CI #1282/#1283/#1284 scored, see the job)
  *
  * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
  * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
@@ -319,7 +319,18 @@ typedef struct {
     // below capacity satisfies ptr_elem by transitivity -- no nonlinear
     // arithmetic needed, the division is one fixed term.
     && pq->capacity <= CANON_USIZE_MAX / pq->elem_size
-    && \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    && \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1))
+    // commit 4: the struct and its element buffer are disjoint. Without
+    // this, every callee frame of the form
+    //   assigns ((char*)pq->data)[0 .. capacity*elem_size - 1]
+    // can be read by WP as possibly writing *pq itself -- a char* range with
+    // no separation fact could alias anything -- so pq->len, pq->capacity
+    // and pq->elem_size were unknown after any call to pq_swap_ / sift_up_ /
+    // sift_down_, and the caller's own ensures and frames failed even where
+    // the callee's contract was fully proved. Registered for run 4 as the
+    // cause of push_result's accepted_ensures pair, pop_raw's nonempty
+    // assigns pair, and the sift assigns fragments.
+    && \separated(pq, (char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
 
   // The slot index i is inside the live prefix.
   predicate pq_in_use(PriorityQueue* pq, integer i) = 0 <= i < pq->len;
@@ -567,6 +578,7 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
                                                     // pq_wf's bound is established
                                                     // directly, not via a product
   requires \valid((char*)buffer + (0 .. capacity * elem_size - 1));
+  requires \separated(pq, (char*)buffer + (0 .. capacity * elem_size - 1));
   assigns *pq;
   ensures pq->data      == buffer;
   ensures pq->len       == 0;
@@ -632,6 +644,12 @@ static inline void pq_init(
     requires pq->elem_size > 0;
     requires pq->capacity  > 0;
     requires pq->cmp != \null;
+    requires pq->capacity <= CANON_USIZE_MAX / pq->elem_size; // commit 4: the loop
+                                           // invariant asserts pq_wf, which gained
+                                           // this conjunct in commit 3; without it
+                                           // here the invariant could not be
+                                           // ESTABLISHED and heapify regressed 0 -> 4
+                                           // at CI #1284. My change, my miss.
     requires \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
     assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
     ensures pq->len == (len > pq->capacity ? pq->capacity : len);

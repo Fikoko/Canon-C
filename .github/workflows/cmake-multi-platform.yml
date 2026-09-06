@@ -871,10 +871,20 @@ jobs:
   #   the jobs go red at gate 0, and the correcting commit records the
   #   actual delta -- a red run is the measurement, not a failure of it.
   #
-  #   ptr     1943/1953 -> 1947/1957   memory  2823/2866 -> 2827/2870
-  #   arena   3430/3521 -> 3434/3525   (arena-32 moves with it, set equality)
-  #   pool    3884/4003 -> 3888/4007   region  3578/3692 -> 3582/3696
-  #   vec     5271/5467 -> 5275/5471   bitset  4839/5002 -> 4843/5006
+  # SCORED AT CI #1284: delta was +6, not +4 -- ptr_offset and ptr_offset_const
+  # split their new ensures across the null/nonnull branch, ptr_elem and
+  # ptr_elem_const did not. Residuals: ptr, memory, bitset unchanged by name;
+  # arena -8, pool -24 (arena's 8 + 16 own), region -8, vec -8. Zero moved
+  # the bad way. Of the 24 distinct goals that closed I predicted 2 (pool's
+  # in_bounds pair) and named 8 others (ptr_span) that did NOT close. The
+  # classifications those 24 carried in VERIFY-009/-010 -- "fits
+  # arithmetic", "free_bytes helpers", "call-site obligations" -- were
+  # wrong: they were the callee's opaque result, and closed the moment the
+  # callee stated it. Pins below are now the OBSERVED figures.
+  #   ptr     1943/1953 -> 1949/1959   memory  2823/2866 -> 2829/2872
+  #   arena   3430/3521 -> 3444/3527, 91 -> 83   (arena-32 moves with it)
+  #   pool    3884/4003 -> 3914/4009, 119 -> 95  region 3578/3692 -> 3592/3698, 114 -> 106
+  #   vec     5271/5467 -> 5285/5473, 196 -> 188 bitset 4839/5002 -> 4845/5008, 163
   #
   # WHERE RESIDUALS MIGHT MOVE, and would be good news arriving as a red run:
   #   pool    pool_get_in_bounds_ensures_part4, pool_get_const_in_bounds_
@@ -913,7 +923,7 @@ jobs:
       - uses: ./.github/actions/framac-setup
       - name: "WP: core/primitives/ptr.h"
         # ptr.h uses Typed+Cast memory model for the same reason as
-        # compare.h. Expected result: 1947 / 1957 proved, exactly 10
+        # compare.h. Expected result: 1949 / 1959 proved, exactly 10
         # unproved (VERIFY-006). Four categories: transitive checked.h
         # overflow (2), align formula ensures (3), ptr_align_* call-chain
         # (3), contract handler non-termination (2). Any deviation is a
@@ -990,8 +1000,8 @@ jobs:
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "1947 / 1957" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 1947 / 1957)."
+          if [ "${PROVED_COUNT}" != "1949 / 1959" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 1949 / 1959)."
             echo "      The goal surface drifted — reclassify in VERIFY-006,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -1231,7 +1241,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
       - name: "WP: core/memory.h"
-        # memory.h — Typed+Cast. Expected: 2827 / 2870 proved, exactly 43
+        # memory.h — Typed+Cast. Expected: 2829 / 2872 proved, exactly 43
         # unproved (VERIFY-008): 23 inherited from substrate + 20 own
         # (\fresh/\freeable allocation 5, bitwise-alignment integer theory
         # 9, memcmp call-site inheritance 12). Any deviation is a regression.
@@ -1312,8 +1322,8 @@ jobs:
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "2827 / 2870" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 2827 / 2870)."
+          if [ "${PROVED_COUNT}" != "2829 / 2872" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 2829 / 2872)."
             echo "      The goal surface drifted — reclassify in VERIFY-008,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -1399,7 +1409,7 @@ jobs:
             echo "      Prover AVAILABILITY is what matters, and it is hard-"
             echo "      gated in .github/actions/framac-setup."
           fi
-          echo "PASS: memory.h verified — 2827/2870 proved, 43 documented"
+          echo "PASS: memory.h verified — 2829/2872 proved, 43 documented"
           echo "      residuals all observed (VERIFY-008): 23 inherited"
           echo "      from ptr.h/slice.h/checked.h substrate + 20"
           echo "      memory.h-own. Composable verification claim holds:"
@@ -1419,7 +1429,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
       - name: "WP: core/arena.h"
-        # arena.h — Typed+Cast. Expected: 3434 / 3525 proved, exactly 91
+        # arena.h — Typed+Cast. Expected: 3444 / 3527 proved, exactly 83
         # unproved (VERIFY-009): 43 inherited (memory.h's full surface) +
         # 48 own (ptr_span call-sites 8, fits/does_not_fit arithmetic 26,
         # zero/try wrappers 10, free_bytes helpers 4 — the mutable pair
@@ -1470,7 +1480,7 @@ jobs:
           INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_arena_output.txt || true)
           STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_arena_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
-          EXPECTED_UNPROVED=91
+          EXPECTED_UNPROVED=83
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
           echo "  Failed:   ${FAILED_COUNT}"
@@ -1501,8 +1511,8 @@ jobs:
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "3434 / 3525" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 3434 / 3525)."
+          if [ "${PROVED_COUNT}" != "3444 / 3527" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 3444 / 3527)."
             echo "      The goal surface drifted — reclassify in VERIFY-009,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -1574,11 +1584,9 @@ jobs:
             "typed_cast_arena_alloc_fits_ensures_part2"
             "typed_cast_arena_alloc_fits_ensures_part3"
             "typed_cast_arena_alloc_fits_ensures_part4"
-            "typed_cast_arena_alloc_fits_ensures_part5"
             "typed_cast_arena_alloc_fits_ensures_2_part2"
             "typed_cast_arena_alloc_fits_ensures_2_part3"
             "typed_cast_arena_alloc_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_fits_ensures_2_part5"
             "typed_cast_arena_alloc_fits_ensures_3_part2"
             "typed_cast_arena_alloc_fits_ensures_3_part3"
             "typed_cast_arena_alloc_fits_ensures_3_part4"
@@ -1587,11 +1595,9 @@ jobs:
             "typed_cast_arena_alloc_aligned_fits_ensures_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_2_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part4"
@@ -1607,10 +1613,6 @@ jobs:
             "typed_cast_arena_try_alloc_aligned_assigns_normal_part03"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part1"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part2"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires_2"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires_2"
           )
           MISSING=0
           for goal in "${CHECKS[@]}"; do
@@ -1636,9 +1638,9 @@ jobs:
             echo "      Prover AVAILABILITY is what matters, and it is hard-"
             echo "      gated in .github/actions/framac-setup."
           fi
-          echo "PASS: arena.h verified — 3434/3525 proved, 91 documented"
+          echo "PASS: arena.h verified — 3444/3527 proved, 83 documented"
           echo "      residuals all observed (VERIFY-009): 43 inherited +"
-          echo "      48 arena.h-own. Composable verification claim holds:"
+          echo "      40 arena.h-own (48 until VERIFY-023 closed 8). Composable verification claim holds:"
           echo "      zero new substrate residuals introduced."
           echo "==============================================="
       - name: Upload WP proof output (arena.h)
@@ -1655,7 +1657,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
       - name: "WP: core/pool.h"
-        # pool.h — Typed+Cast. Expected: 3888 / 4007 proved, exactly 119
+        # pool.h — Typed+Cast. Expected: 3914 / 4009 proved, exactly 95
         # unproved (VERIFY-010): 91 inherited (arena.h's full surface,
         # two-hop transitive) + 28 own across cats 2a/2b/2c/2d. Any
         # deviation is a regression.
@@ -1709,7 +1711,7 @@ jobs:
           INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_pool_output.txt || true)
           STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_pool_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
-          EXPECTED_UNPROVED=119
+          EXPECTED_UNPROVED=95
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
           echo "  Failed:   ${FAILED_COUNT}"
@@ -1740,8 +1742,8 @@ jobs:
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "3888 / 4007" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 3888 / 4007)."
+          if [ "${PROVED_COUNT}" != "3914 / 4009" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 3914 / 4009)."
             echo "      The goal surface drifted — reclassify in VERIFY-010,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -1809,11 +1811,9 @@ jobs:
             "typed_cast_arena_alloc_fits_ensures_part2"
             "typed_cast_arena_alloc_fits_ensures_part3"
             "typed_cast_arena_alloc_fits_ensures_part4"
-            "typed_cast_arena_alloc_fits_ensures_part5"
             "typed_cast_arena_alloc_fits_ensures_2_part2"
             "typed_cast_arena_alloc_fits_ensures_2_part3"
             "typed_cast_arena_alloc_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_fits_ensures_2_part5"
             "typed_cast_arena_alloc_fits_ensures_3_part2"
             "typed_cast_arena_alloc_fits_ensures_3_part3"
             "typed_cast_arena_alloc_fits_ensures_3_part4"
@@ -1826,11 +1826,9 @@ jobs:
             "typed_cast_arena_alloc_aligned_fits_ensures_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_2_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part4"
@@ -1846,38 +1844,18 @@ jobs:
             "typed_cast_arena_try_alloc_aligned_assigns_normal_part03"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part1"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part2"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires_2"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires_2"
             "typed_cast_pool_init_ensures_part4"
             "typed_cast_pool_init_ensures_2_part4"
             "typed_cast_pool_init_ensures_3_part4"
             "typed_cast_pool_init_ensures_4_part3"
             "typed_cast_pool_init_call_arena_alloc_requires"
             "typed_cast_pool_alloc_assert_rte_mem_access"
-            "typed_cast_pool_alloc_call_ptr_elem_requires"
-            "typed_cast_pool_get_call_ptr_elem_requires"
-            "typed_cast_pool_get_in_bounds_ensures_part4"
-            "typed_cast_pool_get_const_call_ptr_elem_const_requires"
-            "typed_cast_pool_get_const_in_bounds_ensures_part4"
             "typed_cast_pool_alloc_zero_call_mem_zero_requires"
-            "typed_cast_pool_as_bytes_call_bytes_from_requires"
-            "typed_cast_pool_as_bytes_call_bytes_from_requires_2"
-            "typed_cast_pool_as_cbytes_call_cbytes_from_requires"
-            "typed_cast_pool_as_cbytes_call_cbytes_from_requires_2"
-            "typed_cast_pool_reserved_bytes_call_bytes_from_requires"
-            "typed_cast_pool_reserved_bytes_call_bytes_from_requires_2"
-            "typed_cast_pool_reserved_cbytes_call_cbytes_from_requires"
-            "typed_cast_pool_reserved_cbytes_call_cbytes_from_requires_2"
             "typed_cast_pool_alloc_zero_assigns_normal_part3"
             "typed_cast_pool_reset_call_arena_reset_to_requires_2"
             "typed_cast_pool_reset_call_arena_alloc_requires"
             "typed_cast_pool_reset_reset_ensures_part3"
             "typed_cast_pool_reset_reset_ensures_2_part3"
-            "typed_cast_pool_reset_secure_assigns_exit_part6"
-            "typed_cast_pool_reset_secure_assigns_normal_part6"
-            "typed_cast_pool_reset_secure_call_mem_secure_zero_requires"
           )
           MISSING=0
           for goal in "${CHECKS[@]}"; do
@@ -1903,7 +1881,7 @@ jobs:
             echo "      Prover AVAILABILITY is what matters, and it is hard-"
             echo "      gated in .github/actions/framac-setup."
           fi
-          echo "PASS: pool.h verified — 3888/4007 proved, 119 documented"
+          echo "PASS: pool.h verified — 3914/4009 proved, 95 documented"
           echo "      residuals all observed by name (VERIFY-010): 89"
           echo "      inherited (arena.h's full surface, verbatim) + 24"
           echo "      pool.h-own. Full set equality enforced. Composable"
@@ -1943,7 +1921,7 @@ jobs:
       - uses: ./.github/actions/framac-setup
       - name: "WP: core/region.h"
         # region.h — Typed+Cast, 120s / -wp-split, in its own isolated job.
-        # Expected: 3582 / 3696 proved, exactly 114 unproved (VERIFY-011):
+        # Expected: 3592 / 3698 proved, exactly 106 unproved (VERIFY-011):
         # 91 inherited (arena.h's full surface, two-hop transitive) + 23
         # region.h-own (region_begin / region_end loop+terminates+assigns /
         # attach_arena / register / set_parent). Any deviation is a regression.
@@ -1999,7 +1977,7 @@ jobs:
           INVALID_COUNT=$(grep -cE "^\\[wp\\] \\[Invalid\\]" wp_region_output.txt || true)
           STEPOUT_COUNT=$(grep -cE "^\\[wp\\] \\[Stepout\\]" wp_region_output.txt || true)
           UNPROVED_COUNT=$((TIMEOUT_COUNT + UNKNOWN_COUNT))
-          EXPECTED_UNPROVED=114
+          EXPECTED_UNPROVED=106
           echo "  Timeouts: ${TIMEOUT_COUNT}"
           echo "  Unknown:  ${UNKNOWN_COUNT}"
           echo "  Failed:   ${FAILED_COUNT}"
@@ -2030,8 +2008,8 @@ jobs:
             exit 1
           fi
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "3582 / 3696" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 3582 / 3696)."
+          if [ "${PROVED_COUNT}" != "3592 / 3698" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 3592 / 3698)."
             echo "      The goal surface drifted — reclassify in VERIFY-011,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -2099,11 +2077,9 @@ jobs:
             "typed_cast_arena_alloc_fits_ensures_part2"
             "typed_cast_arena_alloc_fits_ensures_part3"
             "typed_cast_arena_alloc_fits_ensures_part4"
-            "typed_cast_arena_alloc_fits_ensures_part5"
             "typed_cast_arena_alloc_fits_ensures_2_part2"
             "typed_cast_arena_alloc_fits_ensures_2_part3"
             "typed_cast_arena_alloc_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_fits_ensures_2_part5"
             "typed_cast_arena_alloc_fits_ensures_3_part2"
             "typed_cast_arena_alloc_fits_ensures_3_part3"
             "typed_cast_arena_alloc_fits_ensures_3_part4"
@@ -2116,11 +2092,9 @@ jobs:
             "typed_cast_arena_alloc_aligned_fits_ensures_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_2_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part4"
@@ -2136,10 +2110,6 @@ jobs:
             "typed_cast_arena_try_alloc_aligned_assigns_normal_part03"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part1"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part2"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires_2"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires_2"
             "typed_cast_region_begin_ensures_5"
             "typed_cast_region_end_terminates_part2"
             "typed_cast_region_end_terminates_part3"
@@ -2188,7 +2158,7 @@ jobs:
             echo "      Prover AVAILABILITY is what matters, and it is hard-"
             echo "      gated in .github/actions/framac-setup."
           fi
-          echo "PASS: region.h verified — 3582/3696 proved, 114 documented"
+          echo "PASS: region.h verified — 3592/3698 proved, 106 documented"
           echo "      residuals all observed by name (VERIFY-011): 89"
           echo "      inherited (arena.h's full surface, verbatim) + 23"
           echo "      region.h-own. Full set equality enforced. Composable"
@@ -2240,7 +2210,7 @@ jobs:
   #   the diag precedent (#1132 report-only, #1133 name-stable, then pinned).
   #
   #   MEASURED RESULT: the arena proof surface is IDENTICAL at 32-bit and
-  #   64-bit. Same 3430 / 3521 proved (the figures in this paragraph and table are the #1202-#1210 MEASUREMENTS, not the current pin; VERIFY-023 moved the pin to 3434 / 3525 -- do not rewrite history when ratcheting), same 91 residuals, same 91 names,
+  #   64-bit. Same 3430 / 3521 proved (the figures in this paragraph and table are the #1202-#1210 MEASUREMENTS, not the current pin; VERIFY-023 moved the pin to 3444 / 3527 -- do not rewrite history when ratcheting), same 91 residuals, same 91 names,
   #   zero delta in either direction.
   #
   #     run           proved        T   U  T+U | Alt-Ergo  CVC5   Z3
@@ -2380,8 +2350,8 @@ jobs:
           echo "==============================================="
           echo "  WP (arena.h, ${MACHDEP}) exit status: ${WP_EXIT}"
           echo "  MODE: ENFORCED — gate is SET EQUALITY with the 64-bit residuals."
-          echo "  64-bit baseline for comparison: 3434 / 3525 proved,"
-          echo "  91 residuals (VERIFY-009)."
+          echo "  64-bit baseline for comparison: 3444 / 3527 proved,"
+          echo "  83 residuals (VERIFY-009, ratcheted by VERIFY-023)."
           echo "==============================================="
 
           PROVED_LINE=$(grep -E "^\[wp\] Proved goals:" wp_arena32_output.txt || true)
@@ -2473,11 +2443,9 @@ jobs:
           typed_cast_arena_alloc_fits_ensures_part2
           typed_cast_arena_alloc_fits_ensures_part3
           typed_cast_arena_alloc_fits_ensures_part4
-          typed_cast_arena_alloc_fits_ensures_part5
           typed_cast_arena_alloc_fits_ensures_2_part2
           typed_cast_arena_alloc_fits_ensures_2_part3
           typed_cast_arena_alloc_fits_ensures_2_part4
-          typed_cast_arena_alloc_fits_ensures_2_part5
           typed_cast_arena_alloc_fits_ensures_3_part2
           typed_cast_arena_alloc_fits_ensures_3_part3
           typed_cast_arena_alloc_fits_ensures_3_part4
@@ -2486,11 +2454,9 @@ jobs:
           typed_cast_arena_alloc_aligned_fits_ensures_part2
           typed_cast_arena_alloc_aligned_fits_ensures_part3
           typed_cast_arena_alloc_aligned_fits_ensures_part4
-          typed_cast_arena_alloc_aligned_fits_ensures_part5
           typed_cast_arena_alloc_aligned_fits_ensures_2_part2
           typed_cast_arena_alloc_aligned_fits_ensures_2_part3
           typed_cast_arena_alloc_aligned_fits_ensures_2_part4
-          typed_cast_arena_alloc_aligned_fits_ensures_2_part5
           typed_cast_arena_alloc_aligned_fits_ensures_3_part2
           typed_cast_arena_alloc_aligned_fits_ensures_3_part3
           typed_cast_arena_alloc_aligned_fits_ensures_3_part4
@@ -2506,10 +2472,6 @@ jobs:
           typed_cast_arena_try_alloc_aligned_assigns_normal_part03
           typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part1
           typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part2
-          typed_cast_arena_free_bytes_call_bytes_from_requires
-          typed_cast_arena_free_bytes_call_bytes_from_requires_2
-          typed_cast_arena_free_cbytes_call_cbytes_from_requires
-          typed_cast_arena_free_cbytes_call_cbytes_from_requires_2
           BASELINE_EOF
           sort -u -o res64.txt res64.txt
 
@@ -2591,8 +2553,8 @@ jobs:
 
           # Gate C — pinned goal surface, must move with the 64-bit pin.
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "3434 / 3525" ]; then
-            echo "FAIL: proved-goal summary changed (pinned: 3434 / 3525)."
+          if [ "${PROVED_COUNT}" != "3444 / 3527" ]; then
+            echo "FAIL: proved-goal summary changed (pinned: 3444 / 3527)."
             echo "      If arena's 64-bit pin also moved, ratchet BOTH jobs"
             echo "      and this job's embedded baseline in one commit."
             FAILURES=$((FAILURES + 1))
@@ -2612,7 +2574,7 @@ jobs:
 
           if [ "${FAILURES}" -eq 0 ]; then
             echo "PASS: arena.h proves identically at 32-bit and 64-bit —"
-            echo "      3434/3525, 91 residuals, same 91 names, zero delta."
+            echo "      3444/3527, 83 residuals, same 83 names, zero delta."
             echo "      Machdep control established. Tier 1's minimum width"
             echo "      is evidenced, not asserted."
           else
@@ -3265,7 +3227,7 @@ jobs:
           echo "==============================================="
           echo "  WP (vec_verify.h) exit status: ${WP_EXIT}"
           echo "  MODE: ENFORCED — VERIFY-018 baseline, exact match."
-          echo "  baseline: F4 ratchet (VERIFY-018): 5275/5471, 196 unproved"
+          echo "  baseline: VERIFY-023 ratchet: 5285/5473, 188 unproved"
           echo "            prior: CI #1202 (16b): 5231/5429, 198 — the 2 goals"
           echo "            removed are the F4 pair, now discharged by contract."
           echo "  model=Typed+Cast provers=alt-ergo,z3,cvc5 timeout=120 split=on"
@@ -3302,8 +3264,8 @@ jobs:
           # out of the TU, a deleted contract, an include-graph change)
           # that gates 1-3 could miss.
           PROVED_COUNT=$(echo "${PROVED_LINE}" | grep -oP '\d+ / \d+' | head -1 || true)
-          if [ "${PROVED_COUNT}" != "5275 / 5471" ]; then
-            echo "FAIL: proved-goal summary changed (baseline: 5275 / 5471)."
+          if [ "${PROVED_COUNT}" != "5285 / 5473" ]; then
+            echo "FAIL: proved-goal summary changed (baseline: 5285 / 5473)."
             echo "      The goal surface drifted — reclassify in VERIFY-018,"
             echo "      then ratchet this pin, EXPECTED_UNPROVED, and CHECKS"
             echo "      together in one acknowledged commit."
@@ -3319,7 +3281,7 @@ jobs:
           # (5429 -> 5467), all 38 prove, and 2 previously-unproved goals
           # flip, so proved moves +40 (5231 -> 5271) and the residual set
           # loses exactly the F4 pair. Ratchet DOWN, per this job's rule.
-          EXPECTED_UNPROVED=196
+          EXPECTED_UNPROVED=188
           TIMEOUT_COUNT=$(grep -cE "^\[wp\] \[Timeout\]" wp_vec_output.txt || true)
           UNKNOWN_COUNT=$(grep -cE "^\[wp\] \[Unknown\]" wp_vec_output.txt || true)
           FAILED_COUNT=$(grep -cE "^\[wp\] \[Failed\]" wp_vec_output.txt || true)
@@ -3475,11 +3437,9 @@ jobs:
             "typed_cast_arena_alloc_fits_ensures_part2"
             "typed_cast_arena_alloc_fits_ensures_part3"
             "typed_cast_arena_alloc_fits_ensures_part4"
-            "typed_cast_arena_alloc_fits_ensures_part5"
             "typed_cast_arena_alloc_fits_ensures_2_part2"
             "typed_cast_arena_alloc_fits_ensures_2_part3"
             "typed_cast_arena_alloc_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_fits_ensures_2_part5"
             "typed_cast_arena_alloc_fits_ensures_3_part2"
             "typed_cast_arena_alloc_fits_ensures_3_part3"
             "typed_cast_arena_alloc_fits_ensures_3_part4"
@@ -3492,11 +3452,9 @@ jobs:
             "typed_cast_arena_alloc_aligned_fits_ensures_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_2_part4"
-            "typed_cast_arena_alloc_aligned_fits_ensures_2_part5"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part2"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part3"
             "typed_cast_arena_alloc_aligned_fits_ensures_3_part4"
@@ -3512,10 +3470,6 @@ jobs:
             "typed_cast_arena_try_alloc_aligned_assigns_normal_part03"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part1"
             "typed_cast_arena_try_alloc_aligned_non_null_out_ensures_part2"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires"
-            "typed_cast_arena_free_bytes_call_bytes_from_requires_2"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires"
-            "typed_cast_arena_free_cbytes_call_cbytes_from_requires_2"
             "typed_cast_vec_int_alloc_call_vec_int_init_requires_2"
             "typed_cast_vec_int_free_call_mem_free_requires"
             "typed_cast_vec_int_pop_ok_ensures_4_part5"
@@ -4740,7 +4694,7 @@ jobs:
           # ---- ENFORCED as of VERIFY-020, baseline CI #1259 (95526a9) ----
           ENFORCE=1
           EXPECTED_UNPROVED=163
-          EXPECTED_PROVED="4843 / 5006"
+          EXPECTED_PROVED="4845 / 5008"   # VERIFY-023: +6 goals, set unchanged
           WP_MODEL="Typed+Cast"   # forced by as_bytes / as_cbytes
           # ------------------------------------------------------------------
           FAILURES=0
@@ -5293,6 +5247,17 @@ jobs:
             echo "  Record the baseline in VERIFY-020 before pinning."
           fi
           echo "==============================================="
+          # ADDED 2026-09-06 (VERIFY-023 ratchet). This job has printed
+          # "ENFORCED" since CI #1259 and has never been able to fail the
+          # build: every other accumulator-style job ends with this gate;
+          # this one did not. Found at CI #1284, when the step printed
+          # "VERIFY-020 ENFORCED FAIL: 1 check(s)" and the job went green.
+          # The name-stability evidence from #1259 onward is real -- every
+          # roll-call printed missing 0 / unpinned 0 -- but ENFORCEMENT
+          # begins at this commit, not at #1259, and VERIFY-020 must say so.
+          if [ "${ENFORCE}" -eq 1 ] && [ "${FAILURES}" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Upload WP bitset log
         if: always()
@@ -5984,19 +5949,38 @@ jobs:
           # (~20). VERIFY-023 closes the first in ptr.h; commit 3 closes the
           # second in pq_wf.
           #
-          # REGISTERED FOR RUN 3, before it ran: own residuals fall BELOW 90.
-          # Remaining: the cmp ceiling (~41), the 17 still-uncontracted
-          # functions, 3 push_result frame goals from the uncontracted
-          # result constructors, and whatever nonlinear arithmetic on
-          # index*elem_size the provers cannot close -- that last one is
-          # the risk, and is why the bound is 90 rather than 60 again.
+          # RUN 3 (CI #1284): 143 own. The < 90 prediction was REFUTED --
+          # the second refutation in a row on this arm, which means the
+          # CLASSIFICATION was wrong, not just the number. What closed (27)
+          # was everything BEFORE the first pq->cmp call in each sift
+          # function, plus pq_swap_ 12 -> 1. What did not close was
+          # everything AFTER it: WP has no assigns for the unknown callee,
+          # so from that statement onward pq->data / len / elem_size are
+          # unknown and every later obligation fails whatever ptr_elem now
+          # says. The comparator call is an INFORMATION HORIZON. Run 2's
+          # "41 cmp-ceiling" was a grep for function-pointer goal NAMES;
+          # the true cascade is ~99. Same misattribution shape VERIFY-023
+          # just found in VERIFY-009/-010, made by me, two runs running.
+          # Also: 4 heapify goals REGRESSED (0 -> 4) because commit 3 added
+          # a conjunct to pq_wf that heapify's requires did not carry.
+          #
+          # REGISTERED FOR RUN 4, two changes, predicted separately:
+          #   (a) heapify requires the pq_wf bound -> heapify back to 0 (-4).
+          #   (b) pq_wf gains \separated(pq, data range) -> the callee frames
+          #       on the data range can no longer be read as clobbering the
+          #       struct. Predicted to close push_result accepted_ensures x2
+          #       and accepted_assigns x1, pop_raw nonempty_assigns x2, and
+          #       sift assigns_exit/normal fragments -- own falls to 120-130.
+          #   No prediction is made about the cmp cascade: it will not move
+          #   until the comparator call is wrapped behind a purity contract,
+          #   which is a design decision for its own arc, not this one.
           OWN_N=$(grep -cE '^typed_cast_pq_' /tmp/pq_resid.txt || true)
-          PREDICT_OWN_MAX=90
-          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run-3 prediction: < ${PREDICT_OWN_MAX})"
+          PREDICT_OWN_MAX=130
+          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run 3: 143; run-4 prediction: < ${PREDICT_OWN_MAX})"
           if [ "${OWN_N}" -lt "${PREDICT_OWN_MAX}" ]; then
-            echo "  run-3 own prediction:     CONFIRMED"
+            echo "  run-4 own prediction:     CONFIRMED"
           else
-            echo "  run-3 own prediction:     REFUTED -- record it, do not adjust it"
+            echo "  run-4 own prediction:     REFUTED -- record it, do not adjust it"
           fi
           echo "  of which at pq->cmp sites (fn-pointer class):"
           grep -cE '^typed_cast_pq_sift_(up|down)_.*(function_pointer|terminates|exits|loop_invariant|loop_variant|loop_assigns)' /tmp/pq_resid.txt || true
