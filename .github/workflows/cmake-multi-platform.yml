@@ -5667,7 +5667,8 @@ jobs:
           retention-days: 90
 
   # -------------------------------------------------------------------------
-  # data/priority_queue.h — REPORT-ONLY (VERIFY-0NN, first pass)
+  # data/priority_queue.h — REPORT-ONLY (VERIFY-022; run 0 at CI #1281
+  # cancelled at 90 min, run 1 at CI #1282 complete, commit 2 pending run 2)
   #
   # Shape: verified IN PLACE, no cover TU and no driver. The 40 non-macro
   # functions carry the contracts; DEFINE_PRIORITY_QUEUE's 17 typed wrappers
@@ -5691,42 +5692,32 @@ jobs:
   # priority_queue_test.c asserts ascending order, including through the
   # byte-wise swap path for elements over CANON_MEM_SWAP_MAX.
   #
-  # PRE-REGISTERED PREDICTIONS (scored, not gating at ENFORCE=0):
-  #   ARM A  Run 0 does NOT come back clean. The contracts are a first pass
-  #          written without a local Frama-C, so ACSL syntax or name
-  #          resolution is the likely failure — the lifetime.h ARM B pattern.
-  #   ARM B  The behavior-local `assigns` on pq_push_result is the most
-  #          fragile construct here. If anything is rejected outright, expect
-  #          it there or on pq_pop_raw's `complete behaviors`.
-  #   ARM C  ptr_elem's void* arithmetic forces Typed+Cast, class (h). The
-  #          job runs Typed first so the need is DEMONSTRATED rather than
-  #          assumed; switching model without showing why is what
-  #          VERIFY-019-M exists to prevent.
-  #   ARM D  OWN RESIDUALS BREAK THE DESCENDING TREND UPWARD. The series is
-  #          196 -> 119 -> 114 -> 91 -> 67 -> 71. A heap with two sift loops,
-  #          an uninterpretable comparator and void* element arithmetic
-  #          should exceed 71. Registered before the run precisely because
-  #          it is the prediction most likely to be wrong in an interesting
-  #          way.
-  #   ARM E  Inherited surface is the widest yet: ptr, compare, memory,
-  #          slice, ownership, error, option, result. compare.h is 208/208
-  #          with ZERO residuals, so this is the first module to compose over
-  #          a perfectly clean header — the arm should contribute nothing,
-  #          and if it contributes anything the closure is not what this
-  #          comment says.
+  # RUN-0 PREDICTIONS, scored at CI #1281/#1282 — kept as the record. The
+  # RUN-1/RUN-2 arms are the ones in the WP step below.
+  #   ARM A  Run 0 does NOT come back clean. CONFIRMED in outcome, REFUTED in
+  #          mechanism: predicted ACSL syntax/name failure; every contract
+  #          parsed and WP reached proving. What killed run 0 was the
+  #          90-minute budget, sized from lifetime.h's 4 goals.
+  #   ARM B  Behaviour-local assigns on pq_push_result fragile. REFUTED: WP
+  #          accepted them and synthesised the default frame (run 1).
+  #   ARM C  ptr_elem's void* arithmetic forces Typed+Cast. CONFIRMED: run 0
+  #          under Typed left 56 substrate goals unproved that prove at home,
+  #          all at cast sites.
+  #   ARM D  Own residuals break the descending trend upward, above 71.
+  #          CONFIRMED at 199 (run 1) — but for missing annotations rather
+  #          than heap algorithmics; see the commit-2 message.
+  #   ARM E  Inherited surface = memory.h's TU. CONFIRMED: 43/43 by name.
   #
-  # ENFORCE=0 ON PURPOSE. Nothing is pinned until run 0 is recorded. Do not
+  # ENFORCE=0 ON PURPOSE. Nothing is pinned until run 2 is recorded. Do not
   # set ENFORCE=1 in the same commit that first turns this job green.
   # -------------------------------------------------------------------------
   frama-c-priority-queue:
     needs: build
     runs-on: ubuntu-latest
-    # 240 to match vec (5,467 goals, ~3h08m at CI #1247) and deque. Run 0
-    # at CI #1281 was cancelled by the 90-minute cap with 3,742 goals
-    # scheduled and 97 residuals logged, most of them Typed-model cast
-    # artefacts (see VERIFY-022, run 0). Under Typed+Cast the residue
-    # should be far smaller, but the budget is sized for the worst case.
-    timeout-minutes: 240
+    # 330: run 1 (CI #1282) took 3h55m against 240 — five minutes to spare —
+    # and commit 2's loop annotations add preservation and variant goals.
+    # Still under GitHub's 6h kill, same reasoning as region's 350.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/framac-setup
@@ -5746,7 +5737,8 @@ jobs:
           # "\\result" as an escape, so a probe containing it fails on a
           # CORRECTLY contracted header. Caught locally, before this job ran.
           for clause in "predicate pq_wf" "requires pq_wf(pq)" \
-                        "behavior accepted" "complete behaviors"; do
+                        "behavior accepted" "complete behaviors" \
+                        "loop invariant pq_wf(pq)"; do
             if ! grep -q "$clause" /tmp/pq_pp.i; then
               echo "FAIL: '$clause' is absent from the preprocessed unit."
               echo "      The __FRAMAC__ gate did not open, so WP would"
@@ -5755,7 +5747,7 @@ jobs:
               exit 1
             fi
           done
-          echo "  contracts present in preprocessed unit (4 probes)."
+          echo "  contracts present in preprocessed unit (5 probes)."
       - name: "WP: data/priority_queue.h (VERIFY-022, report-only, Typed+Cast)"
         run: |
           eval $(opam env --switch=frama-c)
@@ -5862,11 +5854,12 @@ jobs:
           fi
           echo ""
           echo "  --- ARM B: inheritance -- Inh(pq) == Residual(memory.h TU), mod prefix ---"
-          # Predicted BEFORE this run (VERIFY-022): priority_queue's core
+          # Predicted BEFORE run 1 (VERIFY-022): priority_queue's core
           # closure is memory.h's translation unit (contract, checked, ptr,
           # slice, memory) plus compare.h and error.h. compare and error have
           # EMPTY home residual sets. By the set-union identity the inherited
           # set is memory.h's pinned 43, exactly, with the same prefix.
+          # CONFIRMED at CI #1282: 43/43 present, 0 missing.
           #
           # The baseline is read from the frama-c-memory job's CHECKS array
           # in THIS workflow file at run time -- there is no second copy of
@@ -5890,9 +5883,17 @@ jobs:
           # soundness of context: no substrate goal that proves at home is
           # residual here. Substrate = anything that is not pq's own and not
           # the fresh result(bool, Error) instantiation.
+          #
+          # REGEX CORRECTED after CI #1282. The C identifier is
+          # result__Bool_Error (double underscore, from _Bool token-pasting),
+          # but WP emits goal names as result_Bool_Error (single). The run-1
+          # job matched the C spelling, so all 22 result goals fell through
+          # to "extra substrate" and ARM C read 0/0. ARM E still summed --
+          # the goals were counted, just misfiled -- which is how it was
+          # caught. vec's and deque's CHECKS arrays use the single form.
           comm -13 /tmp/mem_checks.txt /tmp/pq_resid.txt \
             | grep -vE '^typed_cast_pq_' \
-            | grep -vE '^typed_cast_result__Bool_Error_' > /tmp/armb_extra.txt || true
+            | grep -vE '^typed_cast_result_Bool_Error_' > /tmp/armb_extra.txt || true
           MISSING_N=$(wc -l < /tmp/armb_missing.txt)
           EXTRA_N=$(wc -l < /tmp/armb_extra.txt)
           INH_N=$(comm -12 /tmp/mem_checks.txt /tmp/pq_resid.txt | wc -l)
@@ -5908,26 +5909,41 @@ jobs:
           # -wp-rte goals exist for it. Firm sub-prediction: get_ok and
           # get_err each carry an unproved assert_rte_mem_access, because
           # nothing states \valid(out) -- the VERIFY-018 F4 shape, met a
-          # third time. Everything else in this arm should be
-          # rte_function_pointer on the dispatch combinators (map, map_err,
-          # and_then, or_else, eq x2 -- 6 sites) or union-read mem_access.
-          RES_N=$(grep -cE '^typed_cast_result__Bool_Error_' /tmp/pq_resid.txt || true)
-          GET_OK=$(grep -cE  '^typed_cast_result__Bool_Error_get_ok_assert_rte_mem_access( |$)'  /tmp/pq_resid.txt || true)
-          GET_ERR=$(grep -cE '^typed_cast_result__Bool_Error_get_err_assert_rte_mem_access( |$)' /tmp/pq_resid.txt || true)
-          echo "  result arm residuals:     ${RES_N}"
+          # third time.
+          # CONFIRMED at CI #1282 once the regex above was corrected: 22
+          # goals, get_ok/get_err 1/1. And 22 is EXACTLY vec's pre-F4 count
+          # for the same fresh instantiation under the same model with no
+          # driver contracts -- the second reproduction of that profile.
+          RES_N=$(grep -cE '^typed_cast_result_Bool_Error_' /tmp/pq_resid.txt || true)
+          GET_OK=$(grep -cE  '^typed_cast_result_Bool_Error_get_ok_assert_rte_mem_access( |$)'  /tmp/pq_resid.txt || true)
+          GET_ERR=$(grep -cE '^typed_cast_result_Bool_Error_get_err_assert_rte_mem_access( |$)' /tmp/pq_resid.txt || true)
+          echo "  result arm residuals:     ${RES_N}   (run 1: 22; vec pre-F4: 22)"
           echo "  get_ok/get_err mem_access: ${GET_OK}/${GET_ERR}   (predicted 1/1)"
-          grep -E '^typed_cast_result__Bool_Error_' /tmp/pq_resid.txt | sed 's/^/      /' || true
+          grep -E '^typed_cast_result_Bool_Error_' /tmp/pq_resid.txt | sed 's/^/      /' || true
           echo ""
           echo "  --- ARM D: priority_queue's own residuals ---"
-          # Pre-registered CLASSES (VERIFY-022): (b) rte_function_pointer at
-          # the three pq->cmp sites and whatever WP emits after an unknown
-          # callee ('assigns everything', non-termination) -- the ceiling the
-          # header banner declares; (h) the pop_raw/peek out-frame; plus
-          # loop-related goals once commit 2 adds loop annotations (none in
-          # this run -- the loops are unannotated and WP assumes 'assigns
-          # everything', which produces NO named goal). No count predicted.
+          # RUN 1 (CI #1282): 199. Classified in the commit-2 message: ~110
+          # from two unannotated loops (assigns-everything cascade), ~50 from
+          # the lifetime stubs having no frame (deque run-1 F1 recurring),
+          # ~20 uncontracted functions, 12 pq_swap_, 1 genuine contract
+          # error (pq_is_full), 1 ptr_elem_const \from gap.
+          #
+          # REGISTERED FOR RUN 2, before it ran: own residuals fall BELOW 60.
+          # What remains is dominated by the function-pointer class at the
+          # three pq->cmp sites -- rte_function_pointer, terminates, exits,
+          # loop-invariant preservation, loop variant -- plus ptr_elem's
+          # missing \from. If own is above 60 the loop annotations did less
+          # than expected and VERIFY-022 says so.
           OWN_N=$(grep -cE '^typed_cast_pq_' /tmp/pq_resid.txt || true)
-          echo "  pq_* residuals:           ${OWN_N}"
+          PREDICT_OWN_MAX=60
+          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run-2 prediction: < ${PREDICT_OWN_MAX})"
+          if [ "${OWN_N}" -lt "${PREDICT_OWN_MAX}" ]; then
+            echo "  run-2 own prediction:     CONFIRMED"
+          else
+            echo "  run-2 own prediction:     REFUTED -- record it, do not adjust it"
+          fi
+          echo "  of which at pq->cmp sites (fn-pointer class):"
+          grep -cE '^typed_cast_pq_sift_(up|down)_.*(function_pointer|terminates|exits|loop_invariant|loop_variant|loop_assigns)' /tmp/pq_resid.txt || true
           grep -E '^typed_cast_pq_' /tmp/pq_resid.txt | sed 's/^/      /' || true
           echo ""
           echo "  --- ARM E: the arms must sum to the total ---"
@@ -5939,7 +5955,7 @@ jobs:
           if [ "${ARM_SUM}" -ne "${UNPROVED}" ]; then
             echo "  MISMATCH: a residual matched no arm (or two). Listing:"
             cat /tmp/mem_checks.txt /tmp/armb_extra.txt > /tmp/covered.txt
-            grep -E '^typed_cast_(pq|result__Bool_Error)_' /tmp/pq_resid.txt >> /tmp/covered.txt || true
+            grep -E '^typed_cast_(pq|result_Bool_Error)_' /tmp/pq_resid.txt >> /tmp/covered.txt || true
             sort -u /tmp/covered.txt > /tmp/covered_s.txt
             comm -23 /tmp/pq_resid.txt /tmp/covered_s.txt | sed 's/^/      /'
           fi
@@ -5955,7 +5971,6 @@ jobs:
           name: wp-proof-priority-queue
           path: wp_pq_output.txt
           retention-days: 90
-
   # -------------------------------------------------------------------------
   # 6. MC/DC coverage — GCC 14 -fcondition-coverage (Linux only)
   #

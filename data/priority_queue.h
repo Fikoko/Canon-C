@@ -245,7 +245,20 @@ typedef struct {
         /* lt.open stays true — restamp is not destruction */
     }
 #else
+    /* VERIFY-022 commit 2. These stubs had no frame, so WP assumed they
+     * assign everything and every postcondition downstream of a call died:
+     * all 8 of pq_init's ensures at run 1, plus a large share of push /
+     * pop / remove / heapify. The deque run-1 F1 shape — missing default
+     * assigns on a callee — recurring. Contract covers the STUBS only; the
+     * CANON_LIFETIME_DEBUG bodies above are not in any verified
+     * configuration. */
+    #ifdef __FRAMAC__
+    /*@ assigns \nothing; */
+    #endif
     static inline void pq_lifetime_open_(PriorityQueue* pq)    { (void)pq; }
+    #ifdef __FRAMAC__
+    /*@ assigns \nothing; */
+    #endif
     static inline void pq_lifetime_restamp_(PriorityQueue* pq) { (void)pq; }
 #endif
 
@@ -255,7 +268,7 @@ typedef struct {
 
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
- * ACSL: structural invariant and scope (VERIFY-0NN, first pass — UNVERIFIED)
+ * ACSL: structural invariant and scope (VERIFY-022, commit 2 — run 1 at CI #1282 scored, see the job)
  *
  * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
  * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
@@ -402,6 +415,11 @@ static inline void pq_swap_(borrowed(PriorityQueue*) pq, usize a, usize b) {
         /* Fallback for elements larger than mem_swap's stack buffer */
         unsigned char* ba = (unsigned char*)pa;
         unsigned char* bb = (unsigned char*)pb;
+        /*@
+          loop invariant 0 <= k <= es;
+          loop assigns k, ba[0 .. es - 1], bb[0 .. es - 1];
+          loop variant es - k;
+        */
         for (usize k = 0; k < es; k++) {
             unsigned char t = ba[k]; ba[k] = bb[k]; bb[k] = t;
         }
@@ -429,6 +447,13 @@ static inline void pq_swap_(borrowed(PriorityQueue*) pq, usize a, usize b) {
 static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
     require_msg(pq != NULL, "pq_sift_up_: pq cannot be NULL");
     usize idx = i;
+    /*@
+      loop invariant idx <= i;
+      loop invariant idx < pq->len;
+      loop invariant pq_wf(pq);
+      loop assigns idx, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+      loop variant idx;
+    */
     while (idx > 0u) {
         usize p  = pq_parent_(idx);
         void* pe = ptr_elem(pq->data, p, pq->elem_size);
@@ -449,6 +474,9 @@ static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
 #ifdef __FRAMAC__
 /*@
   requires pq_wf(pq);
+  requires i < pq->len;                  // commit 2: needed to establish the
+                                         // loop invariant; true at all three
+                                         // call sites (heapify, pop, remove)
   assigns ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
   ensures pq_wf(pq);
   // Termination: idx strictly increases (pq_left_child_ and pq_right_child_
@@ -461,6 +489,13 @@ static inline void pq_sift_up_(borrowed(PriorityQueue*) pq, usize i) {
 static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
     require_msg(pq != NULL, "pq_sift_down_: pq cannot be NULL");
     usize idx = i;
+    /*@
+      loop invariant i <= idx;
+      loop invariant idx < pq->len;
+      loop invariant pq_wf(pq);
+      loop assigns idx, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+      loop variant pq->len - idx;
+    */
     while (true) {
         usize smallest = idx;
         usize left     = pq_left_child_(idx);
@@ -577,6 +612,28 @@ static inline void pq_init(
  *
  * Performance: O(n) — Floyd's algorithm
  */
+#ifdef __FRAMAC__
+/*@
+  behavior null:
+    assumes pq == \null;
+    assigns \nothing;
+  behavior live:
+    assumes pq != \null;
+    requires \valid(pq);
+    requires pq->elem_size > 0;
+    requires pq->capacity  > 0;
+    requires pq->cmp != \null;
+    requires \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
+    assigns pq->len, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+    ensures pq->len == (len > pq->capacity ? pq->capacity : len);
+    ensures pq_wf(pq);
+  complete behaviors;
+  disjoint behaviors;
+  // NOT claimed: that the result is a heap. Floyd's algorithm is correct
+  // only if pq->cmp is a strict weak order, and WP cannot interpret
+  // pq->cmp at all. Structural claims only, as everywhere in this header.
+*/
+#endif
 static inline void pq_heapify(borrowed(PriorityQueue*) pq, usize len) {
     if (!pq) { return; }
     require_msg(pq->data    != NULL, "pq_heapify: pq not initialized (data is NULL)");
@@ -587,6 +644,13 @@ static inline void pq_heapify(borrowed(PriorityQueue*) pq, usize len) {
     pq->len = n;
     if (n >= 2u) {
         usize i = pq_parent_(n - 1u) + 1u;
+        /*@
+          loop invariant 0 <= i <= n;
+          loop invariant pq->len == n;
+          loop invariant pq_wf(pq);
+          loop assigns i, ((char*)pq->data)[0 .. pq->capacity * pq->elem_size - 1];
+          loop variant i;
+        */
         while (i-- > 0) {
             pq_sift_down_(pq, i);
         }
@@ -911,6 +975,11 @@ static inline bool pq_is_empty(borrowed(const PriorityQueue*) pq) {
   behavior live:
     assumes pq != \null;
     requires \valid_read(pq);
+    requires pq->len <= pq->capacity;      // run-1 correction: the code tests
+                                           // >=, and without this bound
+                                           // len > capacity makes the ensures
+                                           // FALSE. Not hard, wrong. Under the
+                                           // invariant >= and == coincide.
     ensures \result <==> (pq->len == pq->capacity);
   complete behaviors;
   disjoint behaviors;
