@@ -268,7 +268,7 @@ typedef struct {
 
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
- * ACSL: structural invariant and scope (VERIFY-022, commit 2 — run 1 at CI #1282 scored, see the job)
+ * ACSL: structural invariant and scope (VERIFY-022, commit 3 — runs 1-2 at CI #1282/#1283 scored, see the job)
  *
  * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
  * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
@@ -313,6 +313,12 @@ typedef struct {
     && pq->capacity  > 0
     && pq->len <= pq->capacity
     && pq->cmp != \null
+    // commit 3: ptr_elem requires index <= CANON_USIZE_MAX / elem_size, and
+    // run 2 showed ~20 residuals were exactly that obligation, unprovable
+    // because the invariant did not carry the bound. With it, any index
+    // below capacity satisfies ptr_elem by transitivity -- no nonlinear
+    // arithmetic needed, the division is one fixed term.
+    && pq->capacity <= CANON_USIZE_MAX / pq->elem_size
     && \valid((char*)pq->data + (0 .. pq->capacity * pq->elem_size - 1));
 
   // The slot index i is inside the live prefix.
@@ -554,9 +560,12 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
   requires capacity  > 0;
   requires elem_size > 0;
   requires cmp != \null;
-  requires capacity * elem_size <= (usize)(-1);   // the product must not wrap;
-                                                  // pq_init does NOT check this
-                                                  // and a caller can overflow it
+  requires capacity <= CANON_USIZE_MAX / elem_size; // the product must not wrap;
+                                                    // pq_init does NOT check this
+                                                    // and a caller can overflow it.
+                                                    // Stated in ptr_elem's form so
+                                                    // pq_wf's bound is established
+                                                    // directly, not via a product
   requires \valid((char*)buffer + (0 .. capacity * elem_size - 1));
   assigns *pq;
   ensures pq->data      == buffer;

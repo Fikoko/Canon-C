@@ -611,6 +611,32 @@ static inline usize ptr_align_padding(const void* p, usize align) {
  * Overflow/underflow is caught by ensure_msg() in debug builds.
  * ========================================================================= */
 
+/* ════════════════════════════════════════════════════════════════════════════
+ * VERIFY-023 — the four address helpers now STATE THEIR RESULT.
+ *
+ * Until 2026-09 ptr_offset, ptr_offset_const, ptr_elem and ptr_elem_const
+ * carried `assigns \nothing` and no ensures on \result. Under WP's modular
+ * verification a callee IS its contract, so every address these returned was
+ * an unconstrained pointer: a caller could prove nothing about the element it
+ * had just addressed — no rte_mem_access, no mem_copy precondition, no frame
+ * goal through an element write.
+ *
+ * Nobody noticed for eleven verified modules because none of them addresses
+ * elements this way: bitset indexes words[] directly, vec and deque use typed
+ * T* arithmetic inside macro bodies. priority_queue (VERIFY-022) is the first
+ * verified module that reaches elements through ptr_elem, and at CI #1283 it
+ * showed ~85 of its 170 own residuals were this opacity, not its own logic.
+ * An upstream specification-strength ceiling, the VERIFY-020 F4 family, met
+ * at the primitive every void*-generic container depends on.
+ *
+ * The ensures are the bodies, restated: ptr_offset returns (u8*)p + n and
+ * ptr_elem delegates with n = index * elem_size. They are stated in u8* to
+ * match the code and avoid a second signed-to-unsigned byte bridge in the spec.
+ *
+ * This is a ratchet across every TU that includes ptr.h — memory, arena,
+ * arena-32, pool, region, vec, bitset, priority_queue — and is
+ * pre-registered as such in the frama-c-ptr job banner.
+ * ════════════════════════════════════════════════════════════════════════════ */
 /**
  * @brief Advance pointer p forward by n bytes
  *
@@ -644,6 +670,7 @@ static inline usize ptr_align_padding(const void* p, usize align) {
         ensures \result == \null;
     behavior nonnull:
         assumes p != \null;
+        ensures (u8*)\result == (u8*)p + n;
     complete behaviors;
     disjoint behaviors;
  */
@@ -683,6 +710,7 @@ static inline void* ptr_offset(void* p, usize n) {
         ensures \result == \null;
     behavior nonnull:
         assumes p != \null;
+        ensures (const u8*)\result == (const u8*)p + n;
     complete behaviors;
     disjoint behaviors;
  */
@@ -963,6 +991,7 @@ static inline bool ptr_range_in_range(const void*  p,
     requires elem_size >  0;
     requires index     <= CANON_USIZE_MAX / elem_size;
     assigns  \nothing;
+    ensures  (u8*)\result == (u8*)base + index * elem_size;
  */
 static inline void* ptr_elem(void* base, usize index, usize elem_size) {
     require_msg(base      != NULL, "ptr_elem: base cannot be NULL");
@@ -1000,6 +1029,7 @@ static inline void* ptr_elem(void* base, usize index, usize elem_size) {
     requires elem_size >  0;
     requires index     <= CANON_USIZE_MAX / elem_size;
     assigns  \nothing;
+    ensures  (const u8*)\result == (const u8*)base + index * elem_size;
  */
 static inline const void* ptr_elem_const(const void* base, usize index, usize elem_size) {
     require_msg(base      != NULL, "ptr_elem_const: base cannot be NULL");
