@@ -295,66 +295,6 @@ typedef struct {
    Internal helpers
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ════════════════════════════════════════════════════════════════════════════
- * pq_cmp_ — THE ONE PLACE THE QUEUE CALLS THE COMPARATOR.
- *
- * VERIFY-022 commit 5. Until now pq_sift_up_ and pq_sift_down_ called
- * pq->cmp(...) directly at three sites. WP has no contract for an unknown
- * callee, so from each such call onward it assumed EVERYTHING was assigned:
- * pq->data, pq->len, pq->elem_size all unknown, and every later obligation
- * in the function -- ptr_elem requires, pq_swap_ requires, loop invariant
- * preservation, frames, termination -- failed regardless of its own merit.
- * At CI #1285 that cascade was ~99 of 144 own residuals. The comparator call
- * was an information horizon.
- *
- * TWO WAYS TO CLOSE IT WERE CONSIDERED, and the second was chosen:
- *
- *   (a) A TRUSTED AXIOM: contract this wrapper `assigns \nothing` and leave
- *       its own goal unprovable as the permanent marker -- diag.h's stdio
- *       axiom shape (VERIFY-017). Covers any comparator; proves nothing
- *       about it.
- *
- *   (b) A VERIFIED CONFIGURATION: a `calls` clause naming compare.h's 24
- *       built-in comparators, and a requires that pq->cmp is one of them.
- *       All 24 are proved -- VERIFY-005, 208/208, zero residuals -- with
- *       `assigns \nothing`, byte-form validity requires, and a bounded
- *       result. This wrapper's frame and termination then follow from THEIR
- *       contracts: a theorem, not an assumption. lifetime.h's shape,
- *       "verified at level 4 only". The claim is narrower -- a caller-
- *       supplied comparator is outside the verified configuration, though
- *       the C code accepts it exactly as before -- and nothing is trusted.
- *
- * (b) is what is below. The one goal expected to remain unprovable is
- * \valid_function(pq->cmp), unimplemented in Frama-C 29 -- the same single
- * goal every function-pointer call in the project carries.
- *
- * NOT claimed: anything about the comparator's RESULT beyond -1..1. Heap
- * order still cannot be stated here, and the runtime suite remains the
- * evidence for ordering. This wrapper changes what WP knows about the queue
- * AFTER a comparison, not what it knows about the comparison.
- *
- * Shipped code: three call sites change from pq->cmp(a, b, pq->ctx) to
- * pq_cmp_(pq, a, b). static inline; identical machine code; no conditions
- * added, so MC/DC's denominator does not move.
- * ════════════════════════════════════════════════════════════════════════════ */
-#ifdef __FRAMAC__
-/*@
-  requires \valid_read(pq);
-  requires pq->cmp != \null;
-  requires pq_cmp_builtin(pq);
-  requires pq_cmp_fits(pq);
-  requires \valid_read((char*)a + (0 .. pq->elem_size - 1));
-  requires \valid_read((char*)b + (0 .. pq->elem_size - 1));
-  assigns \nothing;
-  ensures -1 <= \result <= 1;
-*/
-#endif
-static inline int pq_cmp_(const PriorityQueue* pq, const void* a, const void* b) {
-#ifdef __FRAMAC__
-    /*@ calls algo_cmp_u8, algo_cmp_u8_desc, algo_cmp_u16, algo_cmp_u16_desc, algo_cmp_u32, algo_cmp_u32_desc, algo_cmp_u64, algo_cmp_u64_desc, algo_cmp_i8, algo_cmp_i8_desc, algo_cmp_i16, algo_cmp_i16_desc, algo_cmp_i32, algo_cmp_i32_desc, algo_cmp_i64, algo_cmp_i64_desc, algo_cmp_usize, algo_cmp_usize_desc, algo_cmp_isize, algo_cmp_isize_desc, algo_cmp_f32, algo_cmp_f32_desc, algo_cmp_f64, algo_cmp_f64_desc; */
-#endif
-    return pq->cmp(a, b, pq->ctx);
-}
 
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
@@ -494,6 +434,67 @@ static inline int pq_cmp_(const PriorityQueue* pq, const void* a, const void* b)
   predicate pq_in_use(PriorityQueue* pq, integer i) = 0 <= i < pq->len;
 */
 #endif
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * pq_cmp_ — THE ONE PLACE THE QUEUE CALLS THE COMPARATOR.
+ *
+ * VERIFY-022 commit 5. Until now pq_sift_up_ and pq_sift_down_ called
+ * pq->cmp(...) directly at three sites. WP has no contract for an unknown
+ * callee, so from each such call onward it assumed EVERYTHING was assigned:
+ * pq->data, pq->len, pq->elem_size all unknown, and every later obligation
+ * in the function -- ptr_elem requires, pq_swap_ requires, loop invariant
+ * preservation, frames, termination -- failed regardless of its own merit.
+ * At CI #1285 that cascade was ~99 of 144 own residuals. The comparator call
+ * was an information horizon.
+ *
+ * TWO WAYS TO CLOSE IT WERE CONSIDERED, and the second was chosen:
+ *
+ *   (a) A TRUSTED AXIOM: contract this wrapper `assigns \nothing` and leave
+ *       its own goal unprovable as the permanent marker -- diag.h's stdio
+ *       axiom shape (VERIFY-017). Covers any comparator; proves nothing
+ *       about it.
+ *
+ *   (b) A VERIFIED CONFIGURATION: a `calls` clause naming compare.h's 24
+ *       built-in comparators, and a requires that pq->cmp is one of them.
+ *       All 24 are proved -- VERIFY-005, 208/208, zero residuals -- with
+ *       `assigns \nothing`, byte-form validity requires, and a bounded
+ *       result. This wrapper's frame and termination then follow from THEIR
+ *       contracts: a theorem, not an assumption. lifetime.h's shape,
+ *       "verified at level 4 only". The claim is narrower -- a caller-
+ *       supplied comparator is outside the verified configuration, though
+ *       the C code accepts it exactly as before -- and nothing is trusted.
+ *
+ * (b) is what is below. The one goal expected to remain unprovable is
+ * \valid_function(pq->cmp), unimplemented in Frama-C 29 -- the same single
+ * goal every function-pointer call in the project carries.
+ *
+ * NOT claimed: anything about the comparator's RESULT beyond -1..1. Heap
+ * order still cannot be stated here, and the runtime suite remains the
+ * evidence for ordering. This wrapper changes what WP knows about the queue
+ * AFTER a comparison, not what it knows about the comparison.
+ *
+ * Shipped code: three call sites change from pq->cmp(a, b, pq->ctx) to
+ * pq_cmp_(pq, a, b). static inline; identical machine code; no conditions
+ * added, so MC/DC's denominator does not move.
+ * ════════════════════════════════════════════════════════════════════════════ */
+#ifdef __FRAMAC__
+/*@
+  requires \valid_read(pq);
+  requires pq->cmp != \null;
+  requires pq_cmp_builtin(pq);
+  requires pq_cmp_fits(pq);
+  requires \valid_read((char*)a + (0 .. pq->elem_size - 1));
+  requires \valid_read((char*)b + (0 .. pq->elem_size - 1));
+  assigns \nothing;
+  ensures -1 <= \result <= 1;
+*/
+#endif
+static inline int pq_cmp_(const PriorityQueue* pq, const void* a, const void* b) {
+#ifdef __FRAMAC__
+    /*@ calls algo_cmp_u8, algo_cmp_u8_desc, algo_cmp_u16, algo_cmp_u16_desc, algo_cmp_u32, algo_cmp_u32_desc, algo_cmp_u64, algo_cmp_u64_desc, algo_cmp_i8, algo_cmp_i8_desc, algo_cmp_i16, algo_cmp_i16_desc, algo_cmp_i32, algo_cmp_i32_desc, algo_cmp_i64, algo_cmp_i64_desc, algo_cmp_usize, algo_cmp_usize_desc, algo_cmp_isize, algo_cmp_isize_desc, algo_cmp_f32, algo_cmp_f32_desc, algo_cmp_f64, algo_cmp_f64_desc; */
+#endif
+    return pq->cmp(a, b, pq->ctx);
+}
 
 #ifdef __FRAMAC__
 /*@
