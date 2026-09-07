@@ -5681,7 +5681,7 @@ jobs:
 
   # -------------------------------------------------------------------------
   # data/priority_queue.h — REPORT-ONLY (VERIFY-022; runs 0-4 at CI #1281-#1285,
-  # commit 5 = calls-clause comparator boundary + every function contracted, run 5 pending)
+  # run 5 = 18 own; commit 6 closes the 12 that were pq's, run 6 pending)
   #
   # Shape: verified IN PLACE, no cover TU and no driver. The 40 non-macro
   # functions carry the contracts; DEFINE_PRIORITY_QUEUE's 17 typed wrappers
@@ -5994,17 +5994,36 @@ jobs:
           #     now carries a contract. A residual outside the two classes
           #     above is a contract error to read, not a number to record.
           OWN_N=$(grep -cE '^typed_cast_pq_' /tmp/pq_resid.txt || true)
-          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run 3: 143; run 4: 144)"
-          CEIL_N=$(grep -cE '^typed_cast_pq_cmp__' /tmp/pq_resid.txt || true)
-          MULT_N=$(grep -cE '^typed_cast_pq_(swap__call_mem_swap_requires|remove_at_result_call_mem_copy_requires|as_c?bytes_call_c?bytes_from_requires)' /tmp/pq_resid.txt || true)
+          echo "  pq_* residuals:           ${OWN_N}   (run 1: 199; run 2: 170; run 3: 143; run 4: 144; run 5: 18)"
+          # RUN 5 (CI #1287): 144 -> 18. The calls clause TOOK: pq_cmp_ carries
+          # exactly one goal, \\valid_function -- but this regex said 0, because
+          # WP names RTE goals with a SINGLE underscore (pq_cmp_assert_...) and
+          # call goals with a double (pq_swap__call_...). Third instance of
+          # the prefix/underscore class in this workflow. Anchored on the
+          # single form now; nothing else in the header starts pq_cmp_.
+          CEIL_N=$(grep -cE '^typed_cast_pq_cmp_' /tmp/pq_resid.txt || true)
+          # Bin 2 RENAMED at run 5. It was "multiplication / range disjointness";
+          # the log says otherwise. mem_copy's 3rd and mem_swap's 2nd requires
+          # are !regions_overlap(a, b, size), and memory.h DEFINES that
+          # predicate by POINTER ORDERING: a < b + size && b < a + size. Under
+          # WP, ordering two pointers into different bases is meaningless, so
+          # \\separated(elem, buffer) -- which pq_wf and the contracts give --
+          # cannot discharge it. Four mem_copy sites and one mem_swap site.
+          # remove_at's is the same-base case and additionally needs
+          # multiplication. This is a memory.h CONTRACT-SHAPE finding of the
+          # VERIFY-023 kind, not a pq residual: the fix is to state
+          # regions_overlap with \\separated, which is a substrate arc
+          # (VERIFY-024 candidate) with its own ratchet. Named here, not fixed
+          # here.
+          MULT_N=$(grep -cE '^typed_cast_pq_(swap__call_mem_swap_requires|remove_at_result_call_mem_copy_requires|push_result_call_mem_copy_requires|pop_raw_call_mem_copy_requires|peek_call_mem_copy_requires)' /tmp/pq_resid.txt || true)
           REST_N=$((OWN_N - CEIL_N - MULT_N))
           echo "    comparator boundary (pq_cmp_):     ${CEIL_N}   (expected 1: \\valid_function only -- calls clause over the 24 built-ins)"
-          echo "    multiplication / range disjointness: ${MULT_N}   (expected 1-9, prover limit, named class)"
+          echo "    regions_overlap by pointer order:  ${MULT_N}   (expected 5: memory.h contract shape, VERIFY-024 candidate)"
           echo "    everything else:                   ${REST_N}   (expected 0 -- anything here is a contract to read)"
           if [ "${REST_N}" -eq 0 ]; then
-            echo "  run-5 class prediction:   CONFIRMED -- every residual is in a named class"
+            echo "  run-6 class prediction:   CONFIRMED -- every residual is in a named class"
           else
-            echo "  run-5 class prediction:   REFUTED -- ${REST_N} residual(s) outside both classes, listed by function:"
+            echo "  run-6 class prediction:   REFUTED -- ${REST_N} residual(s) outside both classes, listed by function:"
           fi
           echo "  --- per-function tally (own residuals) ---"
           # Explicit names with anchored prefixes. pq_push is a prefix of
@@ -6018,7 +6037,7 @@ jobs:
             [ "$n" -gt 0 ] && printf '    %4d  %s\n' "$n" "$1"
             return 0
           }
-          tally pq_cmp_            '^typed_cast_pq_cmp__'                 ''
+          tally pq_cmp_            '^typed_cast_pq_cmp_'                  ''
           tally pq_swap_           '^typed_cast_pq_swap__'                ''
           tally pq_sift_up_        '^typed_cast_pq_sift_up_'              ''
           tally pq_sift_down_      '^typed_cast_pq_sift_down_'            ''

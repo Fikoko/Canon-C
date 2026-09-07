@@ -56,6 +56,7 @@
          * struct/buffer aliasing. Shapes copied from vec_verify.h; nothing
          * invented. The shipped path (#else) is byte-identical to before. */
         DEFINE_RESULT_TYPEDEF(bool, Error)
+        /* cppcheck-suppress misra-c2012-19.2 ; MISRA-DEV-014 */
         DEFINE_RESULT_STRUCT(bool, Error)
         /*@ assigns \nothing;
             ensures \result.is_ok == \true;
@@ -298,7 +299,7 @@ typedef struct {
 
 /** @brief Returns index of parent node — @pre i > 0 */
 /* ════════════════════════════════════════════════════════════════════════════
- * ACSL: structural invariant and scope (VERIFY-022, commit 5 — runs 1-4 at CI #1282-#1285 scored, see the job)
+ * ACSL: structural invariant and scope (VERIFY-022, commit 6 — runs 1-5 at CI #1282-#1287 scored, see the job)
  *
  * WHAT IS CLAIMED: the STRUCTURAL invariant only. A queue is well-formed when
  * its buffer is valid for capacity*elem_size bytes, len <= capacity, and
@@ -409,6 +410,15 @@ typedef struct {
     && pq->cmp != \null
     && pq_cmp_builtin(pq)
     && pq_cmp_fits(pq)
+    // commit 6, FINDING F-WRAP: pq_left_child_/pq_right_child_ compute 2*i+1
+    // and 2*i+2 in usize with NO guard. For elem_size == 1 a queue with
+    // capacity > 2^63 - 1 makes 2*idx+1 wrap, and `left < pq->len` then reads
+    // the WRONG slot silently. Unreachable on any real machine (no such
+    // buffer exists), so not a runtime bug; but WP found it at CI #1287 as
+    // two unprovable child-index requires, and the proof must state the
+    // bound rather than assume it. Same shape as arena's CANON_ARENA_MAX_SIZE
+    // argument in MCDC-003.
+    && pq->capacity <= (CANON_USIZE_MAX - 2) / 2
     // commit 3: ptr_elem requires index <= CANON_USIZE_MAX / elem_size, and
     // run 2 showed ~20 residuals were exactly that obligation, unprovable
     // because the invariant did not carry the bound. With it, any index
@@ -766,6 +776,7 @@ static inline void pq_sift_down_(borrowed(PriorityQueue*) pq, usize i) {
     && ((cmp == algo_cmp_isize || cmp == algo_cmp_isize_desc) ==> elem_size >= sizeof(isize))
     && ((cmp == algo_cmp_f32 || cmp == algo_cmp_f32_desc) ==> elem_size >= sizeof(f32))
     && ((cmp == algo_cmp_f64 || cmp == algo_cmp_f64_desc) ==> elem_size >= sizeof(f64));
+  requires capacity <= (CANON_USIZE_MAX - 2) / 2;     // F-WRAP, see pq_wf_buf
   requires capacity <= CANON_USIZE_MAX / elem_size; // the product must not wrap;
                                                     // pq_init does NOT check this
                                                     // and a caller can overflow it.
@@ -964,6 +975,9 @@ static inline result__Bool_Error pq_push_result(
  */
 #ifdef __FRAMAC__
 /*@
+  requires pq == \null || \valid_read(pq);   // commit 6: the code reads pq->len
+                                              // whenever pq != NULL (CI #1287,
+                                              // pop_raw_assert_rte_mem_access)
   behavior empty:
     assumes pq == \null || pq->len == 0;
     assigns \nothing;
@@ -1121,12 +1135,10 @@ static inline result__Bool_Error pq_remove_at_result(
 /*@
   behavior rejected:
     assumes pq == \null || elem == \null;
-    assigns \nothing;
     ensures \result == \false;
   behavior full:
     assumes pq != \null && elem != \null && pq->len >= pq->capacity;
     requires \valid_read(pq);
-    assigns \nothing;
     ensures \result == \false;
   behavior accepted:
     assumes pq != \null && elem != \null && pq->len < pq->capacity;
@@ -1139,6 +1151,11 @@ static inline result__Bool_Error pq_remove_at_result(
     ensures \result == \true;
   complete behaviors;
   disjoint behaviors;
+  // commit 6: no behaviour-local `assigns \\nothing` on the reject paths. WP
+  // frames a CALL by the callee's default assigns -- the union over its
+  // behaviours -- so a wrapper cannot claim a tighter frame than the callee
+  // it delegates to (CI #1287, 7 goals across the three wrappers). deque's
+  // run-1 fix was the same shape. True but weaker; recorded as such.
 */
 #endif
 static inline bool pq_push(borrowed(PriorityQueue*) pq, borrowed(const void*) elem) {
@@ -1150,7 +1167,6 @@ static inline bool pq_push(borrowed(PriorityQueue*) pq, borrowed(const void*) el
 /*@
   behavior empty:
     assumes pq == \null || pq->len == 0;
-    assigns \nothing;
     ensures \result == \false;
   behavior nonempty_discard:
     assumes pq != \null && pq->len > 0 && out == \null;
@@ -1170,6 +1186,11 @@ static inline bool pq_push(borrowed(PriorityQueue*) pq, borrowed(const void*) el
     ensures pq_wf(pq);
   complete behaviors;
   disjoint behaviors;
+  // commit 6: no behaviour-local `assigns \\nothing` on the reject paths. WP
+  // frames a CALL by the callee's default assigns -- the union over its
+  // behaviours -- so a wrapper cannot claim a tighter frame than the callee
+  // it delegates to (CI #1287, 7 goals across the three wrappers). deque's
+  // run-1 fix was the same shape. True but weaker; recorded as such.
 */
 #endif
 static inline bool pq_pop(borrowed(PriorityQueue*) pq, void* out) {
@@ -1180,6 +1201,12 @@ static inline bool pq_pop(borrowed(PriorityQueue*) pq, void* out) {
 #ifdef __FRAMAC__
 /*@
   requires pq == \null || \valid_read(pq);
+  requires pq != \null && pq->len > 0 ==> pq_wf(pq);  // commit 6: when out == NULL
+                                              // and the queue is non-empty, the
+                                              // `none` branch still calls
+                                              // pq_peek_raw's NONEMPTY behaviour,
+                                              // whose requires need pq_wf
+                                              // (CI #1287, 2 goals)
   behavior none:
     assumes pq == \null || pq->len == 0 || out == \null;
     assigns \nothing;
@@ -1208,7 +1235,6 @@ static inline bool pq_peek(borrowed(const PriorityQueue*) pq, void* out) {
   requires pq == \null || \valid_read(pq);
   behavior rejected:
     assumes pq == \null || i >= pq->len;
-    assigns \nothing;
     ensures \result == \false;
   behavior removed:
     assumes pq != \null && i < pq->len;
@@ -1219,6 +1245,11 @@ static inline bool pq_peek(borrowed(const PriorityQueue*) pq, void* out) {
     ensures \result == \true;
   complete behaviors;
   disjoint behaviors;
+  // commit 6: no behaviour-local `assigns \\nothing` on the reject paths. WP
+  // frames a CALL by the callee's default assigns -- the union over its
+  // behaviours -- so a wrapper cannot claim a tighter frame than the callee
+  // it delegates to (CI #1287, 7 goals across the three wrappers). deque's
+  // run-1 fix was the same shape. True but weaker; recorded as such.
 */
 #endif
 static inline bool pq_remove_at(borrowed(PriorityQueue*) pq, usize i) {
